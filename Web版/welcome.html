@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b0e13">
+
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline';
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+  ">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+
+  <title>Re'forma へようこそ</title>
+  <link rel="stylesheet" href="css/common.css">
+
+  <style>
+    /* このページ専用の追加スタイル */
+    .welcome-hero {
+      text-align: center;
+      padding: 32px 0 16px;
+    }
+    .welcome-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .welcome-title {
+      font-size: 24px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .welcome-sub {
+      font-size: 14px;
+      color: var(--text-tertiary);
+      max-width: 360px;
+      margin: 0 auto;
+      line-height: 1.85;
+    }
+  </style>
+</head>
+<body>
+
+<header class="rf-header">
+  <div class="rf-brand">
+    <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
+  </div>
+  <a href="index.html" class="text-small text-muted">← 戻る</a>
+</header>
+
+<main>
+  <div class="container-narrow">
+
+    <div class="welcome-hero">
+      <div class="welcome-icon">⚾️</div>
+      <h1 class="welcome-title">Re'forma へようこそ</h1>
+      <p class="welcome-sub">
+        まず、あなたのお名前を教えてください。<br>
+        登録した情報はあなたの端末のみに保存され、外部に送信されることはありません。
+      </p>
+    </div>
+
+    <div class="card">
+      <form id="welcome-form" autocomplete="off">
+
+        <!-- 名前 -->
+        <div class="form-group">
+          <label class="form-label" for="user-name">
+            お名前 <span style="color:var(--color-danger)">*</span>
+          </label>
+          <input
+            type="text"
+            id="user-name"
+            class="form-input"
+            placeholder="例: 山田 (ニックネームでも可)"
+            maxlength="20"
+            required
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div class="form-help">20文字以内・ニックネームでも構いません</div>
+          <div class="form-error hidden" id="name-error"></div>
+        </div>
+
+        <!-- 年齢層(任意) -->
+        <div class="form-group mt-5">
+          <label class="form-label">
+            どなたが使いますか?
+            <span class="text-muted text-small" style="font-weight:400">(任意)</span>
+          </label>
+          <div class="radio-group" id="age-group-list">
+            <label class="radio-item">
+              <input type="radio" name="age-group" value="elementary">
+              <span>お子さん(小学生)</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="age-group" value="junior">
+              <span>お子さん(中高生)</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="age-group" value="adult">
+              <span>本人(大人)</span>
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="age-group" value="coach">
+              <span>選手の指導用</span>
+            </label>
+          </div>
+          <div class="form-help mt-2">
+            この情報は表示の最適化に使われ、外部送信されません
+          </div>
+        </div>
+
+        <!-- 送信 -->
+        <div class="form-group mt-5">
+          <button type="submit" class="btn btn-primary btn-block btn-large" id="submit-btn">
+            はじめる →
+          </button>
+        </div>
+
+        <!-- プライバシー説明 -->
+        <div class="alert alert-info mt-4">
+          <b>プライバシーについて</b><br>
+          <div class="text-small mt-2" style="line-height:1.85">
+            ・お名前と年齢層は<b>あなたの端末のみ</b>に保存されます<br>
+            ・サーバーには送信されません<br>
+            ・撮影した動画も端末から外には出ません<br>
+            ・端末のブラウザデータを削除すれば情報も消えます
+          </div>
+        </div>
+
+      </form>
+    </div>
+
+  </div>
+</main>
+
+<footer class="rf-footer">
+  <div>Re'forma バッティング動作解析</div>
+</footer>
+
+<script src="js/user-profile.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const form = document.getElementById('welcome-form');
+  const nameInput = document.getElementById('user-name');
+  const nameError = document.getElementById('name-error');
+  const submitBtn = document.getElementById('submit-btn');
+  const radioItems = document.querySelectorAll('.radio-item');
+
+  // 既存ユーザー: 値を復元
+  try {
+    const existing = window.ReformaUserProfile && window.ReformaUserProfile.load();
+    if (existing) {
+      nameInput.value = existing.name || '';
+      if (existing.ageGroup) {
+        const r = document.querySelector('input[name="age-group"][value="' + CSS.escape(existing.ageGroup) + '"]');
+        if (r) r.checked = true;
+      }
+    }
+  } catch (e) {
+    console.warn('既存ユーザー復元失敗:', e);
+  }
+
+  // ラジオの視覚的選択状態
+  radioItems.forEach(item => {
+    const radio = item.querySelector('input[type="radio"]');
+    if (radio.checked) item.classList.add('selected');
+    item.addEventListener('click', () => {
+      radioItems.forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      radio.checked = true;
+    });
+  });
+
+  // 名前入力中のリアルタイム検証(エラー表示の即時更新)
+  nameInput.addEventListener('input', () => {
+    if (nameError.classList.contains('hidden')) return; // エラー出てない時は静観
+    const result = window.ReformaUserProfile.validateName(nameInput.value);
+    if (result.valid) {
+      nameError.classList.add('hidden');
+    } else {
+      nameError.textContent = result.error;
+    }
+  });
+
+  // フォーム送信
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const name = nameInput.value;
+    const ageGroupEl = document.querySelector('input[name="age-group"]:checked');
+    const ageGroup = ageGroupEl ? ageGroupEl.value : null;
+
+    // 検証
+    const nameResult = window.ReformaUserProfile.validateName(name);
+    if (!nameResult.valid) {
+      nameError.textContent = nameResult.error;
+      nameError.classList.remove('hidden');
+      nameInput.focus();
+      return;
+    }
+
+    // 保存
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ 保存中...';
+    const saveResult = window.ReformaUserProfile.save({
+      name: nameResult.value,
+      ageGroup: ageGroup,
+    });
+
+    if (!saveResult.success) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'はじめる →';
+      nameError.textContent = saveResult.error;
+      nameError.classList.remove('hidden');
+      return;
+    }
+
+    // 成功 → RMST 撮影画面へ
+    setTimeout(() => {
+      window.location.href = 'rmst.html';
+    }, 300);
+  });
+})();
+</script>
+
+</body>
+</html>

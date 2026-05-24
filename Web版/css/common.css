@@ -1,0 +1,531 @@
+/* Re'forma Web版 — 共通スタイル
+   設計原則:
+   1. 大人向け・品ある配色(子供扱いしない)
+   2. スマートフォン優先(縦長レイアウト)
+   3. 高コントラスト(屋外バッセン環境でも読める)
+   4. アクセシビリティ(タッチ領域44px以上、文字サイズ可変)
+*/
+
+:root {
+  /* メインカラー(Re'forma ブランド) */
+  --reforma-red: #e63946;
+  --reforma-red-dark: #c1252f;
+  --reforma-red-soft: #f88379;
+
+  /* 背景(ダーク基調、落ち着き) */
+  --bg-primary: #0b0e13;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #0d1117;
+  --bg-card: #0a0d11;
+
+  /* テキスト(階層的、読みやすい) */
+  --text-primary: #e5e7eb;
+  --text-secondary: #cbd5e1;
+  --text-tertiary: #94a3b8;
+  --text-muted: #7c8290;
+  --text-disabled: #484f58;
+
+  /* ボーダー */
+  --border-default: #30363d;
+  --border-subtle: #21262d;
+  --border-emphasis: #484f58;
+
+  /* セマンティック */
+  --color-success: #10b981;
+  --color-success-bg: rgba(16, 185, 129, 0.1);
+  --color-warning: #f59e0b;
+  --color-warning-bg: rgba(245, 158, 11, 0.1);
+  --color-danger: #ef4444;
+  --color-danger-bg: rgba(239, 68, 68, 0.1);
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(96, 165, 250, 0.1);
+
+  /* タイプ別カラー */
+  --type-reach: #60a5fa;     /* 鷲・リーチ型 */
+  --type-drive: #f59e0b;     /* サイ・ドライブ型 */
+  --type-whip: #a855f7;      /* 蛇・ウィップ型 */
+  --type-flow: #10b981;      /* 猫・フロー型 */
+
+  /* 形状 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* シャドウ(控えめ) */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.4);
+
+  /* タイポグラフィ */
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'SF Pro JP',
+                       'Hiragino Sans', 'Helvetica Neue', 'Yu Gothic UI', sans-serif;
+  --font-family-mono: 'SF Mono', 'Menlo', 'Consolas', monospace;
+
+  /* スペーシング */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+}
+
+/* ─────────────────────────────────────────
+   リセット
+   ───────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-family-base);
+  font-size: 16px;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+a {
+  color: var(--color-info);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+a:hover {
+  color: var(--reforma-red-soft);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: var(--text-primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color 0.15s;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-info);
+  box-shadow: 0 0 0 3px var(--color-info-bg);
+}
+
+/* ─────────────────────────────────────────
+   レイアウト
+   ───────────────────────────────────────── */
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  width: 100%;
+}
+
+.container-narrow {
+  max-width: 540px;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  width: 100%;
+}
+
+main {
+  flex: 1;
+  padding: var(--space-5) 0;
+}
+
+/* ─────────────────────────────────────────
+   ヘッダー(品ある Re'forma ブランド表示)
+   ───────────────────────────────────────── */
+.rf-header {
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, #1a2332 100%);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 2px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rf-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.rf-brand .rf-re {
+  color: var(--reforma-red);
+  font-size: 26px;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -1px;
+}
+.rf-brand .rf-forma {
+  color: var(--reforma-red);
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -1px;
+}
+.rf-brand .rf-sub {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-left: var(--space-3);
+}
+
+/* ─────────────────────────────────────────
+   ボタン(品のあるデザイン、子供扱いしない)
+   ───────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 14px 28px;
+  border-radius: var(--radius-md);
+  border: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 48px;  /* タッチ領域 */
+  font-family: inherit;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--reforma-red) 0%, var(--reforma-red-dark) 100%);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(230, 57, 70, 0.3);
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(230, 57, 70, 0.4);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+.btn-primary:disabled {
+  background: var(--border-default);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+.btn-secondary:hover {
+  background: var(--border-subtle);
+  border-color: var(--border-emphasis);
+}
+
+.btn-success {
+  background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
+  color: #fff;
+}
+
+.btn-large {
+  padding: 18px 36px;
+  font-size: 17px;
+  min-height: 60px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* ─────────────────────────────────────────
+   カード
+   ───────────────────────────────────────── */
+.card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+.card-tight {
+  padding: var(--space-4);
+}
+
+.card-emphasized {
+  background: linear-gradient(135deg, var(--bg-tertiary) 0%, #1a1f2e 100%);
+  border: 1px solid var(--border-emphasis);
+}
+
+.card-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+  letter-spacing: -0.01em;
+}
+
+.card-subtitle {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-4);
+}
+
+/* ─────────────────────────────────────────
+   アラート(品ある警告表示、過剰でない)
+   ───────────────────────────────────────── */
+.alert {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  line-height: 1.7;
+  margin: var(--space-3) 0;
+  border-left: 3px solid;
+}
+.alert-info {
+  background: var(--color-info-bg);
+  border-color: var(--color-info);
+  color: var(--text-secondary);
+}
+.alert-warning {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning);
+  color: var(--text-secondary);
+}
+.alert-danger {
+  background: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  color: var(--text-secondary);
+}
+.alert-success {
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+  color: var(--text-secondary);
+}
+
+/* ─────────────────────────────────────────
+   タイポグラフィ(階層的、品がある)
+   ───────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+h1 { font-size: 24px; }
+h2 { font-size: 20px; }
+h3 { font-size: 18px; }
+h4 { font-size: 16px; }
+
+.text-muted { color: var(--text-muted); }
+.text-tertiary { color: var(--text-tertiary); }
+.text-small { font-size: 13px; }
+.text-large { font-size: 18px; }
+.text-mono { font-family: var(--font-family-mono); }
+.text-center { text-align: center; }
+
+/* ラベル(品ある小見出し) */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2.5px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  margin-bottom: var(--space-2);
+}
+
+/* ─────────────────────────────────────────
+   信頼区間表示(精度の正直な開示)
+   ───────────────────────────────────────── */
+.confidence-interval {
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: 4px;
+}
+.confidence-interval::before {
+  content: "(";
+}
+.confidence-interval::after {
+  content: ")";
+}
+
+/* ─────────────────────────────────────────
+   フォーム
+   ───────────────────────────────────────── */
+.form-group {
+  margin-bottom: var(--space-4);
+}
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+.form-input {
+  width: 100%;
+  font-size: 16px;  /* iOS auto-zoom 防止 */
+}
+.form-help {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+.form-error {
+  font-size: 12px;
+  color: var(--color-danger);
+  margin-top: var(--space-1);
+}
+
+/* ラジオグループ(タッチ領域大) */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.radio-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 48px;
+}
+.radio-item:hover {
+  border-color: var(--color-info);
+}
+.radio-item input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+.radio-item.selected {
+  background: var(--color-info-bg);
+  border-color: var(--color-info);
+}
+
+/* ─────────────────────────────────────────
+   フッター(精度の正直な開示・常時表示)
+   ───────────────────────────────────────── */
+.rf-footer {
+  background: var(--bg-tertiary);
+  border-top: 1px solid var(--border-subtle);
+  padding: var(--space-4) var(--space-5);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.7;
+  text-align: center;
+}
+.rf-footer .precision-note {
+  margin-top: var(--space-2);
+  color: var(--text-disabled);
+  font-style: italic;
+}
+
+/* ─────────────────────────────────────────
+   ユーティリティ
+   ───────────────────────────────────────── */
+.hidden { display: none !important; }
+.mt-1 { margin-top: var(--space-1); }
+.mt-2 { margin-top: var(--space-2); }
+.mt-3 { margin-top: var(--space-3); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-5 { margin-top: var(--space-5); }
+.mb-1 { margin-bottom: var(--space-1); }
+.mb-2 { margin-bottom: var(--space-2); }
+.mb-3 { margin-bottom: var(--space-3); }
+.mb-4 { margin-bottom: var(--space-4); }
+.mb-5 { margin-bottom: var(--space-5); }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+
+/* ─────────────────────────────────────────
+   レスポンシブ
+   ───────────────────────────────────────── */
+@media (max-width: 480px) {
+  .rf-header {
+    padding: var(--space-3) var(--space-4);
+  }
+  .rf-brand .rf-re,
+  .rf-brand .rf-forma {
+    font-size: 22px;
+  }
+  .container,
+  .container-narrow {
+    padding: 0 var(--space-3);
+  }
+  .card {
+    padding: var(--space-4);
+  }
+  .btn {
+    padding: 12px 22px;
+    font-size: 14px;
+  }
+  .btn-large {
+    padding: 16px 28px;
+    font-size: 16px;
+  }
+}
+
+/* ─────────────────────────────────────────
+   アクセシビリティ
+   ───────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* フォーカス可視化 */
+*:focus-visible {
+  outline: 2px solid var(--color-info);
+  outline-offset: 2px;
+}
