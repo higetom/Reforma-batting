@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Re'forma — MediaPipe Tasks 精度検証</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body {
+  background: #0b0e13; color: #e5e7eb;
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif;
+  font-size: 15px; line-height: 1.6;
+  height: 100%; overflow-x: hidden;
+}
+.container { max-width: 720px; margin: 0 auto; padding: 16px; }
+header {
+  background: linear-gradient(135deg, #161b22, #1a2332);
+  padding: 16px 20px; border-bottom: 2px solid #30363d;
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+header h1 { font-size: 18px; font-weight: 600; color: #e63946; font-style: italic; }
+header .sub { color: #8b949e; font-size: 12px; }
+
+.card {
+  background: #161b22; border: 1px solid #30363d; border-radius: 12px;
+  padding: 16px; margin: 12px 0;
+}
+.card h2 { font-size: 15px; color: #cbd5e1; margin-bottom: 8px; font-weight: 600; letter-spacing: 0.3px; }
+
+#video-wrap {
+  position: relative; width: 100%; aspect-ratio: 9/16;
+  background: #000; border-radius: 12px; overflow: hidden;
+  max-height: 70vh;
+}
+#video, #canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain;
+}
+#video { z-index: 1; }
+#canvas { z-index: 2; pointer-events: none; }
+/* 自撮り(前面)カメラ時は鏡像化:video+canvas を同時に反転して骨格と体を揃える */
+body.cam-front #video, body.cam-front #canvas { transform: scaleX(-1); }
+
+#status {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  background: rgba(0,0,0,0.6); color: #fff; padding: 4px 10px;
+  border-radius: 6px; font-size: 11px; font-family: monospace;
+}
+#fps-display {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  background: rgba(0,0,0,0.6); color: #10b981; padding: 4px 10px;
+  border-radius: 6px; font-size: 12px; font-family: monospace; font-weight: 600;
+}
+
+.btn {
+  display: inline-block; padding: 12px 22px; border-radius: 10px;
+  font-size: 14px; font-weight: 600; border: 0; cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.btn-primary { background: linear-gradient(135deg, #10b981, #059669); color: #fff; }
+.btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; }
+.btn-secondary { background: #1f2937; color: #cbd5e1; border: 1px solid #30363d; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; justify-content: center; }
+
+.metric-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid #21262d; font-size: 13px;
+}
+.metric-name { color: #94a3b8; }
+.metric-value { color: #e5e7eb; font-family: monospace; font-weight: 600; }
+
+.alert {
+  padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.7;
+  margin: 10px 0;
+}
+.alert-info { background: #1a2332; border-left: 3px solid #60a5fa; color: #bfdbfe; }
+.alert-warn { background: #3d2e0d; border-left: 3px solid #fbbf24; color: #fed7aa; }
+.alert-danger { background: #3d0d12; border-left: 3px solid #ef4444; color: #fecaca; }
+
+.tag {
+  display: inline-block; padding: 3px 10px; border-radius: 11px;
+  font-size: 11px; font-weight: 600; margin-right: 5px;
+}
+.tag-green { background: #10b98122; color: #10b981; }
+.tag-amber { background: #f59e0b22; color: #f59e0b; }
+.tag-red   { background: #ef444422; color: #ef4444; }
+
+#log {
+  max-height: 200px; overflow-y: auto; background: #0d1117;
+  font-family: monospace; font-size: 11px; padding: 8px;
+  border-radius: 6px; color: #c9d1d9;
+}
+.log-entry { padding: 2px 0; border-bottom: 1px dashed #21262d; }
+
+details summary { cursor: pointer; padding: 8px 0; color: #94a3b8; font-size: 13px; }
+details[open] summary { color: #cbd5e1; }
+
+footer {
+  text-align: center; padding: 16px; color: #6e7681; font-size: 11px;
+  border-top: 1px solid #21262d; margin-top: 24px;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Re'forma</h1>
+  <span class="sub">MediaPipe Tasks 精度検証 — iPhone Safari 動作確認</span>
+</header>
+
+<div class="container">
+
+  <div class="alert alert-info">
+    <b>このページは何か?</b><br>
+    iPhone Safari で MediaPipe Pose Landmarker (Full model) が
+    どの程度の精度・FPSで動作するかを実機検証します。
+    結果が良ければ Re'forma Web版の開発に進みます。
+  </div>
+
+  <div class="card">
+    <h2>1. モデル読込状況</h2>
+    <div id="model-status" style="font-size:13px;color:#94a3b8">準備中…</div>
+    <div id="env-info" style="margin-top:6px;font-size:11px;color:#6e7681;font-family:monospace"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. カメラ + 骨格検出</h2>
+    <div id="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+      <div id="status">待機中</div>
+      <div id="fps-display">-- fps</div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-primary" id="start-btn">📹 カメラ起動 + 検出開始</button>
+      <button class="btn btn-secondary" id="switch-cam" disabled>🔄 カメラ切替</button>
+      <button class="btn btn-danger" id="record-btn" disabled>● 録画開始</button>
+      <button class="btn btn-secondary" id="stop-btn" disabled>停止</button>
+    </div>
+
+    <div style="margin-top:10px;color:#7c8290;font-size:11.5px;line-height:1.7">
+      ※ HTTPS環境(または localhost)でのみカメラが起動します。<br>
+      ※ 「録画」を押すと、フレームごとの検出データ(JSON)を記録します。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. 即時メトリクス</h2>
+    <div id="metrics">
+      <div class="metric-row">
+        <span class="metric-name">検出されたランドマーク数</span>
+        <span class="metric-value" id="m-landmarks">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-name">平均 Visibility</span>
+        <span class="metric-value" id="m-visibility">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-name">前膝屈曲(参考)</span>
+        <span class="metric-value" id="m-knee">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-name">体幹前屈(参考)</span>
+        <span class="metric-value" id="m-trunk">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-name">推論時間 / フレーム</span>
+        <span class="metric-value" id="m-infer">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4. 録画結果</h2>
+    <div id="record-summary" style="font-size:13px;color:#94a3b8">未録画</div>
+    <div class="controls" id="export-controls" style="display:none">
+      <button class="btn btn-primary" id="export-btn">📥 JSON書き出し</button>
+    </div>
+  </div>
+
+  <details class="card">
+    <summary>5. ログ(技術詳細)</summary>
+    <div id="log"></div>
+  </details>
+
+  <div class="alert alert-warn">
+    <b>検証チェック項目(目視確認用)</b><br>
+    ✓ カメラ起動できたか<br>
+    ✓ 骨格(33点)が描画されているか<br>
+    ✓ FPS が 15 以上出ているか(理想 25-30)<br>
+    ✓ 動いている間、追従が遅れていないか<br>
+    ✓ 推論時間が 50ms 以下か(20fps 相当)
+  </div>
+
+</div>
+
+<footer>
+  Re'forma バッティング動作解析 / MediaPipe Tasks Vision 検証ページ
+</footer>
+
+<script type="module">
+import {
+  PoseLandmarker,
+  FilesetResolver,
+  DrawingUtils
+} from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/vision_bundle.mjs';
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const drawing = new DrawingUtils(ctx);
+
+const statusEl = document.getElementById('status');
+const fpsEl    = document.getElementById('fps-display');
+const modelStatus = document.getElementById('model-status');
+const envInfo = document.getElementById('env-info');
+const logEl   = document.getElementById('log');
+const startBtn  = document.getElementById('start-btn');
+const switchBtn = document.getElementById('switch-cam');
+const recordBtn = document.getElementById('record-btn');
+const stopBtn   = document.getElementById('stop-btn');
+const exportBtn = document.getElementById('export-btn');
+const recSummary = document.getElementById('record-summary');
+const exportControls = document.getElementById('export-controls');
+
+let poseLandmarker = null;
+let runningMode = 'IMAGE';
+let stream = null;
+let usingFront = true;
+let detecting = false;
+let recording = false;
+let recordedFrames = [];
+let lastVideoTime = -1;
+let frameTimes = [];
+let inferTimes = [];
+
+function log(msg) {
+  const t = new Date().toLocaleTimeString();
+  logEl.innerHTML = `<div class="log-entry">[${t}] ${msg}</div>` + logEl.innerHTML;
+}
+
+function detectEnv() {
+  const ua = navigator.userAgent;
+  const webgpu = 'gpu' in navigator;
+  const webgl2 = !!document.createElement('canvas').getContext('webgl2');
+  envInfo.textContent =
+    `Browser: ${ua.substring(0,80)}... | WebGPU: ${webgpu} | WebGL2: ${webgl2}`;
+  log(`環境: WebGPU=${webgpu}, WebGL2=${webgl2}`);
+}
+
+async function loadModel() {
+  modelStatus.textContent = 'モデル読込中(初回は10-20秒かかります)…';
+  log('FilesetResolver 取得中…');
+  const vision = await FilesetResolver.forVisionTasks(
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/wasm'
+  );
+  log('PoseLandmarker (Full) ロード中…');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.5,
+    minPosePresenceConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+    outputSegmentationMasks: false,
+  });
+  runningMode = 'VIDEO';
+  modelStatus.innerHTML = '✅ <b>Pose Landmarker (Full / GPU) 読込完了</b>';
+  log('モデル読込完了');
+  startBtn.disabled = false;
+}
+
+async function startCamera() {
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: usingFront ? 'user' : 'environment',
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30, max: 60 },
+      },
+      audio: false,
+    });
+    video.srcObject = stream;
+    await new Promise(r => video.onloadedmetadata = r);
+    video.play();
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    // 前面カメラなら鏡映表示にする(video+canvas を同時に反転)
+    document.body.classList.toggle('cam-front', usingFront);
+    log(`カメラ起動: ${video.videoWidth}x${video.videoHeight} (${usingFront ? '前面(鏡映)' : '背面'})`);
+    switchBtn.disabled = false;
+    recordBtn.disabled = false;
+    stopBtn.disabled = false;
+    detecting = true;
+    requestAnimationFrame(detect);
+  } catch (e) {
+    statusEl.textContent = 'カメラエラー';
+    log('カメラエラー: ' + e.message);
+    alert('カメラ起動失敗: ' + e.message + '\n\nHTTPSでアクセスしてください(file://やhttp://では動作しません)');
+  }
+}
+
+function calcAngle(a, b, c) {
+  // 3点 a-b-c の角度(度)
+  const ba = [a.x - b.x, a.y - b.y];
+  const bc = [c.x - b.x, c.y - b.y];
+  const dot = ba[0]*bc[0] + ba[1]*bc[1];
+  const m1 = Math.hypot(...ba), m2 = Math.hypot(...bc);
+  if (m1 < 1e-6 || m2 < 1e-6) return 0;
+  return Math.acos(Math.max(-1, Math.min(1, dot/(m1*m2)))) * 180 / Math.PI;
+}
+
+async function detect() {
+  if (!detecting) return;
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const tStart = performance.now();
+    const result = poseLandmarker.detectForVideo(video, performance.now());
+    const tEnd = performance.now();
+    const infer = tEnd - tStart;
+    inferTimes.push(infer);
+    if (inferTimes.length > 30) inferTimes.shift();
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (result.landmarks && result.landmarks.length > 0) {
+      const lms = result.landmarks[0];
+      // 骨格描画(顔は除く=11-32のみ)
+      drawing.drawConnectors(lms, PoseLandmarker.POSE_CONNECTIONS, { color: '#87ceeb', lineWidth: 3 });
+      drawing.drawLandmarks(lms.slice(11), { color: '#ffff00', radius: 4, lineWidth: 1 });
+
+      // メトリクス表示
+      const visAvg = lms.slice(11).reduce((s, l) => s + (l.visibility || 0), 0) / (lms.length - 11);
+      document.getElementById('m-landmarks').textContent = lms.length;
+      document.getElementById('m-visibility').textContent = (visAvg * 100).toFixed(0) + '%';
+      // 前膝屈曲(参考)左膝 = 23(hip)-25(knee)-27(ankle)
+      if (lms[23] && lms[25] && lms[27]) {
+        const kneeFlex = 180 - calcAngle(lms[23], lms[25], lms[27]);
+        document.getElementById('m-knee').textContent = kneeFlex.toFixed(1) + '°';
+      }
+      // 体幹前屈(参考)肩中点-腰中点-膝中点
+      if (lms[11] && lms[12] && lms[23] && lms[24] && lms[25] && lms[26]) {
+        const shoMid = { x: (lms[11].x + lms[12].x)/2, y: (lms[11].y + lms[12].y)/2 };
+        const hipMid = { x: (lms[23].x + lms[24].x)/2, y: (lms[23].y + lms[24].y)/2 };
+        const kneeMid = { x: (lms[25].x + lms[26].x)/2, y: (lms[25].y + lms[26].y)/2 };
+        const trunk = 180 - calcAngle(shoMid, hipMid, kneeMid);
+        document.getElementById('m-trunk').textContent = trunk.toFixed(1) + '°';
+      }
+      document.getElementById('m-infer').textContent = infer.toFixed(1) + ' ms';
+
+      if (recording) {
+        recordedFrames.push({
+          t: performance.now(),
+          landmarks: lms.map(l => ({
+            x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+            z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+          })),
+          infer_ms: +infer.toFixed(1),
+        });
+      }
+      statusEl.textContent = recording ? '● 録画中' : '検出中';
+    } else {
+      statusEl.textContent = '姿勢未検出';
+    }
+
+    // FPS計算
+    frameTimes.push(performance.now());
+    if (frameTimes.length > 30) frameTimes.shift();
+    if (frameTimes.length > 1) {
+      const fps = (frameTimes.length - 1) * 1000 / (frameTimes[frameTimes.length-1] - frameTimes[0]);
+      fpsEl.textContent = fps.toFixed(1) + ' fps';
+      fpsEl.style.color = fps >= 25 ? '#10b981' : (fps >= 15 ? '#f59e0b' : '#ef4444');
+    }
+  }
+  requestAnimationFrame(detect);
+}
+
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  startBtn.textContent = '⏳ 起動中…';
+  await startCamera();
+  startBtn.textContent = '✅ 起動済み';
+});
+
+switchBtn.addEventListener('click', () => {
+  usingFront = !usingFront;
+  startCamera();
+});
+
+recordBtn.addEventListener('click', () => {
+  recordedFrames = [];
+  recording = true;
+  recordBtn.disabled = true;
+  recordBtn.textContent = '● 録画中…';
+  log('録画開始');
+});
+
+stopBtn.addEventListener('click', () => {
+  if (recording) {
+    recording = false;
+    recordBtn.disabled = false;
+    recordBtn.textContent = '● 録画開始';
+    const avgInfer = inferTimes.reduce((s,x)=>s+x,0)/inferTimes.length;
+    const avgFps = frameTimes.length > 1
+      ? (frameTimes.length - 1) * 1000 / (frameTimes[frameTimes.length-1] - frameTimes[0])
+      : 0;
+    recSummary.innerHTML =
+      `✅ <b>録画完了</b><br>` +
+      `フレーム数: ${recordedFrames.length}<br>` +
+      `平均FPS: ${avgFps.toFixed(1)}<br>` +
+      `平均推論時間: ${avgInfer.toFixed(1)} ms<br>` +
+      `動画時間: ${recordedFrames.length > 1 ? ((recordedFrames[recordedFrames.length-1].t - recordedFrames[0].t)/1000).toFixed(2) : 0} 秒`;
+    exportControls.style.display = 'flex';
+    log(`録画停止: ${recordedFrames.length}フレーム`);
+  }
+  // カメラも停止する場合
+  // detecting = false; if (stream) stream.getTracks().forEach(t => t.stop());
+});
+
+exportBtn.addEventListener('click', () => {
+  const payload = {
+    schema: 'reforma_browser_mediapipe_v1',
+    generated_at: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    n_frames: recordedFrames.length,
+    avg_fps: frameTimes.length > 1
+      ? (frameTimes.length - 1) * 1000 / (frameTimes[frameTimes.length-1] - frameTimes[0])
+      : 0,
+    avg_infer_ms: inferTimes.reduce((s,x)=>s+x,0)/inferTimes.length,
+    video_width: video.videoWidth,
+    video_height: video.videoHeight,
+    frames: recordedFrames,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `reforma_browser_test_${Date.now()}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  log('JSON書き出し完了');
+});
+
+// 起動シーケンス
+detectEnv();
+loadModel().catch(e => {
+  modelStatus.innerHTML = '❌ モデル読込失敗: ' + e.message;
+  log('読込エラー: ' + e.message);
+});
+</script>
+
+</body>
+</html>
