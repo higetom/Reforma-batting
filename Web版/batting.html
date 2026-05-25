@@ -9,11 +9,11 @@
 
  <meta http-equiv="Content-Security-Policy" content="
  default-src 'self';
- script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net;
  style-src 'self' 'unsafe-inline';
  img-src 'self' data: blob:;
  media-src 'self' blob:;
- connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
+ connect-src 'self' blob: https://cdn.jsdelivr.net https://storage.googleapis.com;
  object-src 'none';
  base-uri 'self';
  worker-src 'self' blob:;
@@ -214,6 +214,142 @@
  撮影を準備する →
  </button>
 
+ <!-- アップロード機能: iOS Safari は HEVC 変換に対応できないため非表示 -->
+ <!-- デフォルト hidden、JS で デスクトップ判定時のみ visible にする -->
+ <div id="upload-section" class="hidden" style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border-subtle)">
+ <div class="text-tertiary text-small" style="text-align:center;margin-bottom:10px;letter-spacing:0.5px">
+ または (PC環境向け)
+ </div>
+ <button id="link-upload" class="btn btn-block" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-subtle);padding:14px;font-size:15px;font-weight:500">
+ <span style="display:inline-block;width:18px;height:18px;border:1.5px solid var(--text-secondary);border-radius:3px;margin-right:8px;vertical-align:-3px;position:relative">
+ <span style="position:absolute;left:3px;top:3px;width:0;height:0;border-style:solid;border-width:5px 0 5px 8px;border-color:transparent transparent transparent var(--text-secondary)"></span>
+ </span>
+ 撮りだめた動画から解析する
+ </button>
+ <div class="text-tertiary text-small" style="text-align:center;margin-top:8px;font-size:11.5px">
+ 選手から共有された動画(mp4/mov)を解析できます。iPhone標準のHEVC形式にも対応(変換に10〜30秒)。
+ </div>
+ </div>
+ </div>
+</div>
+
+<!-- 動画アップロード画面 -->
+<div id="screen-upload" class="hidden">
+ <div class="action-card">
+ <div class="action-eyebrow">VIDEO UPLOAD</div>
+ <h1 class="action-title">動画から解析する</h1>
+ <p class="text-secondary mt-2 mb-4" style="font-size:14px;line-height:1.85">
+ 過去に撮影したスイング動画から解析します。<br>
+ 撮影画面と同じ精度基準を適用します。
+ </p>
+
+ <!-- 最重要: 1動画 = 1スイング -->
+ <div style="margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-left:3px solid var(--reforma-red);border-radius:var(--radius-md)">
+ <div style="color:var(--reforma-red);font-size:11px;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">
+ 最重要 : 1動画 = 1スイング
+ </div>
+ <div class="text-secondary" style="font-size:13px;line-height:1.75">
+ 1本の動画には<b>1回のスイングだけ</b>含めてください。<br>
+ 複数スイングが入っている動画は、どのスイングを評価するかシステムが判断できず、解析結果が不正確になります。
+ </div>
+ <div class="text-tertiary" style="font-size:11px;margin-top:6px;line-height:1.6">
+ ※ 連続スイングの動画は、写真アプリで1スイング分ずつ「編集 → トリミング」して書き出してから個別にアップロードしてください。
+ </div>
+ </div>
+
+ <div class="card-emphasized card" style="padding:16px;border-left:3px solid var(--color-info)">
+ <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
+ 解析に向いている動画
+ </div>
+ <ul class="guide-list" style="margin:0">
+ <li><b>1動画につきスイング1回のみ</b>(複数スイングは不可)</li>
+ <li>真横(1塁側 or 3塁側)から撮影されている</li>
+ <li>構え〜フォロースルーまで全身が画面に映っている</li>
+ <li>長さは 3秒以上 ・ 20秒以内(目安 4〜8秒)</li>
+ <li>明るい場所で撮影されている</li>
+ <li>形式: mp4 / mov / m4v(iPhone標準形式に対応)</li>
+ </ul>
+ </div>
+
+ <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v,video/*" style="display:none">
+ <!-- PC向け: mp4 / mov(HEVC含む)/ m4v すべて選択可能。HEVC は FFmpeg.wasm で自動変換 -->
+
+ <button class="btn btn-primary btn-block btn-large mt-4" id="btn-pick-file">
+ 動画ファイルを選択する
+ </button>
+
+ <div id="upload-preview-wrap" class="hidden" style="margin-top:18px">
+ <!-- 動画プレビュー(解析にもこの要素をそのまま使う = 撮影フローと同じ条件) -->
+ <div style="position:relative;background:#000;border-radius:var(--radius-md);overflow:hidden">
+ <video id="upload-preview" controls playsinline muted style="width:100%;display:block"></video>
+ <!-- 解析中プログレスバー(動画底部の細い帯のみ表示)
+ 重要: video全面を覆うとChromeがデコードを最適化(省略)し、
+ MediaPipeが空フレームを受け取る不具合があるため、video本体を覆わない設計。 -->
+ <div id="upload-progress-overlay" class="hidden" style="position:absolute;left:0;right:0;bottom:0;background:linear-gradient(to top, rgba(0,0,0,0.92), rgba(0,0,0,0.5));color:#fff;padding:10px 16px 12px;z-index:5">
+ <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+ <div style="width:8px;height:8px;border-radius:50%;background:var(--reforma-red);animation:rfPulse 1s infinite"></div>
+ <div style="font-size:11px;letter-spacing:2px;color:var(--reforma-red);font-weight:700">ANALYZING</div>
+ <div id="upload-overlay-text" style="font-size:12px;font-family:var(--font-family-mono);opacity:0.95;margin-left:auto">準備中…</div>
+ </div>
+ <div style="background:rgba(255,255,255,0.18);border-radius:99px;height:5px;overflow:hidden">
+ <div id="upload-overlay-bar" style="height:100%;width:0%;background:var(--reforma-red);transition:width 0.25s"></div>
+ </div>
+ <div id="upload-overlay-detail" style="font-size:10px;opacity:0.6;margin-top:4px;font-family:var(--font-family-mono)"></div>
+ </div>
+ <style>@keyframes rfPulse { 50% { opacity: 0.3; } }</style>
+ </div>
+ <div id="upload-info" class="text-small text-muted" style="margin-top:8px;font-family:var(--font-family-mono)"></div>
+
+ <!-- HEVC 動画は自動変換される旨を通知(離脱を防ぐ) -->
+ <div id="upload-hevc-warning" class="hidden" style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#082d1a 0%,#04150c 100%);border:1px solid #10b98166;border-left:3px solid var(--color-success);border-radius:var(--radius-md)">
+ <div style="color:var(--color-success);font-size:11px;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">
+ iPhone標準形式 → 自動変換します
+ </div>
+ <div class="text-secondary" style="font-size:13px;line-height:1.75">
+ この動画は HEVC(H.265)形式のため、解析前に H.264 へ自動変換します。<br>
+ <b style="color:var(--text-primary)">初回のみ約25MB の変換ツールをダウンロード</b>(以降はキャッシュ済み)。<br>
+ 動画の長さによって変換に <b>10〜30秒</b> ほどかかります。
+ </div>
+ <div class="text-tertiary" style="font-size:11px;margin-top:8px;line-height:1.6">
+ ※ 変換は完全ローカル処理。動画は端末から外部へ一切送信されません。
+ </div>
+ </div>
+
+ <button class="btn btn-success btn-block btn-large mt-3" id="btn-analyze-upload">
+ ✓ この動画で解析する
+ </button>
+ <button class="btn btn-secondary btn-block mt-2" id="btn-pick-other">
+ 別の動画を選び直す
+ </button>
+ </div>
+
+ <button class="btn btn-secondary btn-block" id="btn-back-from-upload" style="margin-top:18px;background:transparent;color:var(--text-muted);border:1px solid var(--border-subtle)">
+ ← 撮影画面に戻る
+ </button>
+ </div>
+</div>
+
+<!-- 動画アップロード解析中画面(プログレス付き) -->
+<div id="screen-upload-analyzing" class="hidden">
+ <div class="container" style="padding:32px 24px;text-align:center;max-width:480px;margin:0 auto">
+ <h2 class="mb-2" id="upload-stage-title">動画を処理しています</h2>
+ <p class="text-secondary text-small mb-4" style="line-height:1.85" id="upload-stage-desc">
+ HEVC動画の場合は変換から始めます。<br>
+ 動画の長さによって30秒〜2分ほどかかります。
+ </p>
+ <!-- video マウント(Safariが確実にフレームをdecodeするため可視化が必要) -->
+ <div id="analyzing-video-mount" style="margin:18px auto;width:180px;height:240px;border-radius:12px;overflow:hidden;background:#000;border:1px solid var(--border-subtle);position:relative">
+ <canvas id="analyzing-skel-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none"></canvas>
+ </div>
+ <div class="text-tertiary" style="font-size:11px;margin-bottom:18px">処理中の動画(プレビュー)</div>
+ <div style="background:var(--bg-card);border-radius:var(--radius-full);height:8px;overflow:hidden;margin:0 0 12px">
+ <div id="upload-progress-bar" style="height:100%;width:0%;background:var(--reforma-red);transition:width 0.2s"></div>
+ </div>
+ <div id="upload-progress-text" style="font-family:var(--font-family-mono);font-size:14px;color:var(--text-primary);font-weight:500">準備中…</div>
+ <div id="upload-progress-detail" class="text-tertiary" style="font-size:11px;margin-top:6px"></div>
+ <button id="btn-cancel-upload" class="btn btn-secondary mt-4" style="background:transparent;color:var(--text-muted);border:1px solid var(--border-subtle);font-size:13px;padding:8px 20px">
+ 中止してやり直す
+ </button>
  </div>
 </div>
 
@@ -304,6 +440,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  capture: $('screen-capture'),
  analyzing: $('screen-analyzing'),
  error: $('screen-error'),
+ upload: $('screen-upload'),
+ uploadAnalyzing: $('screen-upload-analyzing'),
  };
  function showScreen(name) {
  Object.values(screens).forEach(s => s.classList.add('hidden'));
@@ -325,7 +463,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  let poseLandmarker = null;
  let drawing = null;
  let detecting = false;
- let lastProcessTime = -1; // currentTime チェックの代わりに時間ベースで制御
+ let lastProcessTime = -1; // video.currentTime チェック廃止・時間ベース制御に変更
 
  let recording = false;
  let recordedFrames = [];
@@ -350,15 +488,14 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  const btn = $('btn-prepare');
  btn.disabled = true; btn.textContent = '...準備中…';
  try {
- // モデル読込
+ // モデル読込(Full モデル強制)
  poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker({ preferLite: false });
  drawing = new DrawingUtils(ctx);
  $('model-status-mini').textContent = '✓ 準備完了';
  $('model-status-mini').classList.add('ready');
- // 画面切替を先に行う(rmst.html と同じ順序)
+ // 画面切替を先に行う — Safari は display:none 解除直後にカメラを起動すると
+ // レイアウト未確定のままフレームが届かない。rAF で1フレーム待つ。
  showScreen('capture');
- // Safari: display:none → 表示切替直後はレイアウト未確定のため
- // 1フレーム待ってからカメラ起動する
  await new Promise(resolve => requestAnimationFrame(resolve));
  // カメラ起動
  await startCamera();
@@ -403,7 +540,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // 切替中は detect ループを停止(古いストリームで MediaPipe が混乱するのを防ぐ)
  detecting = false;
  await startCamera();
- // フロントカメラは初期フレーム配信が遅いため 300ms 待機
+ // インカムは初期フレーム配信が遅いため 300ms 待機
  await new Promise(resolve => setTimeout(resolve, 300));
  lastProcessTime = -1;
  detecting = true;
@@ -412,8 +549,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  });
 
  // 検出ループ
- // video.currentTime チェックは iPhone Safari のライブストリームで
- // 値が進まずループが止まるため、時間ベースの制御に変更(最大 60fps)
+ // video.currentTime チェックは iPhone Safari のライブストリームで値が進まず
+ // ループが止まるため、時間ベースの制御に変更(最大 60fps)
  const DETECT_INTERVAL_MS = 1000 / 60;
  async function detect() {
  if (!detecting) return;
@@ -627,6 +764,989 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  if (stream) stream.getTracks().forEach(t => t.stop());
  if (window.ReformaMediaPipe) window.ReformaMediaPipe.release();
  });
+
+ // ─────────────────────────────────────────
+ // 動画アップロード機能 — デスクトップブラウザのみで有効化
+ //
+ // iOS Safari は HEVC 動画の canvas 読出を遮断する制約があり、
+ // クライアントサイドFFmpeg.wasm も Worker 初期化が hang する。
+ // 当面は iPhone/iPad では非表示、Mac/Windows/Linux/Android では表示。
+ //
+ // 判定基準: iOS デバイス(iPad の desktop mode 含む)→ 非表示
+ // ─────────────────────────────────────────
+ (function () {
+ const ua = navigator.userAgent || '';
+ const isIOS = /iPad|iPhone|iPod/.test(ua) ||
+ (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+ if (!isIOS) {
+ const uploadSec = document.getElementById('upload-section');
+ if (uploadSec) uploadSec.classList.remove('hidden');
+ console.log('[upload] section enabled for desktop browser');
+ } else {
+ console.log('[upload] section hidden on iOS (HEVC variant not supported)');
+ }
+ })();
+
+ // ─────────────────────────────────────────
+ // 動画アップロード機能
+ // 撮りだめた動画をMediaPipeに通して同じパイプラインで解析。
+ // 撮影画面と同じ validateInput ゲートを必ず通す。
+ // ─────────────────────────────────────────
+ const MAX_UPLOAD_DURATION_SEC = 20; // 動画の長さ上限
+ const MIN_UPLOAD_DURATION_SEC = 1; // 動画の長さ下限
+ const MAX_UPLOAD_FILE_BYTES = 200 * 1024 * 1024; // 200MB上限
+ const TARGET_PROCESS_FPS = 30; // 解析用フレームレート目標
+ let pickedFile = null;
+ let pickedFileUrl = null;
+ let pickedFileCodec = 'unknown'; // 'hevc' | 'h264' | 'unknown'
+
+ $('link-upload').addEventListener('click', (ev) => {
+ ev.preventDefault();
+ resetUploadState();
+ showScreen('upload');
+ });
+
+ $('btn-back-from-upload').addEventListener('click', () => {
+ resetUploadState();
+ showScreen('intro');
+ });
+
+ // 解析中の中止(止まったときの脱出口)
+ $('btn-cancel-upload').addEventListener('click', () => {
+ if (!confirm('解析を中止しますか?(やり直しになります)')) return;
+ // FFmpegを解放(次回再ロード)
+ try {
+ if (ffmpegInstance && typeof ffmpegInstance.terminate === 'function') {
+ ffmpegInstance.terminate();
+ }
+ } catch (e) {}
+ ffmpegInstance = null;
+ ffmpegLoading = null;
+ location.reload();
+ });
+
+ $('btn-pick-file').addEventListener('click', () => {
+ $('file-input').click();
+ });
+ $('btn-pick-other').addEventListener('click', () => {
+ $('file-input').click();
+ });
+
+ $('file-input').addEventListener('change', async (ev) => {
+ const file = ev.target.files && ev.target.files[0];
+ if (!file) return;
+
+ // 入力検証(クライアントゲート)
+ if (!file.type.startsWith('video/') && !/\.(mp4|mov|m4v)$/i.test(file.name)) {
+ showRichError(
+ '選択されたファイルは動画形式ではないようです(検出MIME: ' +
+ (file.type || '不明') + ')。',
+ ['mp4 / mov / m4v 形式の動画を選択してください']
+ );
+ return;
+ }
+ if (file.size > MAX_UPLOAD_FILE_BYTES) {
+ showRichError(
+ 'ファイルサイズが大きすぎます(' +
+ (file.size / 1024 / 1024).toFixed(1) + 'MB / 上限200MB)。',
+ ['もう少し短い動画を選んでください', '動画を圧縮してからアップロードしてください']
+ );
+ return;
+ }
+
+ // 既存のプレビューを破棄
+ if (pickedFileUrl) { URL.revokeObjectURL(pickedFileUrl); pickedFileUrl = null; }
+
+ pickedFile = file;
+ pickedFileUrl = URL.createObjectURL(file);
+ const previewVideo = $('upload-preview');
+ previewVideo.src = pickedFileUrl;
+
+ // メタデータ確認
+ try {
+ await new Promise((resolve, reject) => {
+ const onMeta = () => { previewVideo.removeEventListener('loadedmetadata', onMeta); resolve(); };
+ const onErr = () => { previewVideo.removeEventListener('error', onErr); reject(new Error('動画ファイルを読み込めませんでした')); };
+ previewVideo.addEventListener('loadedmetadata', onMeta);
+ previewVideo.addEventListener('error', onErr);
+ setTimeout(() => reject(new Error('動画読込タイムアウト(15秒)')), 15000);
+ });
+ } catch (e) {
+ showRichError(
+ 'この動画は再生できません(' + e.message + ')。',
+ ['mp4 / mov 形式の動画を選んでください', '別の動画で再度お試しください']
+ );
+ return;
+ }
+
+ const dur = previewVideo.duration;
+ const w = previewVideo.videoWidth, h = previewVideo.videoHeight;
+ if (!isFinite(dur) || dur <= 0) {
+ showRichError(
+ 'この動画の長さを取得できませんでした。',
+ ['別の動画を選んでください']
+ );
+ return;
+ }
+ if (dur > MAX_UPLOAD_DURATION_SEC) {
+ showRichError(
+ '動画が長すぎます(' + dur.toFixed(1) + '秒 / 上限' + MAX_UPLOAD_DURATION_SEC + '秒)。',
+ ['スイング部分だけを切り出してから再度アップロードしてください']
+ );
+ return;
+ }
+ if (dur < MIN_UPLOAD_DURATION_SEC) {
+ showRichError(
+ '動画が短すぎます(' + dur.toFixed(1) + '秒)。',
+ ['3秒以上の動画を選んでください']
+ );
+ return;
+ }
+
+ // コーデック早期検出(HEVCは iPhone Safari で解析失敗するので事前警告)
+ let codec = 'unknown';
+ try { codec = await detectVideoCodec(file); } catch (e) { console.warn('codec detect:', e.message); }
+ pickedFileCodec = codec;
+ console.log('[upload] codec detected:', codec, 'mime:', file.type);
+
+ // 情報表示
+ const codecLabel = codec === 'hevc' ? 'HEVC (iPhone標準)' : codec === 'h264' ? 'H.264' : '不明';
+ $('upload-info').textContent =
+ '時間 ' + dur.toFixed(1) + '秒 / 解像度 ' + w + '×' + h +
+ ' / 形式 ' + codecLabel +
+ ' / サイズ ' + (file.size / 1024 / 1024).toFixed(1) + 'MB';
+ $('upload-preview-wrap').classList.remove('hidden');
+
+ // HEVC は iPhone Safari で解析失敗の可能性大 → 事前警告
+ const warnBanner = $('upload-hevc-warning');
+ if (warnBanner) {
+ if (codec === 'hevc') warnBanner.classList.remove('hidden');
+ else warnBanner.classList.add('hidden');
+ }
+
+ // 入力をリセット(同じファイルを再選択できるように)
+ ev.target.value = '';
+ });
+
+ // ─────────────────────────────────────────
+ // FFmpeg.wasm 統合 — HEVC → H.264 自動変換
+ // iPhone標準のHEVC動画はSafariがcanvas読出を遮断するため、
+ // FFmpeg.wasm(独自コーデック)でローカル変換してから解析する。
+ // 完全クライアントサイド、データは端末から出ない。
+ // 初回ロード: ~25MB(ブラウザにキャッシュ)、変換: 10秒動画あたり10〜30秒。
+ // ─────────────────────────────────────────
+ let ffmpegInstance = null;
+ let ffmpegLoading = null;
+ const FFMPEG_VERSION = '0.12.10';
+ const FFMPEG_UTIL_VERSION = '0.12.1';
+ const FFMPEG_CORE_VERSION = '0.12.6';
+
+ // UMD バンドルをscript src経由でロード
+ function loadScriptOnce(url, timeoutMs) {
+ timeoutMs = timeoutMs || 30000;
+ return new Promise((resolve, reject) => {
+ const existing = document.querySelector('script[data-rfsrc="' + url + '"]');
+ if (existing) { resolve(); return; }
+ const s = document.createElement('script');
+ s.src = url;
+ s.setAttribute('data-rfsrc', url);
+ let done = false;
+ const finish = (err) => {
+ if (done) return; done = true;
+ clearTimeout(timer);
+ if (err) reject(err); else resolve();
+ };
+ s.onload = () => finish(null);
+ s.onerror = () => finish(new Error('script load failed: ' + url));
+ const timer = setTimeout(() => finish(new Error('script load timeout (' + timeoutMs/1000 + 's): ' + url)), timeoutMs);
+ document.head.appendChild(s);
+ });
+ }
+
+ /**
+ * FFmpeg を Same-Origin(自前ホスト)でロード。
+ *
+ * 重要: 以前は jsdelivr CDN から読み込んでいたが、
+ * FFmpeg 内部の Worker チャンク(814.ffmpeg.js)が
+ * cross-origin になり Safari の Same-Origin Policy で
+ * Worker 作成がハングしていた。
+ *
+ * 対策: 必要ファイルすべて Web版/ffmpeg/ に配置して
+ * 同一オリジン提供 → Worker chunk も同一オリジンになる。
+ */
+ async function loadFFmpeg(onProgress) {
+ if (ffmpegInstance) return ffmpegInstance;
+ if (ffmpegLoading) return ffmpegLoading;
+
+ ffmpegLoading = (async () => {
+ try {
+ console.log('[ffmpeg] loadFFmpeg start (self-hosted)');
+ onProgress && onProgress(5, '変換ツールを準備しています…', '初回のみ約25MBダウンロード');
+
+ // 自前ホスト: batting.html と同じディレクトリの ffmpeg/ サブフォルダ
+ const base = new URL('./ffmpeg/', window.location.href).href;
+ console.log('[ffmpeg] base URL:', base);
+
+ // 1) util を先にロード
+ await loadScriptOnce(base + 'ffmpeg-util.js', 30000);
+ onProgress && onProgress(15, '変換ツールを準備しています…', 'ユーティリティ取得完了');
+
+ // 2) ffmpeg.js をロード(これと同じ場所から内部Workerチャンクが呼ばれる)
+ await loadScriptOnce(base + 'ffmpeg.js', 30000);
+ onProgress && onProgress(25, '変換ツールを準備しています…', 'ライブラリ取得完了');
+
+ const FFmpegCtor = (window.FFmpegWASM && window.FFmpegWASM.FFmpeg)
+ || (window.FFmpeg && window.FFmpeg.FFmpeg)
+ || window.FFmpeg;
+ if (!FFmpegCtor) {
+ throw new Error('FFmpeg グローバルが見つかりません(FFmpegWASM=' +
+ (typeof window.FFmpegWASM) + ')');
+ }
+
+ const ffmpeg = new FFmpegCtor();
+ ffmpeg.on('log', ({ message }) => console.log('[ffmpeg log]', message));
+
+ // Same-Origin なので直接URLを渡せる(toBlobURL不要)
+ const coreURL = base + 'ffmpeg-core.js';
+ const wasmURL = base + 'ffmpeg-core.wasm';
+
+ onProgress && onProgress(40, 'コアをダウンロード中…', '約25MB(初回のみ)');
+ console.log('[ffmpeg] calling load()', { coreURL, wasmURL });
+
+ // タイムアウト保険(90秒。初回25MBダウンロード+初期化)
+ const loadPromise = ffmpeg.load({ coreURL, wasmURL });
+ const timeoutPromise = new Promise((_, reject) =>
+ setTimeout(() => reject(new Error('変換エンジン初期化タイムアウト(90秒)')), 90000));
+ await Promise.race([loadPromise, timeoutPromise]);
+
+ onProgress && onProgress(50, '準備完了', '');
+ ffmpegInstance = ffmpeg;
+ console.log('[ffmpeg] loaded OK');
+ return ffmpeg;
+ } catch (e) {
+ ffmpegLoading = null;
+ console.error('[ffmpeg] load failed:', e);
+ throw new Error('変換ツールの読込に失敗しました: ' + e.message);
+ }
+ })();
+ return ffmpegLoading;
+ }
+
+ /**
+ * HEVC動画ファイルを H.264 mp4 Blob に変換。
+ * 完全ローカル(データは端末から出ない)。
+ */
+ async function convertVideoToMP4(file, onProgress) {
+ const ffmpeg = await loadFFmpeg(onProgress);
+
+ // 変換進捗を購読
+ const progressHandler = ({ progress }) => {
+ // 進捗は 50% を初期化分として残しているので、50〜95% に割り当て
+ const pct = 50 + Math.min(45, Math.max(0, progress) * 45);
+ onProgress && onProgress(pct, '動画を変換しています…',
+ (progress * 100).toFixed(0) + '%');
+ };
+ ffmpeg.on('progress', progressHandler);
+
+ try {
+ onProgress && onProgress(50, '動画ファイルを読み込んでいます…', '');
+ const inName = 'input' + (/\.mov$/i.test(file.name) ? '.mov' : '.mp4');
+ const outName = 'output.mp4';
+ const data = new Uint8Array(await file.arrayBuffer());
+ await ffmpeg.writeFile(inName, data);
+
+ onProgress && onProgress(55, '動画を変換しています…', '');
+ console.log('[ffmpeg] exec start');
+ // -preset ultrafast: 速度優先、画質はやや劣化するが解析には十分
+ // -crf 23: 標準的な画質
+ // -an: 音声不要(解析には使わない)
+ // タイムアウト保険(180秒で諦める)
+ // ブラウザ互換性最大化オプション:
+ // -profile:v baseline: 最も互換性の高い H.264 プロファイル(WebGL対応必須)
+ // -level:v 3.0: 古いデバイスでも対応するレベル
+ // -pix_fmt yuv420p: 標準的な8bit YUV420(canvas 読出 OK)
+ // -preset fast: ultrafast より画質が良くデコードも速い
+ const execPromise = ffmpeg.exec([
+ '-i', inName,
+ '-c:v', 'libx264',
+ '-profile:v', 'baseline',
+ '-level:v', '3.0',
+ '-pix_fmt', 'yuv420p',
+ '-preset', 'fast',
+ '-crf', '23',
+ '-an',
+ '-movflags', '+faststart',
+ outName,
+ ]);
+ const execTimeoutPromise = new Promise((_, reject) =>
+ setTimeout(() => reject(new Error('動画変換タイムアウト(180秒)。動画が長すぎるか、端末メモリ不足の可能性があります。')), 180000));
+ await Promise.race([execPromise, execTimeoutPromise]);
+ console.log('[ffmpeg] exec done');
+
+ onProgress && onProgress(95, '変換完了、解析を開始します…', '');
+ const out = await ffmpeg.readFile(outName);
+
+ // クリーンアップ
+ try { await ffmpeg.deleteFile(inName); } catch (e) {}
+ try { await ffmpeg.deleteFile(outName); } catch (e) {}
+
+ const blob = new Blob([out.buffer], { type: 'video/mp4' });
+ console.log('[ffmpeg] converted:', file.size, 'bytes →', blob.size, 'bytes');
+ return blob;
+ } finally {
+ ffmpeg.off('progress', progressHandler);
+ }
+ }
+
+ /**
+ * 動画ファイルの先頭4KBを読み、コーデックを判別。
+ * MP4/MOV コンテナ内の FourCC を検索する。
+ * - 'hev1' / 'hvc1' → HEVC(H.265) ← iPhone標準・Safari解析不可
+ * - 'avc1' → H.264 ← 解析可能
+ */
+ async function detectVideoCodec(file) {
+ const blob = file.slice(0, 4096);
+ const buf = new Uint8Array(await blob.arrayBuffer());
+ let s = '';
+ for (let i = 0; i < buf.length; i++) {
+ const c = buf[i];
+ s += (c >= 32 && c < 127) ? String.fromCharCode(c) : '.';
+ }
+ if (s.indexOf('hev1') >= 0 || s.indexOf('hvc1') >= 0) return 'hevc';
+ if (s.indexOf('avc1') >= 0) return 'h264';
+ if (file.type === 'video/mp4') return 'h264';
+ if (file.type === 'video/quicktime') return 'hevc';
+ return 'unknown';
+ }
+
+ $('btn-analyze-upload').addEventListener('click', async () => {
+ if (!pickedFile || !pickedFileUrl) return;
+
+ // 新方式: 画面遷移せず、プレビュー画面に留まる
+ // プレビュー用video(#upload-preview)を解析にもそのまま使う(撮影フローと同条件)
+ // プログレスはvideoの上にオーバーレイで重ねる
+ setOverlayProgress(0, 'モデルを準備しています…', '');
+ showOverlay(true);
+ const previewVideo = $('upload-preview');
+ const originalControls = previewVideo.hasAttribute('controls');
+ previewVideo.removeAttribute('controls'); // 解析中は操作禁止
+ previewVideo.muted = true;
+
+ try {
+ // MediaPipe 準備(撮影と同じローダー)
+ if (!poseLandmarker) {
+ poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
+ }
+
+ setOverlayProgress(5, 'フレームを解析しています…', '動画を最初から再生して解析');
+ // プレビューvideoをそのまま解析(新規video作成・FFmpeg変換を完全に廃止)
+ const frames = await extractFromPreviewVideo(previewVideo);
+ setOverlayProgress(98, '解析を組み立てています…', frames.length + 'フレーム取得');
+
+ // RMSTタイプ取得
+ let rmpType = 'フロー型';
+ try {
+ const rmstRaw = sessionStorage.getItem('reforma_last_rmst');
+ if (rmstRaw) {
+ const rmstData = JSON.parse(rmstRaw);
+ if (rmstData.rmp_type) rmpType = rmstData.rmp_type;
+ }
+ } catch (e) {}
+
+ const fps = (frames.length > 1)
+ ? (frames.length - 1) * 1000 / (frames[frames.length - 1].t - frames[0].t)
+ : TARGET_PROCESS_FPS;
+
+ const analysisInput = {
+ frames: frames,
+ avg_fps: fps,
+ rmp_type: rmpType,
+ source: 'upload', // 出所を記録
+ };
+ const result = window.ReformaBattingAnalyzer.analyzeBatting(analysisInput);
+
+ if (result.error) {
+ showRichError(result.error, result.suggestions || []);
+ return;
+ }
+
+ const cleanFrames = frames.map(f => ({
+ t: f.t,
+ landmarks: f.landmarks,
+ }));
+ const payload = {
+ analysis: result,
+ raw_frames: cleanFrames,
+ raw_fps: fps,
+ raw_rmp_type: rmpType,
+ captured_at: new Date().toISOString(),
+ n_frames: frames.length,
+ duration_ms: frames[frames.length - 1].t,
+ source: 'upload',
+ file_name: pickedFile.name,
+ };
+ try {
+ sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
+ } catch (e) {
+ console.warn('sessionStorage 容量超過、frames を間引きます:', e.message);
+ payload.raw_frames = cleanFrames.filter((_, i) => i % 2 === 0);
+ sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
+ }
+ window.location.href = 'batting_result.html';
+ } catch (e) {
+ console.error(e);
+ // エラー種別に応じて改善ヒントを変える
+ const msg = e.message || '不明なエラー';
+ if (/HEVC_BLACKOUT/.test(msg)) {
+ // HEVC ブラックアウト(Mac/PC含む) — 自動変換も失敗した状況
+ showRichError('動画から姿勢検出ができませんでした', [
+ '動画形式の互換性問題の可能性があります(HEVCのまま処理しようとして失敗)',
+ 'mp4(H.264)形式の動画でお試しください',
+ '「撮影を準備する」からその場で撮影すると確実です',
+ ]);
+ } else if (/EXTRACT_FAILED/.test(msg)) {
+ showRichError('動画からフレームを読み込めませんでした', [
+ 'mp4(H.264)形式の動画でお試しください',
+ '別の動画で動作確認してください',
+ 'iCloud共有ではなく、端末に保存された動画を選んでください',
+ ]);
+ } else if (/メタデータ/.test(msg) || /解像度/.test(msg) || /長さ/.test(msg)) {
+ showRichError('動画ファイルを読み込めませんでした', [
+ '動画ファイルが破損している可能性があります',
+ '別の動画で再試行してください',
+ ]);
+ } else {
+ showRichError('解析中にエラーが発生しました', [
+ '別の動画で再度お試しください',
+ 'ページを再読み込みしてから再試行してください',
+ ]);
+ }
+ } finally {
+ // 解析終了(成功・失敗いずれの場合も)プレビュー状態を復元
+ showOverlay(false);
+ try {
+ if (originalControls) previewVideo.setAttribute('controls', '');
+ previewVideo.pause();
+ previewVideo.currentTime = 0;
+ } catch (e) {}
+ }
+ });
+
+ // ─────────────────────────────────────────
+ // 解析オーバーレイ制御
+ // ─────────────────────────────────────────
+ function showOverlay(show) {
+ const ov = $('upload-progress-overlay');
+ if (!ov) return;
+ if (show) ov.classList.remove('hidden');
+ else ov.classList.add('hidden');
+ // 解析中はボタンも無効化
+ $('btn-analyze-upload').disabled = !!show;
+ $('btn-pick-other').disabled = !!show;
+ }
+
+ function setOverlayProgress(pct, text, detail) {
+ const bar = $('upload-overlay-bar');
+ const t = $('upload-overlay-text');
+ const d = $('upload-overlay-detail');
+ if (bar) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+ if (t) t.textContent = (text || '') + (pct != null ? ' ' + Math.round(pct) + '%' : '');
+ if (d) d.textContent = detail || '';
+ }
+
+ // ─────────────────────────────────────────
+ // プレビューvideoからフレーム抽出(撮影フローと同じ仕組み)
+ //
+ // 撮影フローが動く事実から逆算した実装:
+ // 1. 新規video要素を作らず、画面に既に大きく表示されているプレビューvideoを使う
+ // 2. rAF + currentTime変化検出ループ(rVFCではない)
+ // 3. detectForVideo(video, ts) に video要素を直接渡す(canvas経由しない)
+ //
+ // これで撮影フローと条件が完全に揃うため、撮影が動く環境では理論上必ず動く。
+ // ─────────────────────────────────────────
+ async function extractFromPreviewVideo(v) {
+ // readyState >= 2 (HAVE_CURRENT_DATA) まで待つ
+ if (v.readyState < 2) {
+ await new Promise((resolve) => {
+ const h = () => { v.removeEventListener('loadeddata', h); resolve(); };
+ v.addEventListener('loadeddata', h);
+ setTimeout(resolve, 5000); // 安全タイムアウト
+ });
+ }
+
+ // 最初に巻き戻し
+ try { v.currentTime = 0; } catch (e) {}
+ await new Promise((resolve) => {
+ const h = () => { v.removeEventListener('seeked', h); resolve(); };
+ v.addEventListener('seeked', h);
+ setTimeout(resolve, 2000);
+ });
+
+ const duration = v.duration;
+ console.log('[upload] preview video ready: duration=' + duration + 's, size=' + v.videoWidth + 'x' + v.videoHeight);
+
+ if (!isFinite(duration) || duration <= 0) {
+ throw new Error('動画の長さが取得できません(duration=' + duration + ')');
+ }
+ if (!v.videoWidth || !v.videoHeight) {
+ throw new Error('動画の解像度が取得できません(' + v.videoWidth + 'x' + v.videoHeight + ')');
+ }
+
+ const collected = [];
+ const baseTs = performance.now() + 1;
+ let visSum = 0, visCnt = 0;
+
+ // canvas-relay 用(rVFC で確実にフレームを取得して canvas 経由で MediaPipe に渡す)
+ const relayCanvas = document.createElement('canvas');
+ const relayCtx = relayCanvas.getContext('2d', { willReadFrequently: true });
+ const scale = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+ relayCanvas.width = Math.max(1, Math.round(v.videoWidth * scale));
+ relayCanvas.height = Math.max(1, Math.round(v.videoHeight * scale));
+ console.log('[upload] relay canvas:', relayCanvas.width + 'x' + relayCanvas.height);
+
+ const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
+ const finishedRef = { value: false };
+
+ await new Promise((resolve) => {
+ const finish = () => { if (!finishedRef.value) { finishedRef.value = true; resolve(); } };
+
+ v.addEventListener('ended', finish, { once: true });
+ v.addEventListener('error', () => { console.warn('[upload] video error'); finish(); }, { once: true });
+ // 安全タイムアウト(動画長+10秒)
+ const safetyTimer = setTimeout(() => {
+ console.warn('[upload] extraction safety timeout');
+ try { v.pause(); } catch (e) {}
+ finish();
+ }, (duration + 10) * 1000);
+
+ function processCurrentFrame(currentTimeSec) {
+ const tsMs = baseTs + currentTimeSec * 1000;
+ try {
+ // canvas-relay: video の現フレームを canvas に描画
+ relayCtx.drawImage(v, 0, 0, relayCanvas.width, relayCanvas.height);
+ // canvas を MediaPipe に渡す(video element 直渡しより安定)
+ const result = poseLandmarker.detectForVideo(relayCanvas, tsMs);
+ const landmarks = (result.landmarks && result.landmarks[0]) || null;
+ if (landmarks) {
+ const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
+ let s = 0, c = 0;
+ CORE.forEach(i => {
+ if (landmarks[i] && typeof landmarks[i].visibility === 'number') {
+ s += landmarks[i].visibility; c++;
+ }
+ });
+ if (c > 0) { visSum += s / c; visCnt++; }
+ collected.push({
+ t: currentTimeSec * 1000,
+ landmarks: landmarks.map(l => ({
+ x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+ z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+ })),
+ });
+ }
+ } catch (e) { console.warn('[upload] detect error:', e.message); }
+ // プログレス更新
+ const pct = 5 + Math.min(90, (currentTimeSec / duration) * 90);
+ setOverlayProgress(pct, '解析中…', '読込: ' + collected.length + '枚');
+ }
+
+ if (hasRVFC) {
+ // 推奨経路: rVFC は新フレームが描画されたタイミングで確実に発火
+ const onFrame = (now, metadata) => {
+ if (finishedRef.value) return;
+ processCurrentFrame(metadata.mediaTime);
+ if (!v.ended && !v.paused) v.requestVideoFrameCallback(onFrame);
+ else { clearTimeout(safetyTimer); finish(); }
+ };
+ v.requestVideoFrameCallback(onFrame);
+ } else {
+ // フォールバック: rAF + currentTime 変化検出
+ let lastTime = -1;
+ const tick = () => {
+ if (finishedRef.value) return;
+ if (v.currentTime !== lastTime) {
+ lastTime = v.currentTime;
+ processCurrentFrame(lastTime);
+ }
+ if (v.ended) { clearTimeout(safetyTimer); finish(); }
+ else requestAnimationFrame(tick);
+ };
+ requestAnimationFrame(tick);
+ }
+
+ v.play().then(() => {
+ console.log('[upload] preview video playing — using ' + (hasRVFC ? 'rVFC' : 'rAF'));
+ }).catch((err) => {
+ console.warn('[upload] preview play rejected:', err.message);
+ clearTimeout(safetyTimer);
+ finish();
+ });
+ });
+
+ const avgVis = visCnt > 0 ? visSum / visCnt : 0;
+ console.log('[upload] extracted ' + collected.length + ' frames, avgVis=' + avgVis.toFixed(3));
+
+ // 早期診断: visibility 全て0 = フレーム読出に何らかの問題
+ if (collected.length >= 5 && avgVis === 0) {
+ throw new Error(
+ 'HEVC_BLACKOUT: ブラウザがこの動画のフレームを正しく読み出せませんでした ' +
+ '(' + collected.length + 'フレーム検出 / 全て認識精度0%)'
+ );
+ }
+ // 取得フレーム数チェック
+ if (collected.length < 12) {
+ throw new Error('EXTRACT_FAILED: 動画から取得できたフレーム数が少なすぎます(' + collected.length + ')');
+ }
+ return collected;
+ }
+
+ /**
+ * HEVC ブラックアウト専用ガイド画面を表示。
+ * 「離脱しない」を最優先にしたUI: 撮影フローへのワンタップ誘導 + 設定変更手順
+ */
+ function showHevcGuide() {
+ const html = `
+ <div style="text-align:left">
+ <b style="font-size:15px;color:var(--text-primary)">この動画は iPhone Safari で解析できません</b>
+ <div style="margin:10px 0 16px;font-size:13px;color:var(--text-secondary);line-height:1.75">
+ iPhone標準形式(HEVC)の動画は、Safari のブラウザ制約で姿勢検出ができません。
+ これは Re'forma の不具合ではなく、Apple の仕様によるものです。
+ </div>
+
+ <div style="background:rgba(16,185,129,0.08);border-left:3px solid var(--color-success);border-radius:6px;padding:12px 14px;margin-bottom:12px">
+ <b style="font-size:12.5px;color:var(--color-success);letter-spacing:0.5px">最も確実な方法</b>
+ <div style="margin-top:6px;font-size:13px;color:var(--text-secondary);line-height:1.75">
+ Re'forma の「撮影を準備する」からその場で撮影すれば、形式の問題なく確実に解析できます。
+ </div>
+ </div>
+
+ <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-subtle);border-radius:6px;padding:12px 14px;margin-bottom:12px">
+ <b style="font-size:12.5px;color:var(--text-primary);letter-spacing:0.5px">今後アップロードしたい場合</b>
+ <div style="margin-top:8px;font-size:12.5px;color:var(--text-secondary);line-height:1.85">
+ iPhoneの<br>
+ <b>「設定」 → 「カメラ」 → 「フォーマット」 → 「互換性優先」</b><br>
+ を選択してから撮影した動画は H.264 形式になり、問題なくアップロードできます。
+ </div>
+ </div>
+ </div>
+ `;
+ $('error-text').innerHTML = html;
+ showScreen('error');
+ // エラー画面のボタンを「撮影フローへ」中心に変更
+ const errCard = document.querySelector('#screen-error .container');
+ if (errCard) {
+ const primaryBtn = errCard.querySelector('button.btn-primary');
+ if (primaryBtn) primaryBtn.textContent = '撮影画面で その場で撮影する';
+ }
+ }
+
+ function setUploadProgress(pct, text, detail) {
+ $('upload-progress-bar').style.width = Math.max(0, Math.min(100, pct)) + '%';
+ $('upload-progress-text').textContent = (text || '') + ' ' + Math.round(pct) + '%';
+ $('upload-progress-detail').textContent = detail || '';
+ }
+
+ function resetUploadState() {
+ if (pickedFileUrl) { try { URL.revokeObjectURL(pickedFileUrl); } catch (e) {} pickedFileUrl = null; }
+ pickedFile = null;
+ $('upload-preview-wrap').classList.add('hidden');
+ $('upload-preview').removeAttribute('src');
+ $('upload-info').textContent = '';
+ $('file-input').value = '';
+ }
+
+ /**
+ * アップロード動画からフレームを抽出(v2: HEVC対応・canvas-relay)。
+ *
+ * 設計:
+ * 1. video要素を解析画面に可視マウント(Safari がフレームを decode するため必須)
+ * 2. video → 中間canvas に drawImage → そのcanvasをMediaPipeに渡す(HEVC対策)
+ * 3. play()ベース → 失敗時 seek()ベースに自動フォールバック
+ * 4. 早期診断: 最初の10フレームすべて visibility=0 なら HEVC ブラックアウトと判定
+ * 5. 詳細な失敗メッセージで何が起きたか可視化
+ */
+ async function extractFramesFromVideo(url) {
+ const stats = { method: null, frameCount: 0, detectedCount: 0, durationSec: 0, videoSize: null, canvasIsBlack: false };
+
+ // マウントポイント(解析画面内に既に存在)
+ const mount = document.getElementById('analyzing-video-mount');
+ if (!mount) throw new Error('解析画面のマウントが見つかりません');
+
+ // 既存video消去(skeleton canvas は残す)
+ Array.from(mount.querySelectorAll('video')).forEach(el => el.remove());
+
+ const v = document.createElement('video');
+ v.src = url;
+ v.muted = true;
+ v.defaultMuted = true;
+ v.playsInline = true;
+ v.preload = 'auto';
+ v.setAttribute('playsinline', 'true');
+ v.setAttribute('webkit-playsinline', 'true');
+ v.setAttribute('muted', 'true');
+ v.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;z-index:1';
+ mount.insertBefore(v, mount.firstChild); // skeleton canvas より下
+
+ // 中間canvas(video の各フレームを描画 → MediaPipe に渡す)
+ const relayCanvas = document.createElement('canvas');
+ const relayCtx = relayCanvas.getContext('2d', { willReadFrequently: true });
+
+ const cleanup = () => {
+ try { v.pause(); } catch (e) {}
+ try { v.removeAttribute('src'); v.load(); } catch (e) {}
+ try { if (v.parentNode) v.parentNode.removeChild(v); } catch (e) {}
+ };
+
+ try {
+ // ===== メタデータ待ち =====
+ await new Promise((resolve, reject) => {
+ const onMeta = () => { v.removeEventListener('loadedmetadata', onMeta); resolve(); };
+ const onErr = () => reject(new Error('メタデータ読込失敗'));
+ v.addEventListener('loadedmetadata', onMeta);
+ v.addEventListener('error', onErr, { once: true });
+ setTimeout(() => reject(new Error('メタデータ読込タイムアウト(20秒)')), 20000);
+ });
+
+ stats.durationSec = v.duration;
+ stats.videoSize = `${v.videoWidth}×${v.videoHeight}`;
+ console.log('[upload] meta loaded:', stats);
+
+ if (!isFinite(v.duration) || v.duration <= 0) {
+ throw new Error('動画の長さが取得できません(duration=' + v.duration + ')');
+ }
+ if (!v.videoWidth || !v.videoHeight) {
+ throw new Error('動画の解像度が取得できません(' + stats.videoSize + ')');
+ }
+
+ // 中間canvasのサイズ設定(過大はメモリ圧迫なので最大640pxに縮小)
+ const scale = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+ relayCanvas.width = Math.max(1, Math.round(v.videoWidth * scale));
+ relayCanvas.height = Math.max(1, Math.round(v.videoHeight * scale));
+ console.log('[upload] relay canvas:', relayCanvas.width, 'x', relayCanvas.height);
+
+ // ===== Try 1: play()ベース抽出 =====
+ const playResult = await tryPlayBasedExtraction(v, relayCanvas, relayCtx, stats);
+
+ // 早期診断: visibility 全て0 = HEVC ブラックアウト確定
+ if (playResult.detectedCount >= 5 && playResult.avgVis === 0) {
+ throw new Error(
+ 'HEVC_BLACKOUT: 動画フレームから姿勢検出ができませんでした(ブラウザのHEVC/WebGL制約) ' +
+ '(' + playResult.detectedCount + 'フレーム検出 / 全て認識精度0%)'
+ );
+ }
+
+ if (playResult.collected.length >= 12 && playResult.avgVis > 0.1) {
+ stats.method = 'play';
+ console.log('[upload] play-based OK:', stats, 'avgVis=', playResult.avgVis);
+ return playResult.collected;
+ }
+
+ // ===== Try 2: seek()ベース抽出(フォールバック) =====
+ console.warn('[upload] play insufficient. Falling back to seek.',
+ 'collected=', playResult.collected.length, 'avgVis=', playResult.avgVis);
+ setUploadProgress(0, '別の方法で再試行しています…', '');
+ const seekResult = await trySeekBasedExtraction(v, relayCanvas, relayCtx, stats);
+ stats.method = 'seek';
+ console.log('[upload] seek result:', stats, 'avgVis=', seekResult.avgVis);
+
+ if (seekResult.detectedCount >= 5 && seekResult.avgVis === 0) {
+ throw new Error(
+ 'HEVC_BLACKOUT: 動画フレームから姿勢検出ができませんでした(ブラウザのHEVC/WebGL制約) ' +
+ '(' + seekResult.detectedCount + 'フレーム検出 / 全て認識精度0%)'
+ );
+ }
+
+ if (seekResult.collected.length >= 12 && seekResult.avgVis > 0.1) return seekResult.collected;
+
+ // 両方失敗
+ throw new Error(
+ 'EXTRACT_FAILED: 動画からフレームを取得できませんでした ' +
+ '(play=' + playResult.collected.length + '枚 vis=' + Math.round(playResult.avgVis * 100) + '%, ' +
+ 'seek=' + seekResult.collected.length + '枚 vis=' + Math.round(seekResult.avgVis * 100) + '%, ' +
+ '解像度=' + stats.videoSize + ')'
+ );
+ } finally {
+ cleanup();
+ }
+ }
+
+ /**
+ * video の現フレームを canvas に描画。
+ * 1段目: drawImage(video) - 多くの環境で動作
+ * 2段目: createImageBitmap(video) → drawImage(bitmap) - 一部HEVC環境で通る場合あり
+ * 戻り値: true = 成功, false = 失敗
+ */
+ async function drawCurrentFrame(v, canvas, ctx) {
+ try {
+ ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+ return true;
+ } catch (e1) {
+ try {
+ if (typeof createImageBitmap === 'function') {
+ const bitmap = await createImageBitmap(v);
+ ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+ if (bitmap.close) bitmap.close();
+ return true;
+ }
+ } catch (e2) {}
+ return false;
+ }
+ }
+
+ /**
+ * 戦略A: video再生 → canvas-relay → MediaPipe
+ */
+ async function tryPlayBasedExtraction(v, relayCanvas, relayCtx, stats) {
+ const duration = v.duration;
+ const collected = [];
+ const minFrameInterval = 1000 / (TARGET_PROCESS_FPS + 5);
+ let lastProcessedTs = -Infinity;
+ const baseTs = performance.now() + 1;
+ let attempted = 0;
+ let visSum = 0, visCnt = 0;
+
+ v.currentTime = 0;
+
+ function processFrame(currentTimeSec) {
+ attempted++;
+ const tsMs = baseTs + currentTimeSec * 1000;
+ if (tsMs - lastProcessedTs < minFrameInterval) return;
+ lastProcessedTs = tsMs;
+ try {
+ // 撮影フローと同じく video 要素を直接 MediaPipe に渡す
+ // (canvas-relay 経由だと変換後ファイルでも空フレームになる挙動を確認したため廃止)
+ const result = poseLandmarker.detectForVideo(v, tsMs);
+ const landmarks = (result.landmarks && result.landmarks[0]) || null;
+ if (landmarks) {
+ // 体中核の平均visibilityを集計(早期診断用)
+ const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
+ let s = 0, c = 0;
+ CORE.forEach(i => {
+ if (landmarks[i] && typeof landmarks[i].visibility === 'number') {
+ s += landmarks[i].visibility; c++;
+ }
+ });
+ if (c > 0) { visSum += s / c; visCnt++; }
+ collected.push({
+ t: currentTimeSec * 1000,
+ landmarks: landmarks.map(l => ({
+ x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+ z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+ })),
+ });
+ }
+ } catch (e) { console.warn('[upload] play detect:', e.message); }
+ }
+
+ const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
+
+ await new Promise((resolve) => {
+ let finished = false;
+ const finish = () => { if (!finished) { finished = true; resolve(); } };
+ v.addEventListener('ended', finish, { once: true });
+ v.addEventListener('error', () => { console.warn('[upload] video error'); finish(); }, { once: true });
+ setTimeout(() => { try { v.pause(); } catch (e) {} finish(); }, (duration + 8) * 1000);
+
+ if (hasRVFC) {
+ const onFrame = (now, metadata) => {
+ if (finished) return;
+ processFrame(metadata.mediaTime);
+ const pct = Math.min(95, (metadata.mediaTime / duration) * 95);
+ setUploadProgress(pct, '解析中…', '読込: ' + collected.length + '枚');
+ if (!v.ended && !v.paused) v.requestVideoFrameCallback(onFrame);
+ };
+ v.requestVideoFrameCallback(onFrame);
+ } else {
+ let lastTime = -1;
+ const tick = () => {
+ if (finished) return;
+ if (v.currentTime !== lastTime) {
+ lastTime = v.currentTime;
+ processFrame(v.currentTime);
+ const pct = Math.min(95, (v.currentTime / duration) * 95);
+ setUploadProgress(pct, '解析中…', '読込: ' + collected.length + '枚');
+ }
+ if (!v.ended && !v.paused) requestAnimationFrame(tick);
+ else finish();
+ };
+ requestAnimationFrame(tick);
+ }
+
+ v.play().catch(err => {
+ console.warn('[upload] play() rejected:', err.message);
+ finish();
+ });
+ });
+
+ const avgVis = visCnt > 0 ? visSum / visCnt : 0;
+ stats.frameCount = attempted;
+ stats.detectedCount = collected.length;
+ return { collected, detectedCount: collected.length, avgVis: avgVis };
+ }
+
+ /**
+ * 戦略B: seek() → canvas-relay → MediaPipe(Safari HEVCでも一部端末で動作)
+ */
+ async function trySeekBasedExtraction(v, relayCanvas, relayCtx, stats) {
+ const duration = v.duration;
+ const step = 1 / TARGET_PROCESS_FPS;
+ const collected = [];
+ const baseTs = performance.now() + 100000;
+ let attempted = 0;
+ let visSum = 0, visCnt = 0;
+
+ try { v.pause(); } catch (e) {}
+ v.currentTime = 0;
+ await new Promise((resolve) => {
+ const h = () => { v.removeEventListener('seeked', h); resolve(); };
+ v.addEventListener('seeked', h);
+ setTimeout(resolve, 2000);
+ });
+
+ const total = Math.floor(duration / step);
+ for (let i = 0; i < total; i++) {
+ const t = i * step;
+ await new Promise((resolve) => {
+ const h = () => { v.removeEventListener('seeked', h); resolve(); };
+ v.addEventListener('seeked', h);
+ try { v.currentTime = t; } catch (e) { resolve(); return; }
+ setTimeout(resolve, 1500);
+ });
+
+ attempted++;
+ const tsMs = baseTs + t * 1000;
+ try {
+ // seek でも同じく video 要素を直接渡す
+ const result = poseLandmarker.detectForVideo(v, tsMs);
+ const landmarks = (result.landmarks && result.landmarks[0]) || null;
+ if (landmarks) {
+ const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
+ let s = 0, c = 0;
+ CORE.forEach(i => {
+ if (landmarks[i] && typeof landmarks[i].visibility === 'number') {
+ s += landmarks[i].visibility; c++;
+ }
+ });
+ if (c > 0) { visSum += s / c; visCnt++; }
+ collected.push({
+ t: t * 1000,
+ landmarks: landmarks.map(l => ({
+ x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+ z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+ })),
+ });
+ }
+ } catch (e) { console.warn('[upload] seek detect:', e.message); }
+
+ const pct = Math.min(95, (t / duration) * 95);
+ setUploadProgress(pct, 'フォールバック抽出中…', '読込: ' + collected.length + '/' + (i + 1) + '枚');
+ }
+
+ const avgVis = visCnt > 0 ? visSum / visCnt : 0;
+ stats.frameCount = attempted;
+ stats.detectedCount = collected.length;
+ return { collected, detectedCount: collected.length, avgVis: avgVis };
+ }
 
  showScreen('intro');
 })();
