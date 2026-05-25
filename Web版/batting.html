@@ -1031,10 +1031,18 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // -crf 23: 標準的な画質
  // -an: 音声不要(解析には使わない)
  // タイムアウト保険(180秒で諦める)
+ // ブラウザ互換性最大化オプション:
+ // -profile:v baseline: 最も互換性の高い H.264 プロファイル(WebGL対応必須)
+ // -level:v 3.0: 古いデバイスでも対応するレベル
+ // -pix_fmt yuv420p: 標準的な8bit YUV420(canvas 読出 OK)
+ // -preset fast: ultrafast より画質が良くデコードも速い
  const execPromise = ffmpeg.exec([
  '-i', inName,
  '-c:v', 'libx264',
- '-preset', 'ultrafast',
+ '-profile:v', 'baseline',
+ '-level:v', '3.0',
+ '-pix_fmt', 'yuv420p',
+ '-preset', 'fast',
  '-crf', '23',
  '-an',
  '-movflags', '+faststart',
@@ -1092,11 +1100,29 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
  }
 
- // デスクトップでは Chrome/Safari が HEVC を直接デコードできるので
- // FFmpeg.wasm 変換はスキップ(変換後の canvas-relay より直接処理の方が高速・確実)
- const urlForExtraction = pickedFileUrl;
+ // HEVC は Mac Chrome でも WebGL 読出が制限される(ブラウザ全般の制約)
+ // FFmpeg.wasm で baseline H.264 に変換してから解析
+ let urlForExtraction = pickedFileUrl;
+ if (pickedFileCodec === 'hevc') {
+ try {
+ const mp4Blob = await convertVideoToMP4(pickedFile, setUploadProgress);
+ try { URL.revokeObjectURL(pickedFileUrl); } catch (e) {}
+ pickedFileUrl = URL.createObjectURL(mp4Blob);
+ urlForExtraction = pickedFileUrl;
+ pickedFileCodec = 'h264';
+ console.log('[upload] HEVC auto-converted to H.264 (baseline):', mp4Blob.size, 'bytes');
+ } catch (convErr) {
+ console.error('[upload] HEVC変換失敗:', convErr);
+ showRichError('動画変換に失敗しました', [
+ convErr.message || '原因不明',
+ 'mp4(H.264)形式の動画でお試しください',
+ '「撮影を準備する」からその場で撮影できます(確実)',
+ ]);
+ return;
+ }
+ }
 
- setUploadProgress(20, 'フレームを解析しています…', '');
+ setUploadProgress(96, 'フレームを解析しています…', '');
  const frames = await extractFramesFromVideo(urlForExtraction);
  setUploadProgress(99, '解析を組み立てています…', '');
 
