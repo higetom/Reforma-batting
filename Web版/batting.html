@@ -356,9 +356,10 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  $('model-status-mini').textContent = '✓ 準備完了';
  $('model-status-mini').classList.add('ready');
  // 画面切替を先に行う(rmst.html と同じ順序)
- // iPhone Safari は display:none のまま video.play() すると
- // 表示後もフレームが届かないケースがある
  showScreen('capture');
+ // Safari: display:none → 表示切替直後はレイアウト未確定のため
+ // 1フレーム待ってからカメラ起動する
+ await new Promise(resolve => requestAnimationFrame(resolve));
  // カメラ起動
  await startCamera();
  monitor = new window.ReformaQualityGate.QualityMonitor({
