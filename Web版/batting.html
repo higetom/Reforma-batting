@@ -282,16 +282,21 @@
  <!-- 動画プレビュー(解析にもこの要素をそのまま使う = 撮影フローと同じ条件) -->
  <div style="position:relative;background:#000;border-radius:var(--radius-md);overflow:hidden">
  <video id="upload-preview" controls playsinline muted style="width:100%;display:block"></video>
- <!-- 解析中オーバーレイ(プレビュー動画の上に被せて表示) -->
- <div id="upload-progress-overlay" class="hidden" style="position:absolute;inset:0;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;padding:24px;text-align:center;z-index:5">
- <div style="font-size:13px;letter-spacing:2px;color:var(--reforma-red);font-weight:700;margin-bottom:8px">ANALYZING</div>
- <div style="font-size:18px;font-weight:500;margin-bottom:18px">解析中…</div>
- <div style="background:rgba(255,255,255,0.12);border-radius:99px;height:6px;width:80%;max-width:280px;overflow:hidden;margin-bottom:10px">
+ <!-- 解析中プログレスバー(動画底部の細い帯のみ表示)
+ 重要: video全面を覆うとChromeがデコードを最適化(省略)し、
+ MediaPipeが空フレームを受け取る不具合があるため、video本体を覆わない設計。 -->
+ <div id="upload-progress-overlay" class="hidden" style="position:absolute;left:0;right:0;bottom:0;background:linear-gradient(to top, rgba(0,0,0,0.92), rgba(0,0,0,0.5));color:#fff;padding:10px 16px 12px;z-index:5">
+ <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+ <div style="width:8px;height:8px;border-radius:50%;background:var(--reforma-red);animation:rfPulse 1s infinite"></div>
+ <div style="font-size:11px;letter-spacing:2px;color:var(--reforma-red);font-weight:700">ANALYZING</div>
+ <div id="upload-overlay-text" style="font-size:12px;font-family:var(--font-family-mono);opacity:0.95;margin-left:auto">準備中…</div>
+ </div>
+ <div style="background:rgba(255,255,255,0.18);border-radius:99px;height:5px;overflow:hidden">
  <div id="upload-overlay-bar" style="height:100%;width:0%;background:var(--reforma-red);transition:width 0.25s"></div>
  </div>
- <div id="upload-overlay-text" style="font-size:13px;font-family:var(--font-family-mono);opacity:0.9">準備中…</div>
- <div id="upload-overlay-detail" style="font-size:11px;opacity:0.6;margin-top:6px;font-family:var(--font-family-mono)"></div>
+ <div id="upload-overlay-detail" style="font-size:10px;opacity:0.6;margin-top:4px;font-family:var(--font-family-mono)"></div>
  </div>
+ <style>@keyframes rfPulse { 50% { opacity: 0.3; } }</style>
  </div>
  <div id="upload-info" class="text-small text-muted" style="margin-top:8px;font-family:var(--font-family-mono)"></div>
 
@@ -1275,15 +1280,24 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
  const collected = [];
  const baseTs = performance.now() + 1;
- let lastTime = -1;
  let visSum = 0, visCnt = 0;
 
+ // canvas-relay 用(rVFC で確実にフレームを取得して canvas 経由で MediaPipe に渡す)
+ const relayCanvas = document.createElement('canvas');
+ const relayCtx = relayCanvas.getContext('2d', { willReadFrequently: true });
+ const scale = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+ relayCanvas.width = Math.max(1, Math.round(v.videoWidth * scale));
+ relayCanvas.height = Math.max(1, Math.round(v.videoHeight * scale));
+ console.log('[upload] relay canvas:', relayCanvas.width + 'x' + relayCanvas.height);
+
+ const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
  const finishedRef = { value: false };
 
  await new Promise((resolve) => {
  const finish = () => { if (!finishedRef.value) { finishedRef.value = true; resolve(); } };
 
  v.addEventListener('ended', finish, { once: true });
+ v.addEventListener('error', () => { console.warn('[upload] video error'); finish(); }, { once: true });
  // 安全タイムアウト(動画長+10秒)
  const safetyTimer = setTimeout(() => {
  console.warn('[upload] extraction safety timeout');
@@ -1291,23 +1305,15 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  finish();
  }, (duration + 10) * 1000);
 
- // 撮影フローと同じ rAF + currentTime 変化検出
- const tick = () => {
- if (finishedRef.value) return;
- if (v.ended) {
- clearTimeout(safetyTimer);
- finish();
- return;
- }
- if (v.currentTime !== lastTime) {
- lastTime = v.currentTime;
- const tsMs = baseTs + lastTime * 1000;
+ function processCurrentFrame(currentTimeSec) {
+ const tsMs = baseTs + currentTimeSec * 1000;
  try {
- // 撮影フローと完全に同じく、video 要素を直接 detectForVideo に渡す
- const result = poseLandmarker.detectForVideo(v, tsMs);
+ // canvas-relay: video の現フレームを canvas に描画
+ relayCtx.drawImage(v, 0, 0, relayCanvas.width, relayCanvas.height);
+ // canvas を MediaPipe に渡す(video element 直渡しより安定)
+ const result = poseLandmarker.detectForVideo(relayCanvas, tsMs);
  const landmarks = (result.landmarks && result.landmarks[0]) || null;
  if (landmarks) {
- // 中核ランドマークの平均visibility集計
  const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
  let s = 0, c = 0;
  CORE.forEach(i => {
@@ -1316,9 +1322,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }
  });
  if (c > 0) { visSum += s / c; visCnt++; }
-
  collected.push({
- t: lastTime * 1000,
+ t: currentTimeSec * 1000,
  landmarks: landmarks.map(l => ({
  x: +l.x.toFixed(4), y: +l.y.toFixed(4),
  z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
@@ -1326,18 +1331,37 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  });
  }
  } catch (e) { console.warn('[upload] detect error:', e.message); }
-
- // プログレス更新(5〜95%)
- const pct = 5 + Math.min(90, (lastTime / duration) * 90);
+ // プログレス更新
+ const pct = 5 + Math.min(90, (currentTimeSec / duration) * 90);
  setOverlayProgress(pct, '解析中…', '読込: ' + collected.length + '枚');
  }
- requestAnimationFrame(tick);
- };
 
- // 再生開始 → tickループ開始
- v.play().then(() => {
- console.log('[upload] preview video playing — starting rAF loop');
+ if (hasRVFC) {
+ // 推奨経路: rVFC は新フレームが描画されたタイミングで確実に発火
+ const onFrame = (now, metadata) => {
+ if (finishedRef.value) return;
+ processCurrentFrame(metadata.mediaTime);
+ if (!v.ended && !v.paused) v.requestVideoFrameCallback(onFrame);
+ else { clearTimeout(safetyTimer); finish(); }
+ };
+ v.requestVideoFrameCallback(onFrame);
+ } else {
+ // フォールバック: rAF + currentTime 変化検出
+ let lastTime = -1;
+ const tick = () => {
+ if (finishedRef.value) return;
+ if (v.currentTime !== lastTime) {
+ lastTime = v.currentTime;
+ processCurrentFrame(lastTime);
+ }
+ if (v.ended) { clearTimeout(safetyTimer); finish(); }
+ else requestAnimationFrame(tick);
+ };
  requestAnimationFrame(tick);
+ }
+
+ v.play().then(() => {
+ console.log('[upload] preview video playing — using ' + (hasRVFC ? 'rVFC' : 'rAF'));
  }).catch((err) => {
  console.warn('[upload] preview play rejected:', err.message);
  clearTimeout(safetyTimer);
