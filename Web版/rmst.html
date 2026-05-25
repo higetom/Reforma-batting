@@ -384,6 +384,12 @@
         <div class="role-text" id="step-subject-instr">カメラの方を向いて、自然に立ってください。</div>
       </div>
 
+      <!-- 視覚的ダイアグラム(動作によっては必須、ない動作は非表示) -->
+      <div id="step-visual-aid" style="display:none;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px 16px;margin-top:12px">
+        <div style="color:var(--text-tertiary);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:8px">📐 撮影アングル</div>
+        <pre id="step-visual-aid-content" style="font-family:var(--font-family-mono);font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;margin:0"></pre>
+      </div>
+
       <div class="alert alert-info mt-3" id="step-tips" style="display:none">
         <b>ヒント:</b> <span id="step-tips-text"></span>
       </div>
@@ -553,12 +559,26 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
     },
     {
       id: 'hip_90_90',
-      title: 'Hip 90-90 ストレッチ',
+      title: '股関節の柔らかさチェック',
       duration_sec: 15,
-      camera_position: '📱 スマホ縦持ち・被験者の真横(寝た体の側面)から',
-      camera_instr: '床に寝た状態の被験者の真横に座って、体全体が画面に縦長に映るよう撮影。',
-      subject_instr: '仰向けに寝て、両膝を90°曲げ、両股関節も90°持ち上げます。その状態で膝を左右にゆっくり倒します。',
-      tips: '15秒の間にゆっくり左右各2回ずつ。痛い角度まで無理をしない。',
+      camera_position: '📱 スマホ縦持ち・被験者の足元側に立ち、頭の方に向けて撮影',
+      camera_instr:
+        '【撮影者の立ち位置】被験者は仰向けに寝ています。あなたは被験者の足元側(つま先の延長線上)に立ち、スマホを縦に持って被験者の頭の方を画面の奥に向けて撮ってください。' +
+        '\n【画面に映る景色】手前: 立てた両膝(90°曲げた状態)/真ん中: 体/奥: 顔。両膝が左右に倒れる動きが、画面の左右移動として見えればOK。',
+      subject_instr:
+        '床に仰向けで寝てください。両膝を90°に立てて、その状態で両足を揃えたまま左右にゆっくり倒します(膝が床に近づくイメージ)。痛い角度まで無理をしないこと。',
+      tips: '15秒で左右各2回ずつ ゆっくり。難しければスキップしてOK(全身評価には他5動作で十分です)。',
+      visual_aid:
+        '       😊  ← 被験者の頭(画面の奥)\n' +
+        '       ▽▽\n' +
+        '       ││  ← 体\n' +
+        '       ││\n' +
+        '       ⌐⌐  ← 立てた膝 90°\n' +
+        '        ↑\n' +
+        '       📱  ← あなた(足元側に立つ)\n' +
+        '\n' +
+        '   この向きで撮ると、両膝が左右に倒れる動きが\n' +
+        '   画面の左右移動として明確に見えます。',
       facing: 'environment',
     },
     {
@@ -675,6 +695,13 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       $('step-tips-text').textContent = step.tips;
     } else {
       $('step-tips').style.display = 'none';
+    }
+    // 視覚ダイアグラム(該当ステップのみ表示)
+    if (step.visual_aid) {
+      $('step-visual-aid').style.display = '';
+      $('step-visual-aid-content').textContent = step.visual_aid;
+    } else {
+      $('step-visual-aid').style.display = 'none';
     }
     renderStepProgress(currentStepIdx);
     showScreen('stepIntro');
