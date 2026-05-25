@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "_comment_rewrites": "FFmpeg.wasm を同一オリジンとして提供するため Vercel エッジでjsDelivrへプロキシ。ブラウザからは /ffmpeg/* として見えるため Worker の Same-Origin Policy を回避できる。GitHub の25MB上限も回避。",
   "rewrites": [
     {
       "source": "/ffmpeg/ffmpeg.js",
