@@ -395,6 +395,9 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  overlay.width = video.videoWidth;
  overlay.height = video.videoHeight;
  document.body.classList.toggle('cam-front', usingFront);
+ // カメラ切替時に前のストリームの currentTime が残るため、
+ // detect ループが止まらないようリセットする
+ lastVideoTime = -1;
  }
 
  $('btn-switch-cam').addEventListener('click', async () => {
