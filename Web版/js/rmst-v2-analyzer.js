@@ -387,6 +387,51 @@
   };
 
   // ─────────────────────────────────────────
+  // 上位2大分類: 動作起源タイプ
+  // 理論: Putnam DR (1993) "Sequential motions of body segments in striking
+  //       and throwing skills" J Biomech — kinetic chain の起点で2分
+  // 下半身始動型 = 地面反力・骨盤回旋を起点に運動連鎖が proximal→distal
+  // 上半身始動型 = 上肢・体幹のしなりを起点に動作を完結する
+  // ─────────────────────────────────────────
+  const MOVEMENT_ORIGIN_DB = {
+    '下半身始動型': {
+      label_en: 'Lower-Body Driven',
+      short_label: '下半身始動',
+      characteristic: '下肢から始まる運動連鎖でパワーを生み出すタイプ',
+      characteristic_friendly: '足から動き出して、その勢いで打つタイプです',
+      strength: 'パワー伝達効率・打球の強さ・連動性',
+      caution: '上半身の遅れが出ないよう、しなりの維持が大切',
+      includes: ['ドライブ型', 'フロー型'],
+      color: '#f59e0b',
+      icon: '🦵',
+    },
+    '上半身始動型': {
+      label_en: 'Upper-Body Driven',
+      short_label: '上半身始動',
+      characteristic: '上肢・体幹のしなりを主動力に動作を完結するタイプ',
+      characteristic_friendly: '腕や体のひねりを主役にして打つタイプです',
+      strength: 'バットコントロール・繊細な調整・対応力',
+      caution: '下半身からのエネルギーをもらえると更にパワーが出ます',
+      includes: ['リーチ型', 'ウィップ型'],
+      color: '#60a5fa',
+      icon: '💪',
+    },
+  };
+
+  /**
+   * 4タイプ判定結果から、上位の2大分類(動作起源タイプ)を返す
+   */
+  function getMovementOrigin(rmpType) {
+    for (const [originType, info] of Object.entries(MOVEMENT_ORIGIN_DB)) {
+      if (info.includes.includes(rmpType)) {
+        return { origin_type: originType, ...info };
+      }
+    }
+    // デフォルト(フロー型は下半身始動側に分類されているが念のため)
+    return { origin_type: '下半身始動型', ...MOVEMENT_ORIGIN_DB['下半身始動型'] };
+  }
+
+  // ─────────────────────────────────────────
   // メイン解析エントリ
   // ─────────────────────────────────────────
   /**
@@ -429,6 +474,9 @@
     const injuryRisk = computeInjuryRiskScore(stance, squat, hip90, tspine);
     const pokedex = POKEDEX[rmpType];
 
+    // 上位2大分類(動作起源タイプ)を取得
+    const origin = getMovementOrigin(rmpType);
+
     return {
       rmp_type: rmpType,
       type_en: pokedex.type_en,
@@ -447,6 +495,9 @@
         cmj: cmj,
       },
       pokedex_entry: pokedex,
+      // 上位2大分類(階層構造)
+      movement_origin: origin.origin_type,
+      movement_origin_info: origin,
       _protocol_version: 'RMST v2 (60秒・5動作, Web版)',
     };
   }
@@ -458,5 +509,7 @@
     analyzeRMSTv2: analyzeRMSTv2,
     PROTOCOL: PROTOCOL,
     POKEDEX: POKEDEX,
+    MOVEMENT_ORIGIN_DB: MOVEMENT_ORIGIN_DB,
+    getMovementOrigin: getMovementOrigin,
   };
 })(window);

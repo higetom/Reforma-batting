@@ -205,9 +205,24 @@
   <!-- 結果表示エリア(解析完了後に表示) -->
   <div id="result-content" class="hidden">
 
-    <!-- ヒーロー: タイプ名 -->
+    <!-- ヒーロー: 2大分類 + 4タイプの階層表示 -->
     <div class="result-hero card-emphasized fade-in" id="hero-card">
       <div class="hero-eyebrow" id="hero-greeting">あなたの動作タイプ</div>
+
+      <!-- 上位: 動作起源タイプ(大きく、目立つ) -->
+      <div id="hero-origin-row" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 12px">
+        <span id="hero-origin-icon" style="font-size:32px">🦵</span>
+        <span id="hero-origin-name" style="font-size:24px;font-weight:500;letter-spacing:-0.02em">下半身始動型</span>
+      </div>
+      <div id="hero-origin-desc" class="text-secondary text-small mb-3" style="line-height:1.85">
+        下肢から始まる運動連鎖でパワーを生み出すタイプです
+      </div>
+
+      <!-- 区切り線 -->
+      <div style="height:1px;background:var(--border-subtle);margin:18px 32px"></div>
+
+      <!-- 下位: 4タイプの細分類(動物図鑑) -->
+      <div class="hero-eyebrow mt-3" style="font-size:10px">その中でも、あなたは</div>
       <div class="hero-animal" id="hero-animal">🐍</div>
       <div class="hero-type-name" id="hero-type-name">蛇(ウィップ型)</div>
       <div class="hero-type-en" id="hero-type-en">Rotational-Driven</div>
@@ -387,6 +402,15 @@
       ? userName + 'さんの動作タイプ'
       : 'あなたの動作タイプ';
     document.getElementById('hero-greeting').textContent = greetingText;
+
+    // 上位: 動作起源タイプ
+    const origin = result.movement_origin_info || {};
+    document.getElementById('hero-origin-icon').textContent = origin.icon || '⚾';
+    document.getElementById('hero-origin-name').textContent = result.movement_origin || '判定中';
+    document.getElementById('hero-origin-desc').textContent =
+      origin.characteristic_friendly || origin.characteristic || '';
+
+    // 下位: 動物図鑑(4タイプ)
     document.getElementById('hero-animal').textContent = result.animal_emoji;
     document.getElementById('hero-type-name').textContent =
       result.animal_jp + '(' + result.rmp_type + ')';

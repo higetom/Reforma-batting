@@ -24,33 +24,103 @@
   <link rel="stylesheet" href="css/common.css">
 
   <style>
-    /* このページ専用 */
-    body {
-      overflow-x: hidden;
-    }
+    body { overflow-x: hidden; }
+
+    /* ステップヘッダー */
     #step-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 12px 20px;
+      padding: 12px 16px;
       background: var(--bg-secondary);
       border-bottom: 1px solid var(--border-subtle);
+      gap: 10px;
     }
-    #step-header .step-label {
-      font-size: 12px;
+    .step-label {
+      font-size: 11px;
       color: var(--text-tertiary);
       letter-spacing: 1.5px;
+      font-weight: 600;
     }
-    #step-header .greeting {
+    .step-title {
       font-size: 15px;
       color: var(--text-primary);
+      margin-top: 2px;
+    }
+    .step-progress-mini {
+      display: flex;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .step-dot {
+      width: 18px;
+      height: 4px;
+      background: var(--border-subtle);
+      border-radius: 2px;
+    }
+    .step-dot.active { background: var(--reforma-red); }
+    .step-dot.done { background: var(--color-success); }
+
+    /* 動作説明カード */
+    .action-card {
+      padding: 20px 16px;
+    }
+    .action-eyebrow {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--reforma-red);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .action-title {
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .action-duration {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-family: var(--font-family-mono);
+      margin-bottom: 16px;
     }
 
+    .role-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-left: 3px solid;
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .role-card.role-camera { border-left-color: var(--color-info); }
+    .role-card.role-subject { border-left-color: var(--color-success); }
+    .role-label {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .role-camera .role-label { color: var(--color-info); }
+    .role-subject .role-label { color: var(--color-success); }
+    .role-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.85;
+    }
+    .role-icon {
+      display: inline-block;
+      width: 22px;
+      text-align: center;
+      margin-right: 4px;
+    }
+
+    /* 撮影画面 */
     #video-wrap {
       position: relative;
       width: 100%;
       aspect-ratio: 9/16;
-      max-height: 65vh;
+      max-height: 60vh;
       background: #000;
       overflow: hidden;
     }
@@ -66,7 +136,6 @@
     body.cam-front #video,
     body.cam-front #overlay { transform: scaleX(-1); }
 
-    /* ステータスオーバーレイ */
     #status-overlay {
       position: absolute;
       top: 8px;
@@ -80,13 +149,12 @@
       pointer-events: none;
     }
     .status-pill {
-      background: rgba(0, 0, 0, 0.65);
+      background: rgba(0, 0, 0, 0.7);
       color: #fff;
-      padding: 6px 10px;
+      padding: 6px 12px;
       border-radius: var(--radius-full);
       font-size: 11px;
       font-family: var(--font-family-mono);
-      letter-spacing: 0.5px;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
@@ -94,231 +162,303 @@
     .status-pill.fps-warn { color: var(--color-warning); }
     .status-pill.fps-bad { color: var(--color-danger); }
 
-    /* 撮影シーケンス表示 */
-    #sequence-banner {
+    /* カウントダウン */
+    #countdown-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: #fff;
+      pointer-events: none;
+    }
+    #countdown-number {
+      font-size: 96px;
+      font-weight: 200;
+      line-height: 1;
+      font-family: var(--font-family-mono);
+    }
+    #countdown-label {
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+
+    /* 撮影中バッジ */
+    #recording-badge {
+      position: absolute;
+      top: 50px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 4;
+      background: rgba(239, 68, 68, 0.95);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: var(--radius-full);
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: var(--shadow-md);
+    }
+    #recording-badge .rec-dot {
+      width: 10px;
+      height: 10px;
+      background: #fff;
+      border-radius: 50%;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink {
+      50% { opacity: 0.3; }
+    }
+    #recording-timer {
+      font-family: var(--font-family-mono);
+      font-size: 16px;
+    }
+
+    /* 撮影完了バナー */
+    #capture-complete-banner {
       position: absolute;
       bottom: 0;
       left: 0;
       right: 0;
-      z-index: 3;
-      background: linear-gradient(to top, rgba(0,0,0,0.85), rgba(0,0,0,0));
-      color: #fff;
+      z-index: 4;
+      background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0));
       padding: 30px 16px 16px;
       text-align: center;
-      pointer-events: none;
-    }
-    .sequence-current {
-      font-size: 22px;
-      font-weight: 500;
-      letter-spacing: -0.01em;
-      margin-bottom: 4px;
-    }
-    .sequence-instruction {
-      font-size: 14px;
-      color: rgba(255, 255, 255, 0.85);
-    }
-    .sequence-timer {
-      font-family: var(--font-family-mono);
-      font-size: 36px;
-      font-weight: 300;
-      letter-spacing: -1px;
-      margin-top: 8px;
-    }
-
-    /* 品質警告 */
-    #quality-warnings {
-      position: absolute;
-      top: 50px;
-      left: 16px;
-      right: 16px;
-      z-index: 4;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      pointer-events: none;
-    }
-    .quality-warning {
-      background: rgba(245, 158, 11, 0.95);
-      color: #000;
-      padding: 10px 14px;
-      border-radius: var(--radius-md);
-      font-size: 13px;
-      font-weight: 500;
-      text-align: center;
-      animation: fadeIn 0.3s;
-      box-shadow: var(--shadow-md);
-    }
-    .quality-warning.severity-error {
-      background: rgba(239, 68, 68, 0.95);
       color: #fff;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
     }
 
     /* コントロール */
     .controls {
-      padding: 20px 16px;
+      padding: 16px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 10px;
       background: var(--bg-tertiary);
     }
-    #model-status {
+    #model-status-mini {
       text-align: center;
-      font-size: 13px;
+      font-size: 12px;
       color: var(--text-tertiary);
-      padding: 12px;
-      background: var(--bg-card);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-subtle);
+      padding: 8px;
     }
-    #model-status.ready { color: var(--color-success); border-color: rgba(16, 185, 129, 0.3); }
-    #model-status.error { color: var(--color-danger); border-color: rgba(239, 68, 68, 0.3); }
+    #model-status-mini.ready { color: var(--color-success); }
+    #model-status-mini.error { color: var(--color-danger); }
 
+    /* 中断ボタンエリア */
+    #abort-area {
+      padding: 12px 16px;
+      background: var(--bg-tertiary);
+      border-top: 1px solid var(--border-subtle);
+      text-align: center;
+    }
+
+    /* 進捗バー */
     .progress-bar {
       width: 100%;
       height: 4px;
       background: var(--border-subtle);
       border-radius: var(--radius-full);
       overflow: hidden;
-      margin-top: 8px;
     }
     .progress-bar-fill {
       height: 100%;
       background: linear-gradient(90deg, var(--color-info), var(--color-success));
       width: 0%;
-      transition: width 0.3s;
-    }
-
-    /* 撮影前ガイド */
-    #pre-capture-guide {
-      padding: 20px 16px;
-    }
-    .guide-list {
-      list-style: none;
-      padding: 0;
-    }
-    .guide-list li {
-      padding: 10px 14px;
-      background: var(--bg-card);
-      border-radius: var(--radius-md);
-      margin-bottom: 6px;
-      font-size: 13.5px;
-      color: var(--text-secondary);
-      display: flex;
-      gap: 10px;
-      align-items: flex-start;
-    }
-    .guide-list li::before {
-      content: "✓";
-      color: var(--color-success);
-      font-weight: bold;
-      flex-shrink: 0;
+      transition: width 0.3s linear;
     }
   </style>
 </head>
 <body>
 
-<div id="step-header">
-  <div>
-    <div class="step-label">STEP 1 / 3</div>
-    <div class="greeting" id="greeting">こんにちは</div>
+<header id="step-header">
+  <div style="flex:1">
+    <div class="step-label" id="step-num">STEP 0 / 6</div>
+    <div class="step-title" id="step-title-text">準備</div>
+    <div class="step-progress-mini" id="step-progress-dots"></div>
   </div>
-  <a href="welcome.html" class="text-small text-muted">← 戻る</a>
-</div>
+  <a href="welcome.html" class="text-small text-muted">× 中止</a>
+</header>
 
-<!-- 撮影前ガイド画面(初期表示) -->
-<div id="pre-capture-guide">
-  <h2 class="mb-3">動作タイプを判定します</h2>
-  <p class="text-secondary text-small mb-4">
-    60秒の動画撮影で、あなたの動作タイプを4種類(鷲・サイ・蛇・猫)から判定します。
-    判定結果は今後のバッティング解析でも活用されます。
-  </p>
+<main id="screen-container">
 
-  <h3 class="mb-2" style="font-size:15px">撮影のコツ</h3>
-  <ul class="guide-list">
-    <li>三脚 or スマホスタンドでカメラを固定してください</li>
-    <li>全身が画面に収まる位置に立ってください(目安 2.5〜4m)</li>
-    <li>明るい場所(屋内なら照明 ON)で撮影してください</li>
-    <li>動きやすい服装で行ってください</li>
-  </ul>
+  <!-- ─────────────────────────────────────────
+       Screen A: イントロ画面(全体ガイド)
+       ───────────────────────────────────────── -->
+  <div id="screen-intro">
+    <div class="action-card">
+      <div class="action-eyebrow">RMST 動作タイプ判定</div>
+      <h1 class="action-title" id="intro-greeting">動作タイプを判定します</h1>
+      <p class="text-secondary mt-2 mb-4" style="font-size:14px;line-height:1.85">
+        全部で <b>6つの動作</b> を、1つずつ撮影します。
+        各動作は数秒〜15秒程度。途中でやり直しもできます。
+      </p>
 
-  <h3 class="mb-2 mt-4" style="font-size:15px">撮影シーケンス(60秒)</h3>
-  <ul class="guide-list">
-    <li>0-3秒: 正面向きで自然に立つ</li>
-    <li>3-4秒: 90°右に回って横向きに</li>
-    <li>4-7秒: 横向きで自然に立つ</li>
-    <li>7-19秒: 両手を頭上に挙げてスクワット×3</li>
-    <li>19-31秒: 仰向けで股関節 90-90 ROM</li>
-    <li>31-41秒: 座って胸椎回旋(左右)</li>
-    <li>41-55秒: Counter Movement Jump×3</li>
-  </ul>
+      <div class="role-card role-camera">
+        <div class="role-label"><span class="role-icon">📱</span>撮影する方へ(ママ・友人など)</div>
+        <div class="role-text">
+          スマートフォンを<b>両手でしっかり持って</b>、被験者の全身が画面に収まるように撮影してください。
+          画面のシルエットガイドに合わせると確実です。
+        </div>
+      </div>
 
-  <button class="btn btn-primary btn-block btn-large mt-5" id="prepare-btn">
-    カメラを準備する →
-  </button>
-</div>
+      <div class="role-card role-subject">
+        <div class="role-label"><span class="role-icon">⚾️</span>動作する方へ</div>
+        <div class="role-text">
+          動きやすい服装で、リラックスして動作してください。
+          各動作の前に説明と準備時間があります。
+        </div>
+      </div>
 
-<!-- 撮影画面(カメラ起動後) -->
-<div id="capture-screen" class="hidden">
-  <div id="video-wrap">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="overlay"></canvas>
+      <div class="alert alert-info mt-4">
+        <b>所要時間: 約3-5分</b><br>
+        撮影に不安なときは「やり直す」「中止」がいつでも押せます。
+      </div>
 
-    <div id="status-overlay">
-      <div class="status-pill" id="model-pill">モデル準備中…</div>
-      <div class="status-pill fps-good" id="fps-pill">-- fps</div>
-    </div>
-
-    <div id="quality-warnings"></div>
-
-    <div id="sequence-banner" class="hidden">
-      <div class="sequence-current" id="seq-current">撮影中</div>
-      <div class="sequence-instruction" id="seq-instr">準備してください</div>
-      <div class="sequence-timer" id="seq-timer">--</div>
+      <button class="btn btn-primary btn-large btn-block mt-4" id="btn-start-rmst">
+        撮影をはじめる →
+      </button>
     </div>
   </div>
 
-  <div class="controls">
-    <div id="model-status">⏳ Pose モデルを読み込んでいます…</div>
-    <div class="progress-bar"><div class="progress-bar-fill" id="model-progress"></div></div>
+  <!-- ─────────────────────────────────────────
+       Screen B: 各ステップの動作説明
+       ───────────────────────────────────────── -->
+  <div id="screen-step-intro" class="hidden">
+    <div class="action-card">
+      <div class="action-eyebrow" id="step-eyebrow">STEP 1 / 6</div>
+      <h1 class="action-title" id="step-title">立ち姿(正面+横)</h1>
+      <div class="action-duration" id="step-duration">撮影時間: 3秒</div>
 
-    <button class="btn btn-primary btn-block btn-large" id="start-recording-btn" disabled>
-      📹 60秒の撮影を開始する
-    </button>
-    <button class="btn btn-secondary btn-block hidden" id="switch-cam-btn">
-      🔄 カメラ切替
-    </button>
-  </div>
-</div>
+      <div class="role-card role-camera">
+        <div class="role-label"><span class="role-icon">📱</span>撮影する方</div>
+        <div class="role-text" id="step-camera-instr">真正面から、被験者の全身が映るよう撮影してください。</div>
+      </div>
 
-<!-- 解析中画面 -->
-<div id="analyzing-screen" class="hidden">
-  <div class="container" style="padding:48px 24px;text-align:center">
-    <div style="font-size:48px;margin-bottom:16px">⏳</div>
-    <h2 class="mb-2">解析中…</h2>
-    <p class="text-secondary text-small">
-      録画した動画から、あなたの動作タイプを判定しています。
-      数秒お待ちください。
-    </p>
-    <div class="progress-bar mt-4"><div class="progress-bar-fill" id="analyze-progress" style="width:0%"></div></div>
-  </div>
-</div>
+      <div class="role-card role-subject">
+        <div class="role-label"><span class="role-icon">⚾️</span>動作する方</div>
+        <div class="role-text" id="step-subject-instr">カメラの方を向いて、自然に立ってください。</div>
+      </div>
 
-<!-- エラー画面 -->
-<div id="error-screen" class="hidden">
-  <div class="container" style="padding:32px 24px">
-    <div class="alert alert-danger">
-      <b>エラーが発生しました</b><br>
-      <span id="error-message"></span>
+      <div class="alert alert-info mt-3" id="step-tips" style="display:none">
+        <b>ヒント:</b> <span id="step-tips-text"></span>
+      </div>
+
+      <button class="btn btn-primary btn-large btn-block mt-4" id="btn-start-capture">
+        準備できました ・ 撮影開始 →
+      </button>
+      <button class="btn btn-secondary btn-block mt-2" id="btn-skip-step">
+        この動作をスキップ
+      </button>
     </div>
-    <button class="btn btn-secondary btn-block mt-4" onclick="location.reload()">
-      もう一度試す
-    </button>
   </div>
-</div>
+
+  <!-- ─────────────────────────────────────────
+       Screen C: 撮影画面(カメラ起動中)
+       ───────────────────────────────────────── -->
+  <div id="screen-capture" class="hidden">
+    <div id="video-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div id="status-overlay">
+        <div class="status-pill" id="model-pill">モデル準備中…</div>
+        <div class="status-pill fps-good" id="fps-pill">-- fps</div>
+      </div>
+      <div id="recording-badge" class="hidden">
+        <span class="rec-dot"></span>
+        <span>撮影中</span>
+        <span id="recording-timer">--秒</span>
+      </div>
+      <div id="countdown-overlay" class="hidden">
+        <div id="countdown-number">3</div>
+        <div id="countdown-label">準備…</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div id="model-status-mini">⏳ Pose モデルを読み込んでいます…</div>
+
+      <button class="btn btn-danger btn-block btn-large hidden" id="btn-stop-capture">
+        ■ 撮影を停止
+      </button>
+      <button class="btn btn-secondary btn-block hidden" id="btn-switch-cam">
+        🔄 カメラ切替(前後)
+      </button>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       Screen D: 撮影後の確認
+       ───────────────────────────────────────── -->
+  <div id="screen-review" class="hidden">
+    <div class="action-card">
+      <div class="action-eyebrow">撮影結果</div>
+      <h1 class="action-title" id="review-title">立ち姿 完了</h1>
+
+      <div class="card mt-3" id="review-summary">
+        <div class="flex justify-between mb-2">
+          <span class="text-tertiary text-small">撮影フレーム数</span>
+          <span class="text-mono" id="review-frames">--</span>
+        </div>
+        <div class="flex justify-between mb-2">
+          <span class="text-tertiary text-small">検出率</span>
+          <span class="text-mono" id="review-detection">--%</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-tertiary text-small">平均FPS</span>
+          <span class="text-mono" id="review-fps">-- fps</span>
+        </div>
+      </div>
+
+      <div id="review-warning" class="alert alert-warning hidden mt-3">
+        <b>動作品質が低めです</b>
+        <div class="text-small mt-2" id="review-warning-text"></div>
+      </div>
+
+      <button class="btn btn-primary btn-large btn-block mt-4" id="btn-next-step">
+        次の動作へ →
+      </button>
+      <button class="btn btn-secondary btn-block mt-2" id="btn-retry-step">
+        🔄 この動作をもう一度
+      </button>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       Screen E: 全ステップ完了 → 解析中
+       ───────────────────────────────────────── -->
+  <div id="screen-analyzing" class="hidden">
+    <div class="container" style="padding:48px 24px;text-align:center">
+      <div style="font-size:48px;margin-bottom:16px">⏳</div>
+      <h2 class="mb-2">解析中…</h2>
+      <p class="text-secondary text-small mb-4">
+        全動作のデータを統合して、あなたの動作タイプを判定しています。
+      </p>
+      <div class="progress-bar"><div class="progress-bar-fill" id="analyze-progress"></div></div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────
+       Screen F: エラー
+       ───────────────────────────────────────── -->
+  <div id="screen-error" class="hidden">
+    <div class="container" style="padding:32px 24px">
+      <div class="alert alert-danger">
+        <b>エラーが発生しました</b><br>
+        <span id="error-text"></span>
+      </div>
+      <button class="btn btn-secondary btn-block mt-4" onclick="location.reload()">
+        最初からやり直す
+      </button>
+    </div>
+  </div>
+
+</main>
 
 <footer class="rf-footer">
   <div class="precision-note">
@@ -336,139 +476,214 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   'use strict';
 
   // ─────────────────────────────────────────
+  // ステップ定義(各動作)
+  // ─────────────────────────────────────────
+  const STEPS = [
+    {
+      id: 'stance',
+      title: '立ち姿(正面+横)',
+      duration_sec: 6,
+      camera_instr: '正面と横の2方向から、被験者の全身を撮影してください。最初の3秒は正面、後半3秒は横向きで。',
+      subject_instr: '最初の3秒はカメラの方を向いて自然に立ちます。3秒過ぎたら右に90°回って横向きに。',
+      tips: '撮影者は途中で動かず、その場で固定。被験者が向きを変えるだけにしてください。',
+      facing: 'environment', // 背面カメラを推奨
+    },
+    {
+      id: 'overhead_squat',
+      title: 'オーバーヘッドスクワット(3回)',
+      duration_sec: 15,
+      camera_instr: '正面から、被験者の全身が映るよう撮影。少し離れた位置から(目安2-3m)。',
+      subject_instr: '両手を頭の真上に挙げたまま、ゆっくり3回スクワットしてください。深く座ろうと頑張らなくてOK、自然な可動域で。',
+      tips: '15秒の間にゆっくり3回。1回 = 下ろす+立ち上がる で5秒くらい。',
+      facing: 'environment',
+    },
+    {
+      id: 'hip_90_90',
+      title: 'Hip 90-90 ストレッチ',
+      duration_sec: 15,
+      camera_instr: '床に寝た状態の被験者の真横から、体全体が映るよう撮影。',
+      subject_instr: '仰向けに寝て、両膝を90°曲げ、両股関節も90°持ち上げます。その状態で膝を左右にゆっくり倒します。',
+      tips: '15秒の間にゆっくり左右各2回ずつ。痛い角度まで無理をしない。',
+      facing: 'environment',
+    },
+    {
+      id: 't_spine_rot',
+      title: '胸椎回旋(座って)',
+      duration_sec: 10,
+      camera_instr: '被験者の正面から、上半身がよく見える距離で撮影。',
+      subject_instr: '椅子に座り、両手を胸の前で組みます。胸から上を、ゆっくり右に回旋 → 戻る → 左に回旋 → 戻るを行います。',
+      tips: '腰は固定して、胸から回す意識で。10秒で左右各1回ずつ。',
+      facing: 'environment',
+    },
+    {
+      id: 'cmj',
+      title: 'Counter Movement Jump(3回)',
+      duration_sec: 10,
+      camera_instr: '被験者の真横から、全身(特に頭から足まで)が映るよう撮影。少し離れた位置(3-4m)から。',
+      subject_instr: 'リラックスして立ち、深くしゃがんでから真上にジャンプを3回繰り返してください。',
+      tips: '1回ジャンプしたら少し休んで、また飛ぶ感じで。安全な場所(滑らない床)で。',
+      facing: 'environment',
+    },
+  ];
+
+  // ─────────────────────────────────────────
   // 要素取得
   // ─────────────────────────────────────────
-  const greeting = document.getElementById('greeting');
-  const prepareBtn = document.getElementById('prepare-btn');
-  const preCaptureGuide = document.getElementById('pre-capture-guide');
-  const captureScreen = document.getElementById('capture-screen');
-  const analyzingScreen = document.getElementById('analyzing-screen');
-  const errorScreen = document.getElementById('error-screen');
-  const errorMessage = document.getElementById('error-message');
+  const $ = id => document.getElementById(id);
+  const screens = {
+    intro: $('screen-intro'),
+    stepIntro: $('screen-step-intro'),
+    capture: $('screen-capture'),
+    review: $('screen-review'),
+    analyzing: $('screen-analyzing'),
+    error: $('screen-error'),
+  };
 
-  const video = document.getElementById('video');
-  const overlay = document.getElementById('overlay');
+  const video = $('video');
+  const overlay = $('overlay');
   const ctx = overlay.getContext('2d');
-
-  const modelPill = document.getElementById('model-pill');
-  const fpsPill = document.getElementById('fps-pill');
-  const modelStatus = document.getElementById('model-status');
-  const modelProgress = document.getElementById('model-progress');
-  const startRecordingBtn = document.getElementById('start-recording-btn');
-  const switchCamBtn = document.getElementById('switch-cam-btn');
-  const warningsContainer = document.getElementById('quality-warnings');
-
-  const seqBanner = document.getElementById('sequence-banner');
-  const seqCurrent = document.getElementById('seq-current');
-  const seqInstr = document.getElementById('seq-instr');
-  const seqTimer = document.getElementById('seq-timer');
-
-  // ─────────────────────────────────────────
-  // ユーザー名表示
-  // ─────────────────────────────────────────
-  try {
-    const name = window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName();
-    if (name) {
-      greeting.textContent = name + 'さん、動作タイプを判定します';
-    }
-  } catch (e) {}
 
   // ─────────────────────────────────────────
   // 状態
   // ─────────────────────────────────────────
+  let currentStepIdx = -1; // -1 = intro
   let stream = null;
-  let usingFront = true;
+  let usingFront = false; // 背面カメラ優先
   let poseLandmarker = null;
-  let detecting = false;
   let drawing = null;
+  let detecting = false;
   let lastVideoTime = -1;
-  const monitor = new window.ReformaQualityGate.QualityMonitor({
-    windowSize: 30,
-    minDetectionRate: 0.80,
-    minFps: 25,
-  });
 
-  // 録画関連
   let recording = false;
+  let recordedFrames = []; // 現ステップの記録
   let recordingStartTime = 0;
-  let recordedFrames = [];
-  const RECORDING_DURATION_MS = 60 * 1000;
-  let mediaRecorder = null;
-  let recordedBlob = null;
-  let recordedChunks = [];
+  let recordingTimer = null;
+  let captureRequestedStop = false;
 
-  // 撮影シーケンス
-  const SEQUENCE = [
-    { id: 'stance_front',  t_start: 0,  t_end: 3,  label: '正面起立',        instr: '正面を向いて自然に立ってください' },
-    { id: 'transition_1',  t_start: 3,  t_end: 4,  label: '右に90°回転',     instr: '体を右に90°回して横向きに' },
-    { id: 'stance_side',   t_start: 4,  t_end: 7,  label: '横向き起立',      instr: '横向きで自然に立ってください' },
-    { id: 'overhead_squat',t_start: 7,  t_end: 19, label: 'OHスクワット×3', instr: '両手を頭上に挙げてスクワット3回' },
-    { id: 'hip_90_90',     t_start: 19, t_end: 31, label: 'Hip 90-90',       instr: '仰向けで膝90°+股関節90°、足を左右に' },
-    { id: 't_spine_rot',   t_start: 31, t_end: 41, label: 'T-spine回旋',     instr: '椅子に座って胸椎を左右に回旋' },
-    { id: 'cmj',           t_start: 41, t_end: 55, label: 'CMJ×3',           instr: 'Counter Movement Jump 3回' },
-    { id: 'finish',        t_start: 55, t_end: 60, label: '終了準備',        instr: '撮影が終わります' },
-  ];
+  const allStepResults = {}; // {step_id: {frames: [...], summary: {...}}}
+  let monitor = null;
 
   // ─────────────────────────────────────────
-  // モデル進捗表示
+  // 画面遷移
   // ─────────────────────────────────────────
-  window.ReformaMediaPipe.onProgress((event) => {
-    modelStatus.textContent = event.message;
-    modelProgress.style.width = (event.percent || 0) + '%';
-    modelPill.textContent = event.message;
-    if (event.stage === 'ready') {
-      modelStatus.classList.add('ready');
-      modelStatus.textContent = '✅ 準備完了 — 撮影できます';
-    } else if (event.stage === 'error') {
-      modelStatus.classList.add('error');
+  function showScreen(name) {
+    Object.values(screens).forEach(s => s.classList.add('hidden'));
+    screens[name].classList.remove('hidden');
+  }
+
+  function renderStepProgress(currentIdx) {
+    const dots = $('step-progress-dots');
+    dots.innerHTML = '';
+    STEPS.forEach((s, i) => {
+      const dot = document.createElement('div');
+      dot.className = 'step-dot' + (i < currentIdx ? ' done' : (i === currentIdx ? ' active' : ''));
+      dots.appendChild(dot);
+    });
+    $('step-num').textContent = `STEP ${Math.max(1, currentIdx + 1)} / ${STEPS.length}`;
+  }
+
+  // ─────────────────────────────────────────
+  // イントロ画面
+  // ─────────────────────────────────────────
+  try {
+    const name = window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName();
+    if (name) {
+      $('intro-greeting').textContent = name + 'さん、動作タイプを判定します';
     }
+  } catch (e) {}
+
+  $('btn-start-rmst').addEventListener('click', () => {
+    currentStepIdx = 0;
+    showStepIntro();
   });
 
   // ─────────────────────────────────────────
-  // 撮影画面へ遷移
+  // ステップ説明画面
   // ─────────────────────────────────────────
-  prepareBtn.addEventListener('click', async () => {
-    prepareBtn.disabled = true;
-    prepareBtn.textContent = '⏳ 準備中…';
+  function showStepIntro() {
+    if (currentStepIdx >= STEPS.length) {
+      finishAndAnalyze();
+      return;
+    }
+    const step = STEPS[currentStepIdx];
+    $('step-eyebrow').textContent = `STEP ${currentStepIdx + 1} / ${STEPS.length}`;
+    $('step-title').textContent = step.title;
+    $('step-title-text').textContent = step.title;
+    $('step-duration').textContent = `撮影時間: ${step.duration_sec}秒(ゆっくりやって大丈夫)`;
+    $('step-camera-instr').textContent = step.camera_instr;
+    $('step-subject-instr').textContent = step.subject_instr;
+    if (step.tips) {
+      $('step-tips').style.display = '';
+      $('step-tips-text').textContent = step.tips;
+    } else {
+      $('step-tips').style.display = 'none';
+    }
+    renderStepProgress(currentStepIdx);
+    showScreen('stepIntro');
+  }
 
-    // モデル読込開始(ユーザー操作の流れの中で)
+  $('btn-start-capture').addEventListener('click', async () => {
+    const btn = $('btn-start-capture');
+    btn.disabled = true;
+    btn.textContent = '⏳ カメラ準備中…';
     try {
+      await prepareForCapture(STEPS[currentStepIdx]);
+    } catch (e) {
+      showError('準備失敗: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.textContent = '準備できました ・ 撮影開始 →';
+  });
+
+  $('btn-skip-step').addEventListener('click', () => {
+    if (!confirm('この動作をスキップしますか?判定精度がやや下がる可能性があります。')) return;
+    allStepResults[STEPS[currentStepIdx].id] = { skipped: true, frames: [], summary: {} };
+    currentStepIdx++;
+    showStepIntro();
+  });
+
+  // ─────────────────────────────────────────
+  // 撮影準備(カメラ+モデル起動)
+  // ─────────────────────────────────────────
+  async function prepareForCapture(step) {
+    showScreen('capture');
+
+    // モデル読込(初回のみ)
+    if (!poseLandmarker) {
+      window.ReformaMediaPipe.onProgress((event) => {
+        $('model-status-mini').textContent = event.message;
+        $('model-pill').textContent = event.message;
+        if (event.stage === 'ready') $('model-status-mini').classList.add('ready');
+        else if (event.stage === 'error') $('model-status-mini').classList.add('error');
+      });
       poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker({ preferLite: false });
       drawing = new DrawingUtils(ctx);
-    } catch (e) {
-      showError('モデル読込失敗: ' + e.message);
-      return;
     }
+    $('model-status-mini').textContent = '✅ 準備完了';
+    $('model-status-mini').classList.add('ready');
 
-    // カメラ起動
-    try {
-      await startCamera();
-    } catch (e) {
-      showError('カメラ起動失敗: ' + e.message + '\n\nブラウザのカメラ許可を確認してください');
-      return;
-    }
+    // カメラ起動(背面カメラ優先)
+    usingFront = (step.facing === 'user');
+    await startCamera();
 
-    // 画面切替
-    preCaptureGuide.classList.add('hidden');
-    captureScreen.classList.remove('hidden');
+    // モニター初期化
+    monitor = new window.ReformaQualityGate.QualityMonitor({
+      windowSize: 30, minDetectionRate: 0.5, minFps: 20,
+    });
 
-    // 検出ループ開始
     detecting = true;
     requestAnimationFrame(detect);
 
-    // 録画ボタン有効化
-    startRecordingBtn.disabled = false;
-    switchCamBtn.classList.remove('hidden');
-  });
+    // カウントダウン → 録画開始
+    $('btn-switch-cam').classList.remove('hidden');
+    startCountdown(3, () => startRecording(step));
+  }
 
-  // ─────────────────────────────────────────
-  // カメラ起動
-  // ─────────────────────────────────────────
   async function startCamera() {
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        facingMode: usingFront ? 'user' : 'environment',
+        facingMode: usingFront ? 'user' : { ideal: 'environment' },
         width: { ideal: 1280 },
         height: { ideal: 720 },
         frameRate: { ideal: 30, max: 60 },
@@ -477,9 +692,9 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
     });
     video.srcObject = stream;
     await new Promise((resolve, reject) => {
-      video.onloadedmetadata = () => resolve();
+      video.onloadedmetadata = resolve;
       video.onerror = reject;
-      setTimeout(() => reject(new Error('video onloadedmetadata timeout')), 5000);
+      setTimeout(() => reject(new Error('camera timeout')), 5000);
     });
     await video.play();
     overlay.width = video.videoWidth;
@@ -487,7 +702,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
     document.body.classList.toggle('cam-front', usingFront);
   }
 
-  switchCamBtn.addEventListener('click', async () => {
+  $('btn-switch-cam').addEventListener('click', async () => {
     usingFront = !usingFront;
     try {
       await startCamera();
@@ -497,6 +712,93 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   });
 
   // ─────────────────────────────────────────
+  // カウントダウン
+  // ─────────────────────────────────────────
+  function startCountdown(seconds, onComplete) {
+    const ov = $('countdown-overlay');
+    ov.classList.remove('hidden');
+    let remaining = seconds;
+    $('countdown-number').textContent = remaining;
+    $('countdown-label').textContent = '準備…';
+
+    const iv = setInterval(() => {
+      remaining--;
+      if (remaining > 0) {
+        $('countdown-number').textContent = remaining;
+        $('countdown-label').textContent = '準備…';
+      } else if (remaining === 0) {
+        $('countdown-number').textContent = '!';
+        $('countdown-label').textContent = 'スタート';
+      } else {
+        clearInterval(iv);
+        ov.classList.add('hidden');
+        if (typeof onComplete === 'function') onComplete();
+      }
+    }, 800);
+  }
+
+  // ─────────────────────────────────────────
+  // 録画
+  // ─────────────────────────────────────────
+  function startRecording(step) {
+    recording = true;
+    recordedFrames = [];
+    monitor.reset();
+    recordingStartTime = performance.now();
+    captureRequestedStop = false;
+
+    $('recording-badge').classList.remove('hidden');
+    $('btn-stop-capture').classList.remove('hidden');
+    $('btn-switch-cam').classList.add('hidden');
+
+    const totalMs = step.duration_sec * 1000;
+    recordingTimer = setInterval(() => {
+      const elapsed = performance.now() - recordingStartTime;
+      const remain = totalMs - elapsed;
+      $('recording-timer').textContent = `残り ${Math.max(0, remain / 1000).toFixed(1)}秒`;
+      if (elapsed >= totalMs || captureRequestedStop) {
+        finishRecording(step);
+      }
+    }, 100);
+  }
+
+  $('btn-stop-capture').addEventListener('click', () => {
+    if (recording) {
+      captureRequestedStop = true;
+    }
+  });
+
+  function finishRecording(step) {
+    if (!recording) return;
+    recording = false;
+    clearInterval(recordingTimer);
+    recordingTimer = null;
+    $('recording-badge').classList.add('hidden');
+    $('btn-stop-capture').classList.add('hidden');
+
+    // カメラ停止
+    detecting = false;
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+
+    // 結果集計
+    const finalCheck = monitor.finalCheck();
+    allStepResults[step.id] = {
+      step_id: step.id,
+      step_title: step.title,
+      duration_sec: step.duration_sec,
+      frames: recordedFrames,
+      summary: finalCheck.summary,
+      passed: finalCheck.passed,
+      issues: finalCheck.issues,
+    };
+
+    showReview(step, allStepResults[step.id]);
+  }
+
+  // ─────────────────────────────────────────
   // 検出ループ
   // ─────────────────────────────────────────
   async function detect() {
@@ -504,45 +806,35 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
     if (video.currentTime !== lastVideoTime) {
       lastVideoTime = video.currentTime;
       const now = performance.now();
-
       try {
         const result = poseLandmarker.detectForVideo(video, now);
         const landmarks = (result.landmarks && result.landmarks[0]) || null;
 
-        // Canvas クリア + 描画
         ctx.clearRect(0, 0, overlay.width, overlay.height);
         if (landmarks) {
           drawing.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, {
-            color: '#87ceeb',
-            lineWidth: 3,
+            color: '#87ceeb', lineWidth: 3,
           });
           drawing.drawLandmarks(landmarks.slice(11), {
-            color: '#ffff00',
-            radius: 4,
-            lineWidth: 1,
+            color: '#ffff00', radius: 4, lineWidth: 1,
           });
         }
 
-        // 品質モニタリング
         monitor.onFrame(landmarks, now);
 
-        // 録画中なら記録
         if (recording && landmarks) {
           recordedFrames.push({
             t: now - recordingStartTime,
             landmarks: landmarks.map(l => ({
-              x: +l.x.toFixed(4),
-              y: +l.y.toFixed(4),
-              z: +l.z.toFixed(4),
-              v: +(l.visibility || 0).toFixed(3),
+              x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+              z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
             })),
           });
         }
 
-        // FPS 表示
         const snap = monitor.getSnapshot();
-        fpsPill.textContent = snap.fps.toFixed(0) + ' fps';
-        fpsPill.className = 'status-pill ' + (
+        $('fps-pill').textContent = snap.fps.toFixed(0) + ' fps';
+        $('fps-pill').className = 'status-pill ' + (
           snap.fps >= 25 ? 'fps-good' : (snap.fps >= 15 ? 'fps-warn' : 'fps-bad')
         );
       } catch (e) {
@@ -553,206 +845,132 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   }
 
   // ─────────────────────────────────────────
-  // 品質警告表示
+  // 撮影後の確認画面
   // ─────────────────────────────────────────
-  monitor.onWarning((type, issue) => {
-    if (type === 'warning') {
-      addWarning(issue);
-    } else if (type === 'resolved') {
-      removeWarning(issue.code);
+  function showReview(step, result) {
+    $('review-title').textContent = step.title + ' 完了';
+    $('review-frames').textContent = result.frames.length + ' フレーム';
+    $('review-detection').textContent = Math.round((result.summary.detectionRate || 0) * 100) + '%';
+    $('review-fps').textContent = (result.summary.fps || 0).toFixed(0) + ' fps';
+
+    if (result.issues && result.issues.length > 0) {
+      $('review-warning').classList.remove('hidden');
+      $('review-warning-text').textContent = result.issues.map(i => i.message).join(' / ');
+    } else {
+      $('review-warning').classList.add('hidden');
     }
+    showScreen('review');
+  }
+
+  $('btn-next-step').addEventListener('click', () => {
+    currentStepIdx++;
+    showStepIntro();
   });
 
-  function addWarning(issue) {
-    if (document.getElementById('warn-' + issue.code)) return;
-    const el = document.createElement('div');
-    el.id = 'warn-' + issue.code;
-    el.className = 'quality-warning severity-' + issue.severity;
-    el.textContent = issue.message;
-    warningsContainer.appendChild(el);
-  }
-  function removeWarning(code) {
-    const el = document.getElementById('warn-' + code);
-    if (el) el.remove();
-  }
-
-  // ─────────────────────────────────────────
-  // 録画開始
-  // ─────────────────────────────────────────
-  startRecordingBtn.addEventListener('click', async () => {
-    if (recording) return;
-    recordedFrames = [];
-    recordedChunks = [];
-    monitor.reset();
-
-    // MediaRecorder で動画も保存(将来の有料版アップ用)
-    try {
-      const mimeType = MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' :
-                       MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' :
-                       'video/webm';
-      mediaRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) recordedChunks.push(e.data);
-      };
-      mediaRecorder.onstop = () => {
-        recordedBlob = new Blob(recordedChunks, { type: mimeType });
-      };
-      mediaRecorder.start(1000);
-    } catch (e) {
-      console.warn('MediaRecorder 起動失敗(landmark のみで進めます):', e);
-      mediaRecorder = null;
-    }
-
-    recording = true;
-    recordingStartTime = performance.now();
-    startRecordingBtn.disabled = true;
-    startRecordingBtn.textContent = '🔴 録画中…';
-    seqBanner.classList.remove('hidden');
-
-    // シーケンス進行
-    runSequence();
+  $('btn-retry-step').addEventListener('click', () => {
+    delete allStepResults[STEPS[currentStepIdx].id];
+    showStepIntro();
   });
 
   // ─────────────────────────────────────────
-  // 撮影シーケンス進行
+  // 全ステップ完了 → 解析
   // ─────────────────────────────────────────
-  function runSequence() {
-    const interval = setInterval(() => {
-      const elapsedSec = (performance.now() - recordingStartTime) / 1000;
-      const remainSec = (RECORDING_DURATION_MS / 1000) - elapsedSec;
+  function finishAndAnalyze() {
+    showScreen('analyzing');
+    const progress = $('analyze-progress');
+    let p = 0;
+    const iv = setInterval(() => {
+      p = Math.min(p + 10, 90);
+      progress.style.width = p + '%';
+    }, 100);
 
-      const step = SEQUENCE.find(s => elapsedSec >= s.t_start && elapsedSec < s.t_end);
-      if (step) {
-        seqCurrent.textContent = step.label;
-        seqInstr.textContent = step.instr;
-      }
-      seqTimer.textContent = `残り ${Math.max(0, remainSec).toFixed(0)}秒`;
+    // 全動作のフレームを統合して、time を全体タイムラインに合わせる
+    const merged = mergeFrames(allStepResults);
 
-      if (elapsedSec >= RECORDING_DURATION_MS / 1000) {
-        clearInterval(interval);
-        stopRecording();
-      }
-    }, 200);
-  }
-
-  function stopRecording() {
-    recording = false;
-    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-      try { mediaRecorder.stop(); } catch (e) {}
-    }
-    detecting = false;
-    if (stream) stream.getTracks().forEach(t => t.stop());
-
-    // 品質ゲートチェック
-    const finalCheck = monitor.finalCheck();
-    if (!finalCheck.passed) {
-      showQualityFailure(finalCheck);
-      return;
-    }
-
-    // 解析画面へ
-    captureScreen.classList.add('hidden');
-    analyzingScreen.classList.remove('hidden');
-    setTimeout(() => analyzeRMST(finalCheck), 100);
-  }
-
-  // ─────────────────────────────────────────
-  // 品質ゲート不合格時
-  // ─────────────────────────────────────────
-  function showQualityFailure(check) {
-    const html = `
-      <div class="container" style="padding:32px 24px">
-        <div class="alert alert-warning">
-          <b>撮影品質が基準を満たしませんでした</b><br>
-          <div class="text-small mt-2">
-            ${check.issues.map(i => '・' + window.ReformaUserProfile.escapeHtml(i.message)).join('<br>')}
-          </div>
-          ${check.suggestions.length > 0 ? '<div class="mt-3"><b>改善のヒント</b><br><div class="text-small mt-1">' +
-            check.suggestions.map(s => '・' + window.ReformaUserProfile.escapeHtml(s)).join('<br>') +
-            '</div></div>' : ''}
-        </div>
-        <button class="btn btn-primary btn-block mt-4" onclick="location.reload()">
-          もう一度撮影する
-        </button>
-      </div>
-    `;
-    captureScreen.classList.add('hidden');
-    document.body.innerHTML = `
-      <div id="step-header">
-        <div><div class="step-label">STEP 1 / 3</div></div>
-        <a href="welcome.html" class="text-small text-muted">← 戻る</a>
-      </div>
-    ` + html;
-  }
-
-  // ─────────────────────────────────────────
-  // 解析(暫定: 別ファイルで JS版 RMST analyzer を実装する)
-  // ─────────────────────────────────────────
-  async function analyzeRMST(qualityCheck) {
-    // 録画データを localStorage に一時保存
-    try {
-      const payload = {
-        frames: recordedFrames,
-        duration_ms: RECORDING_DURATION_MS,
-        captured_at: new Date().toISOString(),
-        quality_check: qualityCheck.summary,
-        avg_fps: qualityCheck.summary.fps,
-      };
-
-      // フレームデータが大きすぎる場合は sessionStorage に
-      const json = JSON.stringify(payload);
-      if (json.length < 4_000_000) {
-        // localStorage 制限内なら直接保存
-        sessionStorage.setItem('reforma_last_rmst', json);
-      } else {
-        // 大きすぎる場合: フレーム間引き
-        const reduced = {
-          ...payload,
-          frames: recordedFrames.filter((_, i) => i % 2 === 0),
-          _note: 'frames downsampled due to size limit',
+    setTimeout(() => {
+      clearInterval(iv);
+      progress.style.width = '100%';
+      // sessionStorage に保存して結果ページへ
+      try {
+        const payload = {
+          frames: merged.frames,
+          step_results: Object.values(allStepResults).map(r => ({
+            step_id: r.step_id,
+            step_title: r.step_title,
+            n_frames: r.frames ? r.frames.length : 0,
+            summary: r.summary || {},
+            skipped: r.skipped || false,
+          })),
+          avg_fps: merged.avgFps,
+          captured_at: new Date().toISOString(),
         };
-        sessionStorage.setItem('reforma_last_rmst', JSON.stringify(reduced));
+        const json = JSON.stringify(payload);
+        if (json.length < 4_000_000) {
+          sessionStorage.setItem('reforma_last_rmst', json);
+        } else {
+          // 大きい場合: 半分に間引き
+          const reduced = { ...payload, frames: merged.frames.filter((_, i) => i % 2 === 0) };
+          sessionStorage.setItem('reforma_last_rmst', JSON.stringify(reduced));
+        }
+        setTimeout(() => { window.location.href = 'rmst_result.html'; }, 200);
+      } catch (e) {
+        showError('解析データ保存失敗: ' + e.message);
       }
+    }, 1500);
+  }
 
-      // 進捗表示
-      const progress = document.getElementById('analyze-progress');
-      let p = 0;
-      const iv = setInterval(() => {
-        p = Math.min(p + 5, 90);
-        progress.style.width = p + '%';
-      }, 100);
-
-      // 結果ページへ遷移(rmst_result.html で実際の解析実行)
-      setTimeout(() => {
-        clearInterval(iv);
-        progress.style.width = '100%';
-        setTimeout(() => {
-          window.location.href = 'rmst_result.html';
-        }, 200);
-      }, 1500);
-    } catch (e) {
-      showError('解析データ保存失敗: ' + e.message);
-    }
+  /**
+   * 各ステップのフレームを統合(time をプロトコル時刻に変換)
+   * Step 0 (stance): 0-6秒区間に
+   * Step 1 (squat): 7-22秒区間
+   * Step 2 (hip): 22-37秒区間
+   * Step 3 (tspine): 38-48秒区間
+   * Step 4 (cmj): 49-59秒区間
+   * これでサーバーサイド解析互換のタイムラインを構築
+   */
+  function mergeFrames(results) {
+    const PROTOCOL_OFFSETS = {
+      'stance': 0,
+      'overhead_squat': 7,
+      'hip_90_90': 22,
+      't_spine_rot': 38,
+      'cmj': 49,
+    };
+    const merged = [];
+    let totalFps = 0, fpsCount = 0;
+    Object.values(results).forEach(r => {
+      if (r.skipped || !r.frames) return;
+      const offsetSec = PROTOCOL_OFFSETS[r.step_id] || 0;
+      const offsetMs = offsetSec * 1000;
+      r.frames.forEach(f => {
+        merged.push({ t: f.t + offsetMs, landmarks: f.landmarks });
+      });
+      if (r.summary && r.summary.fps) {
+        totalFps += r.summary.fps;
+        fpsCount++;
+      }
+    });
+    merged.sort((a, b) => a.t - b.t);
+    return { frames: merged, avgFps: fpsCount > 0 ? totalFps / fpsCount : 30 };
   }
 
   // ─────────────────────────────────────────
-  // エラー表示
+  // エラー
   // ─────────────────────────────────────────
   function showError(msg) {
-    preCaptureGuide.classList.add('hidden');
-    captureScreen.classList.add('hidden');
-    analyzingScreen.classList.add('hidden');
-    errorScreen.classList.remove('hidden');
-    errorMessage.textContent = msg;
+    $('error-text').textContent = msg;
+    showScreen('error');
   }
 
-  // クリーンアップ
+  // 中断: 中止リンクで welcome に戻る前にカメラ停止
   window.addEventListener('beforeunload', () => {
     detecting = false;
     if (stream) stream.getTracks().forEach(t => t.stop());
     if (window.ReformaMediaPipe) window.ReformaMediaPipe.release();
   });
 
+  // 初期表示
+  showScreen('intro');
 })();
 </script>
 
