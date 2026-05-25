@@ -404,6 +404,111 @@
  }
 
  // ─────────────────────────────────────────
+ // 入力検証ゲート(極めて重要・精度保証の最初の砦)
+ // 人体が確実に映っていないフレームを除外し、解析を拒否する判定
+ //
+ // 目的: 「何もないのに評価が返ってくる」を絶対に防ぐ。
+ // MediaPipe は人がいなくてもノイズ座標を返すことがあり、
+ // それをそのまま処理すると無意味な数値で評価を組み立ててしまう。
+ // ─────────────────────────────────────────
+ function validateInput(frames) {
+ const issues = [];
+ const n = frames.length;
+ if (n < 12) {
+ return { passed: false, code: 'TOO_FEW_FRAMES',
+ reason: 'フレーム数が少なすぎます(' + n + ')。動画が短すぎる可能性があります。',
+ suggestions: ['3秒以上の動画を撮影してください'] };
+ }
+
+ // 体の中核ランドマーク(肩・腰・膝・足首)の visibility を計測
+ const CORE_LM = [11, 12, 23, 24, 25, 26, 27, 28];
+ let validFrames = 0;
+ let visSum = 0, visCnt = 0;
+ const hipMidXs = [], handMidXs = [];
+
+ frames.forEach(f => {
+ const lm = f.landmarks;
+ if (!lm) return;
+ // 中核8点の visibility 平均
+ let frameVis = 0, frameCnt = 0;
+ CORE_LM.forEach(i => {
+ if (lm[i] && typeof lm[i].v === 'number') {
+ frameVis += lm[i].v;
+ frameCnt++;
+ }
+ });
+ if (frameCnt > 0) {
+ const avgVis = frameVis / frameCnt;
+ visSum += avgVis;
+ visCnt++;
+ if (avgVis >= 0.5) validFrames++;
+ }
+ // 腰中点・両手中点の位置を記録(後で動きの検出に使う)
+ if (lm[23] && lm[24]) {
+ hipMidXs.push((lm[23].x + lm[24].x) / 2);
+ }
+ if (lm[15] && lm[16]) {
+ handMidXs.push((lm[15].x + lm[16].x) / 2);
+ }
+ });
+
+ const avgBodyVis = visCnt > 0 ? visSum / visCnt : 0;
+ const detectionRate = visCnt > 0 ? validFrames / visCnt : 0;
+
+ // ゲート1: 平均 visibility が低すぎる = 人体が検出できていない
+ if (avgBodyVis < 0.4) {
+ return { passed: false, code: 'NO_PERSON',
+ reason: '動画に人が映っていない、または姿勢検出ができない状態でした(平均認識精度 ' + Math.round(avgBodyVis * 100) + '%)。',
+ suggestions: [
+ '人物が画面内に映っているか確認してください',
+ '明るい場所で再撮影してください',
+ 'カメラから距離を取り、全身が映る位置に立ってください',
+ ] };
+ }
+
+ // ゲート2: 検出率が低すぎる
+ if (detectionRate < 0.5) {
+ return { passed: false, code: 'LOW_DETECTION',
+ reason: '体の検出率が低すぎます(' + Math.round(detectionRate * 100) + '%)。動画品質が解析基準を満たしません。',
+ suggestions: [
+ '全身が画面内に入る位置(2.5-4m)から撮影してください',
+ '明るい場所で再撮影してください',
+ ] };
+ }
+
+ // ゲート3: 動きの検出(腰または手が動いているか)
+ // バッティングなら必ず腰・手が動くはず。動きがゼロなら静止画 or ノイズ
+ function ptpRange(arr) {
+ if (arr.length === 0) return 0;
+ let mn = arr[0], mx = arr[0];
+ for (let i = 1; i < arr.length; i++) {
+ if (arr[i] < mn) mn = arr[i];
+ if (arr[i] > mx) mx = arr[i];
+ }
+ return mx - mn;
+ }
+ const hipMotionRange = ptpRange(hipMidXs);
+ const handMotionRange = ptpRange(handMidXs);
+ // 画像座標 0-1 で、最低 5% は動いていることを期待
+ if (hipMotionRange < 0.02 && handMotionRange < 0.05) {
+ return { passed: false, code: 'NO_MOTION',
+ reason: '動きが検出できませんでした(腰の動き ' + (hipMotionRange * 100).toFixed(1) + '%、手の動き ' + (handMotionRange * 100).toFixed(1) + '%)。スイング動作が記録されていません。',
+ suggestions: [
+ 'スイング動作を実際に行ってから「完了」を押してください',
+ 'カメラの前で被験者がスイングしていることを確認してください',
+ ] };
+ }
+
+ return {
+ passed: true,
+ avgBodyVis: +avgBodyVis.toFixed(3),
+ detectionRate: +detectionRate.toFixed(3),
+ hipMotion: +hipMotionRange.toFixed(3),
+ handMotion: +handMotionRange.toFixed(3),
+ };
+ }
+
+ // ─────────────────────────────────────────
  // メイン解析
  // ─────────────────────────────────────────
  function analyzeBatting(input) {
@@ -411,6 +516,17 @@
  if (frames.length < 12) {
  return { error: 'フレーム不足(' + frames.length + '): 動画が短すぎる/姿勢検出失敗が多い' };
  }
+
+ // 入力検証ゲート(精度保証の最重要関門)
+ const validation = validateInput(frames);
+ if (!validation.passed) {
+ return {
+ error: validation.reason,
+ error_code: validation.code,
+ suggestions: validation.suggestions,
+ };
+ }
+
  const fps = input.avg_fps || 30;
  const rmpType = input.rmp_type || 'フロー型';
 

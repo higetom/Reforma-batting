@@ -262,12 +262,12 @@
 <div id="screen-error" class="hidden">
  <div class="container" style="padding:32px 24px">
  <div class="alert alert-danger">
- <b>エラーが発生しました</b><br>
- <span id="error-text"></span>
+ <div id="error-text">エラーが発生しました</div>
  </div>
- <button class="btn btn-secondary btn-block mt-4" onclick="location.reload()">
- 最初からやり直す
+ <button class="btn btn-primary btn-block btn-large mt-4" onclick="location.reload()">
+ もう一度撮影する
  </button>
+ <a href="index.html" class="btn btn-secondary btn-block mt-2">トップへ戻る</a>
  </div>
 </div>
 
@@ -540,7 +540,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  const result = window.ReformaBattingAnalyzer.analyzeBatting(analysisInput);
 
  if (result.error) {
- showError(result.error);
+ // 検証ゲート不合格時はリッチエラー(コード+提案)を表示
+ showRichError(result.error, result.suggestions || []);
  return;
  }
 
@@ -564,6 +565,19 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
  function showError(msg) {
  $('error-text').textContent = msg;
+ showScreen('error');
+ }
+
+ // 検証ゲート不合格時のリッチエラー表示(改善提案つき)
+ function showRichError(reason, suggestions) {
+ const safeReason = window.ReformaUserProfile.escapeHtml(reason);
+ const sug = (suggestions || []).map(s =>
+ '<li style="margin-bottom:4px">' + window.ReformaUserProfile.escapeHtml(s) + '</li>'
+ ).join('');
+ $('error-text').innerHTML =
+ '<b>解析できませんでした</b><br>' +
+ '<div style="margin-top:8px;font-size:13.5px;line-height:1.85">' + safeReason + '</div>' +
+ (sug ? '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border-subtle)"><b style="font-size:12.5px;color:var(--color-info);letter-spacing:1px">改善のヒント</b><ul style="margin:8px 0 0 18px;padding:0;font-size:13px">' + sug + '</ul></div>' : '');
  showScreen('error');
  }
 
