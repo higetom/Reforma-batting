@@ -271,9 +271,8 @@
  </ul>
  </div>
 
- <input type="file" id="file-input" accept="video/mp4" style="display:none">
- <!-- 注: accept="video/mp4" にすると iOS Safari は HEVC を選んだ際に変換してくれることがある -->
- <!-- それでも HEVC が渡される場合は detectVideoCodec() で事前判定して別フローに分岐 -->
+ <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v,video/*" style="display:none">
+ <!-- PC向け: mp4 / mov(HEVC含む)/ m4v すべて選択可能。HEVC は FFmpeg.wasm で自動変換 -->
 
  <button class="btn btn-primary btn-block btn-large mt-4" id="btn-pick-file">
  動画ファイルを選択する
