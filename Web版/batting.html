@@ -376,6 +376,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  });
 
  async function startCamera() {
+ // 新ストリーム開始前にリセット(切替後の detect ループを確実に動かす)
+ lastVideoTime = -1;
  if (stream) stream.getTracks().forEach(t => t.stop());
  stream = await navigator.mediaDevices.getUserMedia({
  video: {
@@ -395,14 +397,15 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  overlay.width = video.videoWidth;
  overlay.height = video.videoHeight;
  document.body.classList.toggle('cam-front', usingFront);
- // カメラ切替時に前のストリームの currentTime が残るため、
- // detect ループが止まらないようリセットする
- lastVideoTime = -1;
  }
 
  $('btn-switch-cam').addEventListener('click', async () => {
  usingFront = !usingFront;
- try { await startCamera(); } catch (e) { showError('カメラ切替失敗: ' + e.message); }
+ try {
+ await startCamera();
+ // 切替直後もフレーム配信が安定するまで1フレーム待つ
+ await new Promise(resolve => requestAnimationFrame(resolve));
+ } catch (e) { showError('カメラ切替失敗: ' + e.message); }
  });
 
  // 検出ループ
