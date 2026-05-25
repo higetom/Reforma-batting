@@ -241,14 +241,29 @@
  撮影画面と同じ精度基準を適用します。
  </p>
 
+ <!-- 最重要: 1動画 = 1スイング -->
+ <div style="margin-bottom:14px;padding:14px 16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-left:3px solid var(--reforma-red);border-radius:var(--radius-md)">
+ <div style="color:var(--reforma-red);font-size:11px;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">
+ 最重要 : 1動画 = 1スイング
+ </div>
+ <div class="text-secondary" style="font-size:13px;line-height:1.75">
+ 1本の動画には<b>1回のスイングだけ</b>含めてください。<br>
+ 複数スイングが入っている動画は、どのスイングを評価するかシステムが判断できず、解析結果が不正確になります。
+ </div>
+ <div class="text-tertiary" style="font-size:11px;margin-top:6px;line-height:1.6">
+ ※ 連続スイングの動画は、写真アプリで1スイング分ずつ「編集 → トリミング」して書き出してから個別にアップロードしてください。
+ </div>
+ </div>
+
  <div class="card-emphasized card" style="padding:16px;border-left:3px solid var(--color-info)">
  <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
  解析に向いている動画
  </div>
  <ul class="guide-list" style="margin:0">
+ <li><b>1動画につきスイング1回のみ</b>(複数スイングは不可)</li>
  <li>真横(1塁側 or 3塁側)から撮影されている</li>
  <li>構え〜フォロースルーまで全身が画面に映っている</li>
- <li>長さは 3秒以上 ・ 20秒以内</li>
+ <li>長さは 3秒以上 ・ 20秒以内(目安 4〜8秒)</li>
  <li>明るい場所で撮影されている</li>
  <li>形式: mp4 / mov / m4v(iPhone標準形式に対応)</li>
  </ul>
@@ -300,21 +315,24 @@
 <!-- 動画アップロード解析中画面(プログレス付き) -->
 <div id="screen-upload-analyzing" class="hidden">
  <div class="container" style="padding:32px 24px;text-align:center;max-width:480px;margin:0 auto">
- <h2 class="mb-2">動画を解析しています</h2>
- <p class="text-secondary text-small mb-4" style="line-height:1.85">
- フレームを1枚ずつ姿勢検出しています。<br>
+ <h2 class="mb-2" id="upload-stage-title">動画を処理しています</h2>
+ <p class="text-secondary text-small mb-4" style="line-height:1.85" id="upload-stage-desc">
+ HEVC動画の場合は変換から始めます。<br>
  動画の長さによって30秒〜2分ほどかかります。
  </p>
  <!-- video マウント(Safariが確実にフレームをdecodeするため可視化が必要) -->
  <div id="analyzing-video-mount" style="margin:18px auto;width:180px;height:240px;border-radius:12px;overflow:hidden;background:#000;border:1px solid var(--border-subtle);position:relative">
  <canvas id="analyzing-skel-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none"></canvas>
  </div>
- <div class="text-tertiary" style="font-size:11px;margin-bottom:18px">解析中の動画(プレビュー)</div>
+ <div class="text-tertiary" style="font-size:11px;margin-bottom:18px">処理中の動画(プレビュー)</div>
  <div style="background:var(--bg-card);border-radius:var(--radius-full);height:8px;overflow:hidden;margin:0 0 12px">
  <div id="upload-progress-bar" style="height:100%;width:0%;background:var(--reforma-red);transition:width 0.2s"></div>
  </div>
- <div id="upload-progress-text" class="text-small text-muted" style="font-family:var(--font-family-mono)">準備中…</div>
+ <div id="upload-progress-text" style="font-family:var(--font-family-mono);font-size:14px;color:var(--text-primary);font-weight:500">準備中…</div>
  <div id="upload-progress-detail" class="text-tertiary" style="font-size:11px;margin-top:6px"></div>
+ <button id="btn-cancel-upload" class="btn btn-secondary mt-4" style="background:transparent;color:var(--text-muted);border:1px solid var(--border-subtle);font-size:13px;padding:8px 20px">
+ 中止してやり直す
+ </button>
  </div>
 </div>
 
@@ -740,6 +758,20 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  showScreen('intro');
  });
 
+ // 解析中の中止(止まったときの脱出口)
+ $('btn-cancel-upload').addEventListener('click', () => {
+ if (!confirm('解析を中止しますか?(やり直しになります)')) return;
+ // FFmpegを解放(次回再ロード)
+ try {
+ if (ffmpegInstance && typeof ffmpegInstance.terminate === 'function') {
+ ffmpegInstance.terminate();
+ }
+ } catch (e) {}
+ ffmpegInstance = null;
+ ffmpegLoading = null;
+ location.reload();
+ });
+
  $('btn-pick-file').addEventListener('click', () => {
  $('file-input').click();
  });
@@ -856,29 +888,79 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  const FFMPEG_UTIL_VERSION = '0.12.1';
  const FFMPEG_CORE_VERSION = '0.12.6';
 
+ // UMD バンドルをscript src経由でロード(iOS Safari の ESM import 詰まり回避)
+ function loadScriptOnce(url, timeoutMs) {
+ timeoutMs = timeoutMs || 30000;
+ return new Promise((resolve, reject) => {
+ const existing = document.querySelector('script[data-rfsrc="' + url + '"]');
+ if (existing) { resolve(); return; }
+ const s = document.createElement('script');
+ s.src = url;
+ s.setAttribute('data-rfsrc', url);
+ let done = false;
+ const finish = (err) => {
+ if (done) return; done = true;
+ clearTimeout(timer);
+ if (err) reject(err); else resolve();
+ };
+ s.onload = () => finish(null);
+ s.onerror = () => finish(new Error('script load failed: ' + url));
+ const timer = setTimeout(() => finish(new Error('script load timeout (' + timeoutMs/1000 + 's): ' + url)), timeoutMs);
+ document.head.appendChild(s);
+ });
+ }
+
  async function loadFFmpeg(onProgress) {
  if (ffmpegInstance) return ffmpegInstance;
  if (ffmpegLoading) return ffmpegLoading;
 
  ffmpegLoading = (async () => {
  try {
- onProgress && onProgress(0, '変換ツールを準備しています…', '(初回のみ約25MBダウンロード)');
+ console.log('[ffmpeg] loadFFmpeg start');
+ onProgress && onProgress(2, '変換ツールを準備しています…', '初回のみ約25MBダウンロード');
+
  const cdn = 'https://cdn.jsdelivr.net/npm';
- const [ffmpegMod, utilMod] = await Promise.all([
- import(`${cdn}/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/index.js`),
- import(`${cdn}/@ffmpeg/util@${FFMPEG_UTIL_VERSION}/dist/esm/index.js`),
- ]);
- onProgress && onProgress(20, '変換コアを取得しています…', '');
- const ffmpeg = new ffmpegMod.FFmpeg();
- ffmpeg.on('log', ({ message }) => console.log('[ffmpeg]', message));
- const coreBase = `${cdn}/@ffmpeg/core@${FFMPEG_CORE_VERSION}/dist/esm`;
- await ffmpeg.load({
- coreURL: await utilMod.toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript'),
- wasmURL: await utilMod.toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm'),
- });
+ // UMD バンドルを順番にロード(より確実)
+ console.log('[ffmpeg] loading util UMD');
+ await loadScriptOnce(`${cdn}/@ffmpeg/util@${FFMPEG_UTIL_VERSION}/dist/umd/index.js`, 60000);
+ onProgress && onProgress(10, '変換ツールを準備しています…', 'ユーティリティ取得完了');
+
+ console.log('[ffmpeg] loading ffmpeg UMD');
+ await loadScriptOnce(`${cdn}/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/umd/ffmpeg.js`, 60000);
+ onProgress && onProgress(20, '変換ツールを準備しています…', 'ライブラリ取得完了');
+
+ // UMDで露出されるグローバル(版によって名前差異あり)
+ const FFmpegCtor = (window.FFmpegWASM && window.FFmpegWASM.FFmpeg)
+ || (window.FFmpeg && window.FFmpeg.FFmpeg)
+ || window.FFmpeg;
+ const toBlobURL = (window.FFmpegUtil && window.FFmpegUtil.toBlobURL);
+ if (!FFmpegCtor || !toBlobURL) {
+ throw new Error('FFmpeg UMD のグローバルが見つかりません(FFmpegWASM=' +
+ (typeof window.FFmpegWASM) + ', FFmpegUtil=' + (typeof window.FFmpegUtil) + ')');
+ }
+
+ const ffmpeg = new FFmpegCtor();
+ ffmpeg.on('log', ({ message }) => console.log('[ffmpeg log]', message));
+
+ const coreBase = `${cdn}/@ffmpeg/core@${FFMPEG_CORE_VERSION}/dist/umd`;
+ onProgress && onProgress(30, 'コア(WebAssembly)を取得中…', '');
+ console.log('[ffmpeg] fetching core.js');
+ const coreURL = await toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript');
+ onProgress && onProgress(40, 'コア(WebAssembly)を取得中…', '');
+ console.log('[ffmpeg] fetching core.wasm');
+ const wasmURL = await toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm');
+
+ onProgress && onProgress(45, '変換エンジンを初期化中…', '');
+ console.log('[ffmpeg] loading core');
+ // タイムアウト保険(ハングアップしたら60秒で諦める)
+ const loadPromise = ffmpeg.load({ coreURL, wasmURL });
+ const timeoutPromise = new Promise((_, reject) =>
+ setTimeout(() => reject(new Error('変換エンジン初期化タイムアウト(60秒)')), 60000));
+ await Promise.race([loadPromise, timeoutPromise]);
+
  onProgress && onProgress(50, '準備完了', '');
  ffmpegInstance = ffmpeg;
- console.log('[ffmpeg] loaded');
+ console.log('[ffmpeg] loaded OK');
  return ffmpeg;
  } catch (e) {
  ffmpegLoading = null;
@@ -913,18 +995,24 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  await ffmpeg.writeFile(inName, data);
 
  onProgress && onProgress(55, '動画を変換しています…', '');
+ console.log('[ffmpeg] exec start');
  // -preset ultrafast: 速度優先、画質はやや劣化するが解析には十分
  // -crf 23: 標準的な画質
- // -movflags +faststart: ストリーミング最適化
- await ffmpeg.exec([
+ // -an: 音声不要(解析には使わない)
+ // タイムアウト保険(180秒で諦める)
+ const execPromise = ffmpeg.exec([
  '-i', inName,
  '-c:v', 'libx264',
  '-preset', 'ultrafast',
  '-crf', '23',
- '-an', // 音声は不要(解析には使わない)
+ '-an',
  '-movflags', '+faststart',
  outName,
  ]);
+ const execTimeoutPromise = new Promise((_, reject) =>
+ setTimeout(() => reject(new Error('動画変換タイムアウト(180秒)。動画が長すぎるか、端末メモリ不足の可能性があります。')), 180000));
+ await Promise.race([execPromise, execTimeoutPromise]);
+ console.log('[ffmpeg] exec done');
 
  onProgress && onProgress(95, '変換完了、解析を開始します…', '');
  const out = await ffmpeg.readFile(outName);
