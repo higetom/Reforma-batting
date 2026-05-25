@@ -351,14 +351,16 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  btn.disabled = true; btn.textContent = '...準備中…';
  try {
  // モデル読込
- poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
+ poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker({ preferLite: false });
  drawing = new DrawingUtils(ctx);
  $('model-status-mini').textContent = '✓ 準備完了';
  $('model-status-mini').classList.add('ready');
+ // 画面切替を先に行う(rmst.html と同じ順序)
+ // iPhone Safari は display:none のまま video.play() すると
+ // 表示後もフレームが届かないケースがある
+ showScreen('capture');
  // カメラ起動
  await startCamera();
- // 画面切替
- showScreen('capture');
  monitor = new window.ReformaQualityGate.QualityMonitor({
  windowSize: 30, minDetectionRate: 0.5, minFps: 20,
  });
