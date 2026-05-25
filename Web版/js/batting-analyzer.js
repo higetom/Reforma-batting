@@ -556,6 +556,20 @@
  const avgBodyVis = visCnt > 0 ? visSum / visCnt : 0;
  const detectionRate = visCnt > 0 ? validFrames / visCnt : 0;
 
+ // ─────────────────────────────────────────
+ // 重要: MediaPipe Tasks Vision 0.10.10 で
+ // visibility が undefined/0 で返るケースの救済(2026-05-25)
+ //
+ // 当該ケースでは visSum === 0 になる。この場合、
+ // MediaPipe の minPoseDetectionConfidence: 0.5 を既に通過した
+ // フレームしか recordedFrames に積まれていないため、
+ // 「visibility が出ない API バージョン」と判断して
+ // visibility ベースのゲートをスキップする。
+ // NO_MOTION ゲート(下)で「ちゃんと動いているか」は引き続き検証する。
+ // ─────────────────────────────────────────
+ const visibilityFieldMissing = (visCnt > 0 && visSum === 0);
+
+ if (!visibilityFieldMissing) {
  // ゲート1: 平均 visibility が低すぎる = 人体が検出できていない
  if (avgBodyVis < 0.4) {
  return { passed: false, code: 'NO_PERSON',
@@ -575,6 +589,11 @@
  '全身が画面内に入る位置(2.5-4m)から撮影してください',
  '明るい場所で再撮影してください',
  ] };
+ }
+ } else {
+ console.warn('[validateInput] visibility field not populated by MediaPipe ' +
+ '(visSum=0 across ' + visCnt + ' frames). ' +
+ 'Skipping visibility gate, relying on MediaPipe internal confidence and NO_MOTION gate.');
  }
 
  // ゲート3: 動きの検出(腰または手が動いているか)
