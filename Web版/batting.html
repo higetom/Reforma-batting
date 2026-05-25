@@ -282,13 +282,18 @@
 
 <!-- 動画アップロード解析中画面(プログレス付き) -->
 <div id="screen-upload-analyzing" class="hidden">
- <div class="container" style="padding:48px 24px;text-align:center;max-width:480px;margin:0 auto">
+ <div class="container" style="padding:32px 24px;text-align:center;max-width:480px;margin:0 auto">
  <h2 class="mb-2">動画を解析しています</h2>
  <p class="text-secondary text-small mb-4" style="line-height:1.85">
  フレームを1枚ずつ姿勢検出しています。<br>
  動画の長さによって30秒〜2分ほどかかります。
  </p>
- <div style="background:var(--bg-card);border-radius:var(--radius-full);height:8px;overflow:hidden;margin:32px 0 12px">
+ <!-- video マウント(Safariが確実にフレームをdecodeするため可視化が必要) -->
+ <div id="analyzing-video-mount" style="margin:18px auto;width:180px;height:240px;border-radius:12px;overflow:hidden;background:#000;border:1px solid var(--border-subtle);position:relative">
+ <canvas id="analyzing-skel-canvas" style="position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none"></canvas>
+ </div>
+ <div class="text-tertiary" style="font-size:11px;margin-bottom:18px">解析中の動画(プレビュー)</div>
+ <div style="background:var(--bg-card);border-radius:var(--radius-full);height:8px;overflow:hidden;margin:0 0 12px">
  <div id="upload-progress-bar" style="height:100%;width:0%;background:var(--reforma-red);transition:width 0.2s"></div>
  </div>
  <div id="upload-progress-text" class="text-small text-muted" style="font-family:var(--font-family-mono)">準備中…</div>
@@ -873,26 +878,38 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  console.error(e);
  // エラー種別に応じて改善ヒントを変える
  const msg = e.message || '不明なエラー';
- let hints;
- if (/フレーム/.test(msg) || /取得できません/.test(msg)) {
+ let hints, title;
+ if (/HEVC_BLACKOUT/.test(msg)) {
+ // iPhone HEVC ブラックアウト専用
+ title = 'iPhone動画の形式が対応していません';
  hints = [
- 'iPhone Safari の場合: 設定 > Safari > 詳細 > Experimental Features で「WebAssembly SIMD」が有効か確認',
- 'mp4形式の動画で再試行してください(HEVC/H.265より H.264 が安定)',
- '別の動画(短めのmp4)で動作確認してください',
- 'iCloud共有動画ではなく、端末ローカルに保存された動画を選んでください',
+ '【最も簡単】iPhoneの「写真」アプリで動画を開き、共有 → 「ファイルに保存」で書き出してから、もう一度アップロードしてください',
+ '【今後の予防策】iPhone「設定 > カメラ > フォーマット」で「互換性優先」を選択すると、今後撮影する動画は H.264 形式になり問題なく解析できます',
+ '【別の手段】Re\'forma の「撮影を準備する」から、その場で撮影すれば確実に解析できます',
+ ];
+ } else if (/EXTRACT_FAILED/.test(msg)) {
+ title = '動画からフレームを取得できませんでした';
+ hints = [
+ 'mp4(H.264)形式の動画でお試しください',
+ '別の動画(短めの mp4 等)で動作確認してください',
+ 'iCloud 共有ではなく、端末ローカルに保存された動画を選んでください',
  ];
  } else if (/メタデータ/.test(msg) || /解像度/.test(msg) || /長さ/.test(msg)) {
+ title = '動画ファイルを読み込めませんでした';
  hints = [
  '動画ファイルが破損している可能性があります',
  '別の動画で再試行してください',
  ];
  } else {
+ title = '解析中にエラーが発生しました';
  hints = [
  '別の動画で再度お試しください',
  'ページを再読み込みしてから再試行してください',
  ];
  }
- showRichError('解析中にエラーが発生しました: ' + msg, hints);
+ // 技術的な詳細(HEVC_BLACKOUT等のプレフィックス)はユーザーに見せない
+ const userMsg = msg.replace(/^[A-Z_]+:\s*/, '');
+ showRichError(title + '\n' + userMsg, hints);
  }
  });
 
@@ -912,29 +929,24 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }
 
  /**
- * アップロード動画からフレームを抽出(Safari対策強化版)。
+ * アップロード動画からフレームを抽出(v2: HEVC対応・canvas-relay)。
  *
- * 重要: Safari (とくにiOS) は document.createElement('video') を
- * DOMに追加しないと、フレームをレンダリングせず、
- * requestVideoFrameCallback / canvas読出/MediaPipe検出が
- * すべて無効になる。必ずDOMに追加すること。
- *
- * 戦略: play()ベース → 失敗 or 0フレームならseek()ベースに自動フォールバック。
- * extractionStats を返り値に含めて、エラー時に何が起きたか可視化する。
+ * 設計:
+ * 1. video要素を解析画面に可視マウント(Safari がフレームを decode するため必須)
+ * 2. video → 中間canvas に drawImage → そのcanvasをMediaPipeに渡す(HEVC対策)
+ * 3. play()ベース → 失敗時 seek()ベースに自動フォールバック
+ * 4. 早期診断: 最初の10フレームすべて visibility=0 なら HEVC ブラックアウトと判定
+ * 5. 詳細な失敗メッセージで何が起きたか可視化
  */
  async function extractFramesFromVideo(url) {
- const stats = { method: null, frameCount: 0, detectedCount: 0, durationSec: 0, videoSize: null };
+ const stats = { method: null, frameCount: 0, detectedCount: 0, durationSec: 0, videoSize: null, canvasIsBlack: false };
 
- // 1) 専用マウントポイントを analyzing 画面の中に用意(DOM内・可視必須)
- let mount = document.getElementById('analyzing-video-mount');
- if (!mount) {
- mount = document.createElement('div');
- mount.id = 'analyzing-video-mount';
- mount.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:120px;height:67px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden';
- document.body.appendChild(mount);
- }
- // 既存があれば消す
- while (mount.firstChild) mount.removeChild(mount.firstChild);
+ // マウントポイント(解析画面内に既に存在)
+ const mount = document.getElementById('analyzing-video-mount');
+ if (!mount) throw new Error('解析画面のマウントが見つかりません');
+
+ // 既存video消去(skeleton canvas は残す)
+ Array.from(mount.querySelectorAll('video')).forEach(el => el.remove());
 
  const v = document.createElement('video');
  v.src = url;
@@ -945,13 +957,17 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  v.setAttribute('playsinline', 'true');
  v.setAttribute('webkit-playsinline', 'true');
  v.setAttribute('muted', 'true');
- v.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block';
- mount.appendChild(v); // ← Safari がレンダリングするため DOM 内に必須
+ v.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;z-index:1';
+ mount.insertBefore(v, mount.firstChild); // skeleton canvas より下
+
+ // 中間canvas(video の各フレームを描画 → MediaPipe に渡す)
+ const relayCanvas = document.createElement('canvas');
+ const relayCtx = relayCanvas.getContext('2d', { willReadFrequently: true });
 
  const cleanup = () => {
  try { v.pause(); } catch (e) {}
  try { v.removeAttribute('src'); v.load(); } catch (e) {}
- try { if (mount.parentNode) mount.parentNode.removeChild(mount); } catch (e) {}
+ try { if (v.parentNode) v.parentNode.removeChild(v); } catch (e) {}
  };
 
  try {
@@ -975,27 +991,52 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  throw new Error('動画の解像度が取得できません(' + stats.videoSize + ')');
  }
 
- // ===== Try 1: play()ベース抽出 =====
- const playResult = await tryPlayBasedExtraction(v, stats);
+ // 中間canvasのサイズ設定(過大はメモリ圧迫なので最大640pxに縮小)
+ const scale = Math.min(1, 640 / Math.max(v.videoWidth, v.videoHeight));
+ relayCanvas.width = Math.max(1, Math.round(v.videoWidth * scale));
+ relayCanvas.height = Math.max(1, Math.round(v.videoHeight * scale));
+ console.log('[upload] relay canvas:', relayCanvas.width, 'x', relayCanvas.height);
 
- if (playResult.collected.length >= 12) {
+ // ===== Try 1: play()ベース抽出 =====
+ const playResult = await tryPlayBasedExtraction(v, relayCanvas, relayCtx, stats);
+
+ // 早期診断: visibility 全て0 = HEVC ブラックアウト確定
+ if (playResult.detectedCount >= 5 && playResult.avgVis === 0) {
+ throw new Error(
+ 'HEVC_BLACKOUT: 動画形式が iPhone Safari の MediaPipe 検出に対応していません ' +
+ '(' + playResult.detectedCount + 'フレーム検出 / 全て認識精度0%)'
+ );
+ }
+
+ if (playResult.collected.length >= 12 && playResult.avgVis > 0.1) {
  stats.method = 'play';
- console.log('[upload] play-based OK:', stats);
+ console.log('[upload] play-based OK:', stats, 'avgVis=', playResult.avgVis);
  return playResult.collected;
  }
 
  // ===== Try 2: seek()ベース抽出(フォールバック) =====
- console.warn('[upload] play-based got only', playResult.collected.length, 'frames. Falling back to seek-based.');
+ console.warn('[upload] play insufficient. Falling back to seek.',
+ 'collected=', playResult.collected.length, 'avgVis=', playResult.avgVis);
  setUploadProgress(0, '別の方法で再試行しています…', '');
- const seekResult = await trySeekBasedExtraction(v, stats);
+ const seekResult = await trySeekBasedExtraction(v, relayCanvas, relayCtx, stats);
  stats.method = 'seek';
- console.log('[upload] seek-based result:', stats);
- if (seekResult.length >= 12) return seekResult;
+ console.log('[upload] seek result:', stats, 'avgVis=', seekResult.avgVis);
 
- // 両方失敗 → 詳細を付けて throw
+ if (seekResult.detectedCount >= 5 && seekResult.avgVis === 0) {
  throw new Error(
- `動画からフレームを取得できませんでした` +
- ` (play=${playResult.collected.length}枚, seek=${seekResult.length}枚, 解像度=${stats.videoSize})`
+ 'HEVC_BLACKOUT: 動画形式が iPhone Safari の MediaPipe 検出に対応していません ' +
+ '(' + seekResult.detectedCount + 'フレーム検出 / 全て認識精度0%)'
+ );
+ }
+
+ if (seekResult.collected.length >= 12 && seekResult.avgVis > 0.1) return seekResult.collected;
+
+ // 両方失敗
+ throw new Error(
+ 'EXTRACT_FAILED: 動画からフレームを取得できませんでした ' +
+ '(play=' + playResult.collected.length + '枚 vis=' + Math.round(playResult.avgVis * 100) + '%, ' +
+ 'seek=' + seekResult.collected.length + '枚 vis=' + Math.round(seekResult.avgVis * 100) + '%, ' +
+ '解像度=' + stats.videoSize + ')'
  );
  } finally {
  cleanup();
@@ -1003,15 +1044,16 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }
 
  /**
- * 戦略A: 動画を再生して requestVideoFrameCallback / rAF でフレーム取得
+ * 戦略A: video再生 → canvas-relay → MediaPipe
  */
- async function tryPlayBasedExtraction(v, stats) {
+ async function tryPlayBasedExtraction(v, relayCanvas, relayCtx, stats) {
  const duration = v.duration;
  const collected = [];
  const minFrameInterval = 1000 / (TARGET_PROCESS_FPS + 5);
  let lastProcessedTs = -Infinity;
- const baseTs = performance.now() + 1; // 既存landmarkerの最終ts より大きく
+ const baseTs = performance.now() + 1;
  let attempted = 0;
+ let visSum = 0, visCnt = 0;
 
  v.currentTime = 0;
 
@@ -1021,9 +1063,20 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  if (tsMs - lastProcessedTs < minFrameInterval) return;
  lastProcessedTs = tsMs;
  try {
- const result = poseLandmarker.detectForVideo(v, tsMs);
+ // 重要: videoを直接渡すとHEVCで失敗 → canvasに描いてから渡す
+ relayCtx.drawImage(v, 0, 0, relayCanvas.width, relayCanvas.height);
+ const result = poseLandmarker.detectForVideo(relayCanvas, tsMs);
  const landmarks = (result.landmarks && result.landmarks[0]) || null;
  if (landmarks) {
+ // 体中核の平均visibilityを集計(早期診断用)
+ const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
+ let s = 0, c = 0;
+ CORE.forEach(i => {
+ if (landmarks[i] && typeof landmarks[i].visibility === 'number') {
+ s += landmarks[i].visibility; c++;
+ }
+ });
+ if (c > 0) { visSum += s / c; visCnt++; }
  collected.push({
  t: currentTimeSec * 1000,
  landmarks: landmarks.map(l => ({
@@ -1032,7 +1085,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  })),
  });
  }
- } catch (e) { console.warn('[upload] play frame detect:', e.message); }
+ } catch (e) { console.warn('[upload] play detect:', e.message); }
  }
 
  const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
@@ -1040,10 +1093,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  await new Promise((resolve) => {
  let finished = false;
  const finish = () => { if (!finished) { finished = true; resolve(); } };
-
  v.addEventListener('ended', finish, { once: true });
  v.addEventListener('error', () => { console.warn('[upload] video error'); finish(); }, { once: true });
- // 万一の保険
  setTimeout(() => { try { v.pause(); } catch (e) {} finish(); }, (duration + 8) * 1000);
 
  if (hasRVFC) {
@@ -1071,32 +1122,31 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  requestAnimationFrame(tick);
  }
 
- // 再生開始
  v.play().catch(err => {
  console.warn('[upload] play() rejected:', err.message);
- // play失敗してもseek戦略でリカバリ可能なので、ここでrejectせず終了
  finish();
  });
  });
 
+ const avgVis = visCnt > 0 ? visSum / visCnt : 0;
  stats.frameCount = attempted;
  stats.detectedCount = collected.length;
- return { collected };
+ return { collected, detectedCount: collected.length, avgVis: avgVis };
  }
 
  /**
- * 戦略B: seek()ベース抽出(再生不要・Safari HEVCでも動作)
+ * 戦略B: seek() → canvas-relay → MediaPipe(Safari HEVCでも一部端末で動作)
  */
- async function trySeekBasedExtraction(v, stats) {
+ async function trySeekBasedExtraction(v, relayCanvas, relayCtx, stats) {
  const duration = v.duration;
  const step = 1 / TARGET_PROCESS_FPS;
  const collected = [];
- const baseTs = performance.now() + 100000; // play戦略のtsと衝突しないよう大きめ
+ const baseTs = performance.now() + 100000;
  let attempted = 0;
+ let visSum = 0, visCnt = 0;
 
  try { v.pause(); } catch (e) {}
  v.currentTime = 0;
- // 最初のシーク完了待ち
  await new Promise((resolve) => {
  const h = () => { v.removeEventListener('seeked', h); resolve(); };
  v.addEventListener('seeked', h);
@@ -1106,20 +1156,28 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  const total = Math.floor(duration / step);
  for (let i = 0; i < total; i++) {
  const t = i * step;
- // シーク
  await new Promise((resolve) => {
  const h = () => { v.removeEventListener('seeked', h); resolve(); };
  v.addEventListener('seeked', h);
  try { v.currentTime = t; } catch (e) { resolve(); return; }
- setTimeout(resolve, 1500); // 1.5秒以内に seeked が来なければ諦め
+ setTimeout(resolve, 1500);
  });
 
  attempted++;
  const tsMs = baseTs + t * 1000;
  try {
- const result = poseLandmarker.detectForVideo(v, tsMs);
+ relayCtx.drawImage(v, 0, 0, relayCanvas.width, relayCanvas.height);
+ const result = poseLandmarker.detectForVideo(relayCanvas, tsMs);
  const landmarks = (result.landmarks && result.landmarks[0]) || null;
  if (landmarks) {
+ const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
+ let s = 0, c = 0;
+ CORE.forEach(i => {
+ if (landmarks[i] && typeof landmarks[i].visibility === 'number') {
+ s += landmarks[i].visibility; c++;
+ }
+ });
+ if (c > 0) { visSum += s / c; visCnt++; }
  collected.push({
  t: t * 1000,
  landmarks: landmarks.map(l => ({
@@ -1128,15 +1186,16 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  })),
  });
  }
- } catch (e) { console.warn('[upload] seek frame detect:', e.message); }
+ } catch (e) { console.warn('[upload] seek detect:', e.message); }
 
  const pct = Math.min(95, (t / duration) * 95);
  setUploadProgress(pct, 'フォールバック抽出中…', '読込: ' + collected.length + '/' + (i + 1) + '枚');
  }
 
+ const avgVis = visCnt > 0 ? visSum / visCnt : 0;
  stats.frameCount = attempted;
  stats.detectedCount = collected.length;
- return collected;
+ return { collected, detectedCount: collected.length, avgVis: avgVis };
  }
 
  showScreen('intro');
