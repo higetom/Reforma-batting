@@ -303,11 +303,47 @@
         <div class="role-label"><span class="role-icon">📱</span>撮影する方へ(ママ・友人など)</div>
         <div class="role-text">
           スマートフォンを<b>両手でしっかり持って</b>、被験者の全身が画面に収まるように撮影してください。
-          画面のシルエットガイドに合わせると確実です。
+          各ステップで「カメラの位置」(正面/横)が指示されます。
         </div>
       </div>
 
-      <div class="role-card role-subject">
+      <!-- 撮影者の絶対ルール3つ(現場フィードバックから追加) -->
+      <div class="card-emphasized card" style="padding:18px 16px;margin-top:12px;border-left:3px solid var(--color-info)">
+        <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
+          📸 撮影者の3つの絶対ルール
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+          <div style="font-size:24px;flex-shrink:0">📱</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px;margin-bottom:2px">スマホは縦向き</div>
+            <div class="text-tertiary text-small">横向きで撮らないでください。被験者の全身が縦長に映ります。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+          <div style="font-size:24px;flex-shrink:0">📏</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px;margin-bottom:2px">カメラの高さは被験者のおへそ〜胸</div>
+            <div class="text-tertiary text-small">
+              大人がお子さんを撮るときは <b>しゃがんで</b>ください。
+              上から見下ろす画角だと正確な解析ができません。
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:flex-start">
+          <div style="font-size:24px;flex-shrink:0">📐</div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:14px;margin-bottom:2px">距離は2〜4m</div>
+            <div class="text-tertiary text-small">
+              全身(頭から足先まで)が画面に収まる距離をキープしてください。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="role-card role-subject" style="margin-top:12px">
         <div class="role-label"><span class="role-icon">⚾️</span>動作する方へ</div>
         <div class="role-text">
           動きやすい服装で、リラックスして動作してください。
@@ -315,7 +351,7 @@
         </div>
       </div>
 
-      <div class="alert alert-info mt-4">
+      <div class="alert alert-info mt-3">
         <b>所要時間: 約3-5分</b><br>
         撮影に不安なときは「やり直す」「中止」がいつでも押せます。
       </div>
@@ -337,6 +373,9 @@
 
       <div class="role-card role-camera">
         <div class="role-label"><span class="role-icon">📱</span>撮影する方</div>
+        <div style="font-size:13px;color:var(--color-info);font-weight:600;margin-bottom:6px" id="step-camera-position">
+          📱 スマホ縦持ち・被験者の正面から
+        </div>
         <div class="role-text" id="step-camera-instr">真正面から、被験者の全身が映るよう撮影してください。</div>
       </div>
 
@@ -362,6 +401,9 @@
        Screen C: 撮影画面(カメラ起動中)
        ───────────────────────────────────────── -->
   <div id="screen-capture" class="hidden">
+    <div style="padding:8px 12px;background:var(--bg-secondary);font-size:12px;color:var(--text-secondary);text-align:center;border-bottom:1px solid var(--border-subtle)">
+      📱 スマホ縦向き ・ 📏 カメラ高さは被験者のおへそ〜胸
+    </div>
     <div id="video-wrap">
       <video id="video" autoplay playsinline muted></video>
       <canvas id="overlay"></canvas>
@@ -480,18 +522,30 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   // ─────────────────────────────────────────
   const STEPS = [
     {
-      id: 'stance',
-      title: '立ち姿(正面+横)',
-      duration_sec: 6,
-      camera_instr: '正面と横の2方向から、被験者の全身を撮影してください。最初の3秒は正面、後半3秒は横向きで。',
-      subject_instr: '最初の3秒はカメラの方を向いて自然に立ちます。3秒過ぎたら右に90°回って横向きに。',
-      tips: '撮影者は途中で動かず、その場で固定。被験者が向きを変えるだけにしてください。',
-      facing: 'environment', // 背面カメラを推奨
+      id: 'stance_front',
+      title: '立ち姿 ①(正面から)',
+      duration_sec: 3,
+      camera_position: '📱 スマホ縦持ち・被験者の正面から',
+      camera_instr: '被験者の正面に立ち、3秒間そのまま撮影してください。',
+      subject_instr: 'カメラの方を向いて、自然に立ってください。両手は体の横に下ろしたままで。',
+      tips: '体の左右どちらが下がっているかをチェックする動作です。',
+      facing: 'environment',
+    },
+    {
+      id: 'stance_side',
+      title: '立ち姿 ②(横から)',
+      duration_sec: 3,
+      camera_position: '📱 スマホ縦持ち・被験者の真横(左or右どちらでもOK)から',
+      camera_instr: '今度は被験者の真横(左or右)に移動して、3秒間そのまま撮影してください。',
+      subject_instr: '撮影者が横に回るまで、その場で動かず立っていてください。撮影開始の合図で自然に立つだけ。',
+      tips: '撮影者が動く動作です。被験者は立ち姿のまま待つだけでOK。',
+      facing: 'environment',
     },
     {
       id: 'overhead_squat',
       title: 'オーバーヘッドスクワット(3回)',
       duration_sec: 15,
+      camera_position: '📱 スマホ縦持ち・被験者の正面から(2-3m)',
       camera_instr: '正面から、被験者の全身が映るよう撮影。少し離れた位置から(目安2-3m)。',
       subject_instr: '両手を頭の真上に挙げたまま、ゆっくり3回スクワットしてください。深く座ろうと頑張らなくてOK、自然な可動域で。',
       tips: '15秒の間にゆっくり3回。1回 = 下ろす+立ち上がる で5秒くらい。',
@@ -501,7 +555,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       id: 'hip_90_90',
       title: 'Hip 90-90 ストレッチ',
       duration_sec: 15,
-      camera_instr: '床に寝た状態の被験者の真横から、体全体が映るよう撮影。',
+      camera_position: '📱 スマホ縦持ち・被験者の真横(寝た体の側面)から',
+      camera_instr: '床に寝た状態の被験者の真横に座って、体全体が画面に縦長に映るよう撮影。',
       subject_instr: '仰向けに寝て、両膝を90°曲げ、両股関節も90°持ち上げます。その状態で膝を左右にゆっくり倒します。',
       tips: '15秒の間にゆっくり左右各2回ずつ。痛い角度まで無理をしない。',
       facing: 'environment',
@@ -510,17 +565,19 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       id: 't_spine_rot',
       title: '胸椎回旋(座って)',
       duration_sec: 10,
-      camera_instr: '被験者の正面から、上半身がよく見える距離で撮影。',
+      camera_position: '📱 スマホ縦持ち・被験者の正面から(座面の高さ)',
+      camera_instr: '被験者の正面、上半身がよく見える距離で撮影。カメラは被験者の胸の高さに合わせて。',
       subject_instr: '椅子に座り、両手を胸の前で組みます。胸から上を、ゆっくり右に回旋 → 戻る → 左に回旋 → 戻るを行います。',
       tips: '腰は固定して、胸から回す意識で。10秒で左右各1回ずつ。',
       facing: 'environment',
     },
     {
       id: 'cmj',
-      title: 'Counter Movement Jump(3回)',
+      title: 'ジャンプ(3回)',
       duration_sec: 10,
-      camera_instr: '被験者の真横から、全身(特に頭から足まで)が映るよう撮影。少し離れた位置(3-4m)から。',
-      subject_instr: 'リラックスして立ち、深くしゃがんでから真上にジャンプを3回繰り返してください。',
+      camera_position: '📱 スマホ縦持ち・被験者の真横から(3-4m離れて)',
+      camera_instr: '真横から、全身(頭の少し上から足先まで)が画面に縦長に収まるよう、3-4m離れて撮影。',
+      subject_instr: 'リラックスして立ち、深くしゃがんでから真上に高くジャンプを3回繰り返してください。',
       tips: '1回ジャンプしたら少し休んで、また飛ぶ感じで。安全な場所(滑らない床)で。',
       facing: 'environment',
     },
@@ -610,6 +667,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
     $('step-title').textContent = step.title;
     $('step-title-text').textContent = step.title;
     $('step-duration').textContent = `撮影時間: ${step.duration_sec}秒(ゆっくりやって大丈夫)`;
+    $('step-camera-position').textContent = step.camera_position || '📱 スマホ縦持ち';
     $('step-camera-instr').textContent = step.camera_instr;
     $('step-subject-instr').textContent = step.subject_instr;
     if (step.tips) {
@@ -929,12 +987,15 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    * これでサーバーサイド解析互換のタイムラインを構築
    */
   function mergeFrames(results) {
+    // 動画解析サーバー側の PROTOCOL タイムラインに合わせて offset を設定
+    // (Python版 movement_signature_test_v2.py の PROTOCOL と互換)
     const PROTOCOL_OFFSETS = {
-      'stance': 0,
-      'overhead_squat': 7,
-      'hip_90_90': 22,
-      't_spine_rot': 38,
-      'cmj': 49,
+      'stance_front':   0,   // 0-3秒
+      'stance_side':    4,   // 4-7秒(向き変えの1秒スキップ後)
+      'overhead_squat': 7,   // 7-19秒
+      'hip_90_90':      19,  // 19-31秒
+      't_spine_rot':    31,  // 31-41秒
+      'cmj':            41,  // 41-55秒
     };
     const merged = [];
     let totalFps = 0, fpsCount = 0;
