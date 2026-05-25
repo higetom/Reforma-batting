@@ -390,6 +390,21 @@
         <pre id="step-visual-aid-content" style="font-family:var(--font-family-mono);font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;margin:0"></pre>
       </div>
 
+      <!-- チュートリアル動画(将来 video_url が設定されたら表示) -->
+      <div id="step-tutorial-video" class="hidden" style="margin-top:12px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:12px;text-align:center">
+        <div style="color:var(--text-tertiary);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:8px">🎬 撮影と動作のお手本</div>
+        <video id="step-tutorial-video-player" controls playsinline preload="metadata" style="width:100%;max-height:300px;border-radius:var(--radius-sm)">
+          お使いのブラウザは動画再生に対応していません。
+        </video>
+        <div id="step-tutorial-video-caption" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
+      </div>
+
+      <!-- 「何を測定しているか」セクション(該当動作のみ表示) -->
+      <div id="step-what-we-measure" style="display:none;background:linear-gradient(135deg,#0a1a14,#0d2818);border:1px solid #10b98144;border-radius:var(--radius-md);padding:14px 16px;margin-top:12px">
+        <div style="color:#10b981;font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:6px">🔬 この動作で見ていること</div>
+        <div id="step-what-we-measure-content" style="font-size:13px;color:var(--text-secondary);line-height:1.85"></div>
+      </div>
+
       <div class="alert alert-info mt-3" id="step-tips" style="display:none">
         <b>ヒント:</b> <span id="step-tips-text"></span>
       </div>
@@ -431,11 +446,19 @@
     <div class="controls">
       <div id="model-status-mini">⏳ Pose モデルを読み込んでいます…</div>
 
-      <button class="btn btn-danger btn-block btn-large hidden" id="btn-stop-capture">
-        ■ 撮影を停止
+      <!-- 動作完了ボタン(撮影中、3秒以上経過で活性化) -->
+      <button class="btn btn-success btn-block btn-large hidden" id="btn-finish-capture" disabled>
+        ✓ 動作完了 ・ 次へ進む
       </button>
+      <div id="finish-hint" class="hidden" style="text-align:center;font-size:12px;color:var(--text-tertiary);margin-top:-4px">
+        動作が終わったら、規定時間を待たずに押せます
+      </div>
+
       <button class="btn btn-secondary btn-block hidden" id="btn-switch-cam">
         🔄 カメラ切替(前後)
+      </button>
+      <button class="btn btn-secondary btn-block hidden" id="btn-abort-capture" style="background:transparent;color:var(--color-danger);border:1px solid var(--color-danger);font-weight:500">
+        × 撮影を中断する
       </button>
     </div>
   </div>
@@ -535,6 +558,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       camera_instr: '被験者の正面に立ち、3秒間そのまま撮影してください。',
       subject_instr: 'カメラの方を向いて、自然に立ってください。両手は体の横に下ろしたままで。',
       tips: '体の左右どちらが下がっているかをチェックする動作です。',
+      what_we_measure: '【何を見ているか】左右の肩・骨盤・足首の高さの差(前額面の非対称)。投球側・打撃側の影響で生じる構造的・機能的な左右差を評価しています。',
       facing: 'environment',
     },
     {
@@ -545,6 +569,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       camera_instr: '今度は被験者の真横(左or右)に移動して、3秒間そのまま撮影してください。',
       subject_instr: '撮影者が横に回るまで、その場で動かず立っていてください。撮影開始の合図で自然に立つだけ。',
       tips: '撮影者が動く動作です。被験者は立ち姿のまま待つだけでOK。',
+      what_we_measure: '【何を見ているか】頭部前方位・胸椎後弯・腰椎前弯のバランス(矢状面姿勢)。Janda の UCS/LCS 分類の評価軸です。',
       facing: 'environment',
     },
     {
@@ -555,11 +580,13 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       camera_instr: '正面から、被験者の全身が映るよう撮影。少し離れた位置から(目安2-3m)。',
       subject_instr: '両手を頭の真上に挙げたまま、ゆっくり3回スクワットしてください。深く座ろうと頑張らなくてOK、自然な可動域で。',
       tips: '15秒の間にゆっくり3回。1回 = 下ろす+立ち上がる で5秒くらい。',
+      what_we_measure: '【何を見ているか】下肢可動性(足関節・膝・股関節の屈曲)、膝の入り(valgus collapse)、肩甲帯柔軟性(腕の落ち)、体幹安定性。Cook の FMS Deep Squat Test 準拠の全身評価です。',
       facing: 'environment',
     },
     {
       id: 'hip_90_90',
-      title: '股関節の柔らかさチェック',
+      title: '下半身〜体幹の連動チェック',
+      title_pro: 'Hip-Spine Coupling (proximal kinetic chain)',
       duration_sec: 15,
       camera_position: '📱 スマホ縦持ち・被験者の足元側に立ち、頭の方に向けて撮影',
       camera_instr:
@@ -568,6 +595,11 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       subject_instr:
         '床に仰向けで寝てください。両膝を90°に立てて、その状態で両足を揃えたまま左右にゆっくり倒します(膝が床に近づくイメージ)。痛い角度まで無理をしないこと。',
       tips: '15秒で左右各2回ずつ ゆっくり。難しければスキップしてOK(全身評価には他5動作で十分です)。',
+      // この動作の本質: 股関節は始動、観察するのは下半身→骨盤→腰椎→体幹の連動性
+      what_we_measure:
+        '【何を見ているか】膝の動きはあくまで「きっかけ」です。本質は股関節→骨盤→腰椎→体幹の運動連鎖(proximal kinetic chain)の評価。下半身始動の打撃で力がスムーズに上に伝わるかを判断します。',
+      what_we_measure_pro:
+        '【測定対象】股関節内外旋ROM、骨盤回旋可動性、腰椎側方シフト・回旋、胸椎反応・代償パターン。Sahrmann (2002) Movement System Impairment, Janda の関節連鎖モデル準拠。',
       visual_aid:
         '       😊  ← 被験者の頭(画面の奥)\n' +
         '       ▽▽\n' +
@@ -589,6 +621,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       camera_instr: '被験者の正面、上半身がよく見える距離で撮影。カメラは被験者の胸の高さに合わせて。',
       subject_instr: '椅子に座り、両手を胸の前で組みます。胸から上を、ゆっくり右に回旋 → 戻る → 左に回旋 → 戻るを行います。',
       tips: '腰は固定して、胸から回す意識で。10秒で左右各1回ずつ。',
+      what_we_measure: '【何を見ているか】胸椎の回旋可動域(座位で骨盤を固定することで胸椎を選択的に測定)。バッティング・投球の分離角を生み出す主要要素。Burkhart (2003) SICK scapula 評価の応用です。',
       facing: 'environment',
     },
     {
@@ -599,6 +632,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       camera_instr: '真横から、全身(頭の少し上から足先まで)が画面に縦長に収まるよう、3-4m離れて撮影。',
       subject_instr: 'リラックスして立ち、深くしゃがんでから真上に高くジャンプを3回繰り返してください。',
       tips: '1回ジャンプしたら少し休んで、また飛ぶ感じで。安全な場所(滑らない床)で。',
+      what_we_measure: '【何を見ているか】下肢爆発力(伸張-短縮サイクル: SSC)・着地時の左右非対称・膝の安定性。Kraemer (2012) の CMJ 評価準拠で、打撃のパワー指標として活用します。',
       facing: 'environment',
     },
   ];
@@ -636,6 +670,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   let recordingStartTime = 0;
   let recordingTimer = null;
   let captureRequestedStop = false;
+  let captureWasAborted = false;
 
   const allStepResults = {}; // {step_id: {frames: [...], summary: {...}}}
   let monitor = null;
@@ -702,6 +737,26 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       $('step-visual-aid-content').textContent = step.visual_aid;
     } else {
       $('step-visual-aid').style.display = 'none';
+    }
+    // 「何を測定しているか」(該当ステップのみ表示)
+    if (step.what_we_measure) {
+      $('step-what-we-measure').style.display = '';
+      $('step-what-we-measure-content').textContent = step.what_we_measure;
+    } else {
+      $('step-what-we-measure').style.display = 'none';
+    }
+    // チュートリアル動画(将来 video_url が設定された場合のみ表示)
+    if (step.video_url) {
+      const tv = $('step-tutorial-video');
+      const player = $('step-tutorial-video-player');
+      tv.classList.remove('hidden');
+      player.src = step.video_url;
+      if (step.video_caption) {
+        $('step-tutorial-video-caption').textContent = step.video_caption;
+      }
+    } else {
+      $('step-tutorial-video').classList.add('hidden');
+      $('step-tutorial-video-player').removeAttribute('src');
     }
     renderStepProgress(currentStepIdx);
     showScreen('stepIntro');
@@ -825,32 +880,59 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   // ─────────────────────────────────────────
   // 録画
   // ─────────────────────────────────────────
+  // 動作完了ボタンを押せるまでの最小撮影秒数(早すぎる完了を防ぐ)
+  const MIN_CAPTURE_SEC_BEFORE_FINISH = 3;
+
   function startRecording(step) {
     recording = true;
     recordedFrames = [];
     monitor.reset();
     recordingStartTime = performance.now();
     captureRequestedStop = false;
+    captureWasAborted = false;
 
     $('recording-badge').classList.remove('hidden');
-    $('btn-stop-capture').classList.remove('hidden');
+    $('btn-finish-capture').classList.remove('hidden');
+    $('btn-finish-capture').disabled = true;
+    $('btn-finish-capture').textContent = `✓ ${MIN_CAPTURE_SEC_BEFORE_FINISH}秒後に押せます…`;
+    $('finish-hint').classList.add('hidden');
+    $('btn-abort-capture').classList.remove('hidden');
     $('btn-switch-cam').classList.add('hidden');
 
     const totalMs = step.duration_sec * 1000;
+    const finishEnableMs = MIN_CAPTURE_SEC_BEFORE_FINISH * 1000;
+
     recordingTimer = setInterval(() => {
       const elapsed = performance.now() - recordingStartTime;
       const remain = totalMs - elapsed;
       $('recording-timer').textContent = `残り ${Math.max(0, remain / 1000).toFixed(1)}秒`;
+
+      // 完了ボタンを活性化(3秒経過後)
+      if (elapsed >= finishEnableMs && $('btn-finish-capture').disabled) {
+        $('btn-finish-capture').disabled = false;
+        $('btn-finish-capture').textContent = '✓ 動作完了 ・ 次へ進む';
+        $('finish-hint').classList.remove('hidden');
+      }
+
       if (elapsed >= totalMs || captureRequestedStop) {
         finishRecording(step);
       }
     }, 100);
   }
 
-  $('btn-stop-capture').addEventListener('click', () => {
-    if (recording) {
+  // 動作完了ボタン: 規定時間前でも次へ進める
+  $('btn-finish-capture').addEventListener('click', () => {
+    if (recording && !$('btn-finish-capture').disabled) {
       captureRequestedStop = true;
     }
+  });
+
+  // 中断ボタン: 撮影を破棄して動作説明画面に戻る
+  $('btn-abort-capture').addEventListener('click', () => {
+    if (!recording) return;
+    if (!confirm('この動作の撮影を中断しますか?(データは破棄されます)')) return;
+    captureWasAborted = true;
+    captureRequestedStop = true;
   });
 
   function finishRecording(step) {
@@ -859,13 +941,22 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
     clearInterval(recordingTimer);
     recordingTimer = null;
     $('recording-badge').classList.add('hidden');
-    $('btn-stop-capture').classList.add('hidden');
+    $('btn-finish-capture').classList.add('hidden');
+    $('finish-hint').classList.add('hidden');
+    $('btn-abort-capture').classList.add('hidden');
 
     // カメラ停止
     detecting = false;
     if (stream) {
       stream.getTracks().forEach(t => t.stop());
       stream = null;
+    }
+
+    // 中断時はデータ破棄して説明画面に戻る
+    if (captureWasAborted) {
+      recordedFrames = [];
+      showStepIntro();
+      return;
     }
 
     // 結果集計
@@ -878,6 +969,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       summary: finalCheck.summary,
       passed: finalCheck.passed,
       issues: finalCheck.issues,
+      // 実際の撮影秒数(完了ボタンで早く終わった場合の記録)
+      actual_capture_sec: (performance.now() - recordingStartTime) / 1000,
     };
 
     showReview(step, allStepResults[step.id]);
@@ -934,7 +1027,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   // ─────────────────────────────────────────
   function showReview(step, result) {
     $('review-title').textContent = step.title + ' 完了';
-    $('review-frames').textContent = result.frames.length + ' フレーム';
+    const sec = (result.actual_capture_sec || 0).toFixed(1);
+    $('review-frames').textContent = `${result.frames.length} フレーム(撮影時間 ${sec}秒)`;
     $('review-detection').textContent = Math.round((result.summary.detectionRate || 0) * 100) + '%';
     $('review-fps').textContent = (result.summary.fps || 0).toFixed(0) + ' fps';
 
