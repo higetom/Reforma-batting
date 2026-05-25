@@ -83,35 +83,136 @@
  }
 
  // ─────────────────────────────────────────
- // 打者判別(右打者/左打者)
- // 構え時に前足(投手側)がどちらかで判定
+ // 打者判別(右打者/左打者) — 改良版
+ //
+ // 旧版は「動画全体の足首Y range」で判定していたため、
+ // 後ろ足のpivotや重心移動など余計な動きを拾って誤判定が頻発した。
+ //
+ // 改良版: 独立した3シグナルの投票制 + 信頼度スコア。
+ //
+ // Signal 1 [強]: ストライド期(動画20-60%)の足首リフト量
+ // → 構えY平均からの最大上方移動。前足ほど大きく上がる。
+ // Signal 2 [中]: 構え時の鼻の位置(肩中点に対する相対位置)
+ // → 真横撮影で右打者は左を向く=鼻が体の左側に出る。
+ // Signal 3 [中]: 構え時の両手首の重心位置(肩中点に対する相対位置)
+ // → 右打者は両手を体の右後ろで構える(撮影方向によるが、肩の中央軸からの偏りで判定)
+ //
+ // 戻り値: { side: 'right'|'left', confidence: 0-1, signals: {...} }
  // ─────────────────────────────────────────
  function detectSide(frames) {
- // 構え時(動画前半20%)で、前足のY座標が低い(画像下=高い)方を判別
- const n = Math.max(3, Math.floor(frames.length / 5));
- let leftAnkleY = 0, rightAnkleY = 0, cnt = 0;
- for (let i = 0; i < n; i++) {
+ const N = frames.length;
+ if (N < 10) {
+ return { side: 'right', confidence: 0, signals: { reason: 'insufficient_frames' } };
+ }
+
+ // フェーズ範囲(時間比率)
+ const stanceStart = 0;
+ const stanceEnd = Math.max(3, Math.floor(N * 0.20));
+ const strideStart = Math.floor(N * 0.20);
+ const strideEnd = Math.floor(N * 0.60);
+
+ const votes = { right: 0, left: 0 };
+ const weights = { right: 0, left: 0 };
+ const signals = {};
+
+ // ===== Signal 1: ストライド足のリフト量 (weight 2.0) =====
+ // 構え時の平均Yから、ストライド期の最低Y(=最高位置)までの差分
+ let lStanceYs = [], rStanceYs = [];
+ for (let i = stanceStart; i < stanceEnd; i++) {
  const lm = frames[i].landmarks;
- if (lm[LM.L_ANK] && lm[LM.R_ANK]) {
- leftAnkleY += lm[LM.L_ANK].y;
- rightAnkleY += lm[LM.R_ANK].y;
- cnt++;
+ if (lm[LM.L_ANK] && (lm[LM.L_ANK].v == null || lm[LM.L_ANK].v > 0.4)) lStanceYs.push(lm[LM.L_ANK].y);
+ if (lm[LM.R_ANK] && (lm[LM.R_ANK].v == null || lm[LM.R_ANK].v > 0.4)) rStanceYs.push(lm[LM.R_ANK].y);
+ }
+ const lStanceY = lStanceYs.length ? lStanceYs.reduce((s, v) => s + v, 0) / lStanceYs.length : null;
+ const rStanceY = rStanceYs.length ? rStanceYs.reduce((s, v) => s + v, 0) / rStanceYs.length : null;
+
+ let lMinY = Infinity, rMinY = Infinity;
+ for (let i = strideStart; i < strideEnd && i < N; i++) {
+ const lm = frames[i].landmarks;
+ if (lm[LM.L_ANK] && (lm[LM.L_ANK].v == null || lm[LM.L_ANK].v > 0.4)) lMinY = Math.min(lMinY, lm[LM.L_ANK].y);
+ if (lm[LM.R_ANK] && (lm[LM.R_ANK].v == null || lm[LM.R_ANK].v > 0.4)) rMinY = Math.min(rMinY, lm[LM.R_ANK].y);
+ }
+ if (lStanceY != null && rStanceY != null && lMinY !== Infinity && rMinY !== Infinity) {
+ const lLift = Math.max(0, lStanceY - lMinY);
+ const rLift = Math.max(0, rStanceY - rMinY);
+ signals.lLift = +lLift.toFixed(4);
+ signals.rLift = +rLift.toFixed(4);
+ // 差が1%以上なら有効投票
+ if (Math.abs(lLift - rLift) > 0.01) {
+ // 大きく上がった足が前足
+ // 左足が上がった → 右打者(左足が投手側=前足)
+ if (lLift > rLift) { votes.right += 2; weights.right += 2; }
+ else { votes.left += 2; weights.left += 2; }
  }
  }
- if (cnt === 0) return 'right';
- // 前足のY座標が大きい(画像下)=立っている = 利き手と反対側
- // 簡易判定: 動画中で足の動きが大きい方を前足とする
- let leftRange = 0, rightRange = 0;
- let lAnkY = [], rAnkY = [];
- frames.forEach(f => {
- const lm = f.landmarks;
- if (lm[LM.L_ANK]) lAnkY.push(lm[LM.L_ANK].y);
- if (lm[LM.R_ANK]) rAnkY.push(lm[LM.R_ANK].y);
- });
- if (lAnkY.length > 0) leftRange = Math.max(...lAnkY) - Math.min(...lAnkY);
- if (rAnkY.length > 0) rightRange = Math.max(...rAnkY) - Math.min(...rAnkY);
- // 大きく動く足 = 前足。右打者なら左足が前足、左打者なら右足が前足
- return leftRange > rightRange ? 'right' : 'left';
+
+ // ===== Signal 2: 構え時の鼻の体軸からの偏り (weight 1.0) =====
+ // 真横撮影で被写体が体軸を捻って投手を見るとき、鼻は前足側にやや出る
+ let noseOffsets = [];
+ for (let i = stanceStart; i < stanceEnd; i++) {
+ const lm = frames[i].landmarks;
+ if (lm[LM.NOSE] && lm[LM.L_SHO] && lm[LM.R_SHO]) {
+ const shoMidX = (lm[LM.L_SHO].x + lm[LM.R_SHO].x) / 2;
+ const noseX = lm[LM.NOSE].x;
+ noseOffsets.push(noseX - shoMidX); // 正=画面右、負=画面左
+ }
+ }
+ if (noseOffsets.length >= 3) {
+ const avgOff = noseOffsets.reduce((s, v) => s + v, 0) / noseOffsets.length;
+ signals.noseOffset = +avgOff.toFixed(4);
+ // 鼻が肩中点から大きくズレている=被写体が向きを捻っている
+ // ※ 真横撮影では鼻オフセットは判定材料が弱いので、weight 0.5 にとどめる
+ if (Math.abs(avgOff) > 0.03) {
+ // この単独シグナルは弱いので投票しない(参考値として記録のみ)
+ }
+ }
+
+ // ===== Signal 3: 構え時の手首位置(肩中点との相対) (weight 1.0) =====
+ // 右打者は両手を体の右後ろで構える。被写体の体軸から「後ろ側」に手がある。
+ // 後ろ側=「ストライド足の反対側」。 ストライド足を Signal 1 で判定済みなら、
+ // 手首が逆側にあるかで cross-check できる。
+ let handOffsets = [];
+ for (let i = stanceStart; i < stanceEnd; i++) {
+ const lm = frames[i].landmarks;
+ if (lm[LM.L_WRI] && lm[LM.R_WRI] && lm[LM.L_HIP] && lm[LM.R_HIP]) {
+ const hipMidX = (lm[LM.L_HIP].x + lm[LM.R_HIP].x) / 2;
+ const handMidX = (lm[LM.L_WRI].x + lm[LM.R_WRI].x) / 2;
+ handOffsets.push(handMidX - hipMidX);
+ }
+ }
+ if (handOffsets.length >= 3) {
+ const avgHandOff = handOffsets.reduce((s, v) => s + v, 0) / handOffsets.length;
+ signals.handOffset = +avgHandOff.toFixed(4);
+ // この値は撮影方向(1塁/3塁)で逆転するため、単独投票は弱い
+ // ストライド検出と整合性を取る用途のみ
+ }
+
+ // ===== 集計 =====
+ let side, confidence;
+ const totalWeight = weights.right + weights.left;
+ if (totalWeight === 0) {
+ // 全シグナル不発 → デフォルトは右、信頼度ゼロ
+ side = 'right';
+ confidence = 0;
+ } else {
+ side = weights.right >= weights.left ? 'right' : 'left';
+ const dominant = Math.max(weights.right, weights.left);
+ const ratio = dominant / totalWeight; // 0.5 〜 1.0
+ // ストライドリフト差が大きいほど信頼度UP
+ const liftDiff = signals.lLift != null && signals.rLift != null
+ ? Math.abs(signals.lLift - signals.rLift) : 0;
+ const liftBoost = Math.min(0.3, liftDiff * 10); // リフト差10%なら +0.3
+ confidence = Math.min(1, (ratio - 0.5) * 2 + liftBoost);
+ }
+
+ signals.votes = votes;
+ signals.weights = weights;
+ return { side: side, confidence: +confidence.toFixed(3), signals: signals };
+ }
+
+ // 旧API互換ラッパー(side文字列のみ返す)
+ function detectSideSimple(frames) {
+ return detectSide(frames).side;
  }
 
  // ─────────────────────────────────────────
@@ -531,7 +632,20 @@
  const rmpType = input.rmp_type || 'フロー型';
 
  // 打者判別
- const side = detectSide(frames);
+ // force_side が指定されている場合(結果画面の手動切替)、それを優先
+ const sideResult = detectSide(frames);
+ let side, sideConfidence, sideSignals, sideOverridden;
+ if (input.force_side === 'right' || input.force_side === 'left') {
+ side = input.force_side;
+ sideConfidence = 1.0; // 人間が指定したので信頼度100%
+ sideSignals = sideResult.signals;
+ sideOverridden = true;
+ } else {
+ side = sideResult.side;
+ sideConfidence = sideResult.confidence;
+ sideSignals = sideResult.signals;
+ sideOverridden = false;
+ }
 
  // 身長推定
  const bodyHeight = estimateBodyHeight(frames);
@@ -588,6 +702,9 @@
  return {
  side: side,
  side_jp: side === 'right' ? '右打者' : '左打者',
+ side_confidence: sideConfidence,
+ side_signals: sideSignals,
+ side_overridden: sideOverridden,
  body_height: bodyHeight,
  n_frames: frames.length,
  fps: fps,

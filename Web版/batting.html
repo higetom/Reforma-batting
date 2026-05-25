@@ -159,16 +159,16 @@
  </div>
  </div>
 
- <!-- 撮影者ルール3つ -->
+ <!-- 撮影者ルール -->
  <div class="card-emphasized card" style="padding:16px;margin-top:12px;border-left:3px solid var(--color-info)">
  <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
- 撮影の3つの絶対ルール
+ 撮影の絶対ルール
  </div>
  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
  <div style="font-size:22px;flex-shrink:0"></div>
  <div style="flex:1">
  <div style="font-weight:600;font-size:14px">スマホは縦向き</div>
- <div class="text-tertiary text-small">横向きで撮らないでください。</div>
+ <div class="text-tertiary text-small">横向きでは撮らないでください。</div>
  </div>
  </div>
  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
@@ -178,11 +178,21 @@
  <div class="text-tertiary text-small">大人がお子さんを撮るときはしゃがんでください。</div>
  </div>
  </div>
- <div style="display:flex;gap:12px;align-items:flex-start">
+ <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
  <div style="font-size:22px;flex-shrink:0"></div>
  <div style="flex:1">
  <div style="font-weight:600;font-size:14px">真横から、距離は4-5m</div>
- <div class="text-tertiary text-small">構え〜フォロースルーまで全身が画面に収まること。</div>
+ <div class="text-tertiary text-small">1塁側 or 3塁側のどちらかから撮影。</div>
+ </div>
+ </div>
+ <div style="display:flex;gap:12px;align-items:flex-start;padding-top:10px;border-top:1px dashed var(--border-subtle);background:rgba(245,158,11,0.05);margin:0 -16px -16px;padding:14px 16px 14px;border-radius:0 0 8px 8px">
+ <div style="font-size:22px;flex-shrink:0;color:var(--color-warning)">!</div>
+ <div style="flex:1">
+ <div style="font-weight:700;font-size:14px;color:var(--color-warning)">画面はみ出し厳禁</div>
+ <div class="text-tertiary text-small" style="line-height:1.7">
+ 構えからフォロースルーまで <b>頭・両足・バット先端</b> がすべて画面内に収まること。<br>
+ とくに <b>フォロースルー時にバットが画面外に出る</b> ことが多いので、カメラを少し引いて撮影してください。
+ </div>
  </div>
  </div>
  </div>
@@ -204,10 +214,19 @@
  撮影を準備する →
  </button>
 
- <div style="text-align:center;margin-top:18px;padding-top:14px;border-top:1px solid var(--border-subtle)">
- <a href="#" id="link-upload" class="text-small text-muted" style="text-decoration:underline">
+ <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border-subtle)">
+ <div class="text-tertiary text-small" style="text-align:center;margin-bottom:10px;letter-spacing:0.5px">
+ または
+ </div>
+ <button id="link-upload" class="btn btn-block" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-subtle);padding:14px;font-size:15px;font-weight:500">
+ <span style="display:inline-block;width:18px;height:18px;border:1.5px solid var(--text-secondary);border-radius:3px;margin-right:8px;vertical-align:-3px;position:relative">
+ <span style="position:absolute;left:3px;top:3px;width:0;height:0;border-style:solid;border-width:5px 0 5px 8px;border-color:transparent transparent transparent var(--text-secondary)"></span>
+ </span>
  撮りだめた動画から解析する
- </a>
+ </button>
+ <div class="text-tertiary text-small" style="text-align:center;margin-top:8px;font-size:11.5px">
+ 過去に撮ったスイング動画(mp4/mov)を読み込みます
+ </div>
  </div>
  </div>
 </div>
@@ -619,14 +638,29 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }
 
  // sessionStorage に保存して結果ページへ
+ // 手動切替で再解析できるよう、生のlandmarkデータも保存
+ const cleanFrames = recordedFrames.map(f => ({
+ t: f.t,
+ landmarks: f.landmarks,
+ }));
  const payload = {
  analysis: result,
+ raw_frames: cleanFrames,
+ raw_fps: fps,
+ raw_rmp_type: rmpType,
  captured_at: new Date().toISOString(),
  n_frames: recordedFrames.length,
  duration_ms: recordedFrames[recordedFrames.length - 1].t,
+ source: 'capture',
  };
- const json = JSON.stringify(payload);
- sessionStorage.setItem('reforma_last_batting', json);
+ try {
+ sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
+ } catch (e) {
+ // 容量超過時は frames を半分に間引いて再試行
+ console.warn('sessionStorage 容量超過、frames を間引きます:', e.message);
+ payload.raw_frames = cleanFrames.filter((_, i) => i % 2 === 0);
+ sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
+ }
 
  window.location.href = 'batting_result.html';
  } catch (e) {
@@ -812,22 +846,53 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  return;
  }
 
+ const cleanFrames = frames.map(f => ({
+ t: f.t,
+ landmarks: f.landmarks,
+ }));
  const payload = {
  analysis: result,
+ raw_frames: cleanFrames,
+ raw_fps: fps,
+ raw_rmp_type: rmpType,
  captured_at: new Date().toISOString(),
  n_frames: frames.length,
  duration_ms: frames[frames.length - 1].t,
  source: 'upload',
  file_name: pickedFile.name,
  };
+ try {
  sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
+ } catch (e) {
+ console.warn('sessionStorage 容量超過、frames を間引きます:', e.message);
+ payload.raw_frames = cleanFrames.filter((_, i) => i % 2 === 0);
+ sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
+ }
  window.location.href = 'batting_result.html';
  } catch (e) {
  console.error(e);
- showRichError('解析中にエラーが発生しました: ' + e.message, [
+ // エラー種別に応じて改善ヒントを変える
+ const msg = e.message || '不明なエラー';
+ let hints;
+ if (/フレーム/.test(msg) || /取得できません/.test(msg)) {
+ hints = [
+ 'iPhone Safari の場合: 設定 > Safari > 詳細 > Experimental Features で「WebAssembly SIMD」が有効か確認',
+ 'mp4形式の動画で再試行してください(HEVC/H.265より H.264 が安定)',
+ '別の動画(短めのmp4)で動作確認してください',
+ 'iCloud共有動画ではなく、端末ローカルに保存された動画を選んでください',
+ ];
+ } else if (/メタデータ/.test(msg) || /解像度/.test(msg) || /長さ/.test(msg)) {
+ hints = [
+ '動画ファイルが破損している可能性があります',
+ '別の動画で再試行してください',
+ ];
+ } else {
+ hints = [
  '別の動画で再度お試しください',
  'ページを再読み込みしてから再試行してください',
- ]);
+ ];
+ }
+ showRichError('解析中にエラーが発生しました: ' + msg, hints);
  }
  });
 
@@ -847,38 +912,113 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }
 
  /**
- * アップロード動画からフレームを抽出。
- * 戦略: 動画を再生し、requestVideoFrameCallback で各フレームを処理。
- * 対応していない環境では requestAnimationFrame + currentTime 変化検出にフォールバック。
- * MediaPipe の detectForVideo は単調増加するタイムスタンプを要求するので、
- * フレーム時刻(currentTime)を ms 換算して使用する。
+ * アップロード動画からフレームを抽出(Safari対策強化版)。
+ *
+ * 重要: Safari (とくにiOS) は document.createElement('video') を
+ * DOMに追加しないと、フレームをレンダリングせず、
+ * requestVideoFrameCallback / canvas読出/MediaPipe検出が
+ * すべて無効になる。必ずDOMに追加すること。
+ *
+ * 戦略: play()ベース → 失敗 or 0フレームならseek()ベースに自動フォールバック。
+ * extractionStats を返り値に含めて、エラー時に何が起きたか可視化する。
  */
  async function extractFramesFromVideo(url) {
+ const stats = { method: null, frameCount: 0, detectedCount: 0, durationSec: 0, videoSize: null };
+
+ // 1) 専用マウントポイントを analyzing 画面の中に用意(DOM内・可視必須)
+ let mount = document.getElementById('analyzing-video-mount');
+ if (!mount) {
+ mount = document.createElement('div');
+ mount.id = 'analyzing-video-mount';
+ mount.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:120px;height:67px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden';
+ document.body.appendChild(mount);
+ }
+ // 既存があれば消す
+ while (mount.firstChild) mount.removeChild(mount.firstChild);
+
  const v = document.createElement('video');
  v.src = url;
  v.muted = true;
+ v.defaultMuted = true;
  v.playsInline = true;
  v.preload = 'auto';
- v.crossOrigin = 'anonymous';
+ v.setAttribute('playsinline', 'true');
+ v.setAttribute('webkit-playsinline', 'true');
+ v.setAttribute('muted', 'true');
+ v.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block';
+ mount.appendChild(v); // ← Safari がレンダリングするため DOM 内に必須
 
- // メタデータ待ち
+ const cleanup = () => {
+ try { v.pause(); } catch (e) {}
+ try { v.removeAttribute('src'); v.load(); } catch (e) {}
+ try { if (mount.parentNode) mount.parentNode.removeChild(mount); } catch (e) {}
+ };
+
+ try {
+ // ===== メタデータ待ち =====
  await new Promise((resolve, reject) => {
- v.addEventListener('loadedmetadata', resolve, { once: true });
- v.addEventListener('error', () => reject(new Error('再生不可')), { once: true });
- setTimeout(() => reject(new Error('動画読込タイムアウト')), 20000);
+ const onMeta = () => { v.removeEventListener('loadedmetadata', onMeta); resolve(); };
+ const onErr = () => reject(new Error('メタデータ読込失敗'));
+ v.addEventListener('loadedmetadata', onMeta);
+ v.addEventListener('error', onErr, { once: true });
+ setTimeout(() => reject(new Error('メタデータ読込タイムアウト(20秒)')), 20000);
  });
 
+ stats.durationSec = v.duration;
+ stats.videoSize = `${v.videoWidth}×${v.videoHeight}`;
+ console.log('[upload] meta loaded:', stats);
+
+ if (!isFinite(v.duration) || v.duration <= 0) {
+ throw new Error('動画の長さが取得できません(duration=' + v.duration + ')');
+ }
+ if (!v.videoWidth || !v.videoHeight) {
+ throw new Error('動画の解像度が取得できません(' + stats.videoSize + ')');
+ }
+
+ // ===== Try 1: play()ベース抽出 =====
+ const playResult = await tryPlayBasedExtraction(v, stats);
+
+ if (playResult.collected.length >= 12) {
+ stats.method = 'play';
+ console.log('[upload] play-based OK:', stats);
+ return playResult.collected;
+ }
+
+ // ===== Try 2: seek()ベース抽出(フォールバック) =====
+ console.warn('[upload] play-based got only', playResult.collected.length, 'frames. Falling back to seek-based.');
+ setUploadProgress(0, '別の方法で再試行しています…', '');
+ const seekResult = await trySeekBasedExtraction(v, stats);
+ stats.method = 'seek';
+ console.log('[upload] seek-based result:', stats);
+ if (seekResult.length >= 12) return seekResult;
+
+ // 両方失敗 → 詳細を付けて throw
+ throw new Error(
+ `動画からフレームを取得できませんでした` +
+ ` (play=${playResult.collected.length}枚, seek=${seekResult.length}枚, 解像度=${stats.videoSize})`
+ );
+ } finally {
+ cleanup();
+ }
+ }
+
+ /**
+ * 戦略A: 動画を再生して requestVideoFrameCallback / rAF でフレーム取得
+ */
+ async function tryPlayBasedExtraction(v, stats) {
  const duration = v.duration;
  const collected = [];
- const minFrameInterval = 1000 / (TARGET_PROCESS_FPS + 5); // 35fps相当でスキップ判定
+ const minFrameInterval = 1000 / (TARGET_PROCESS_FPS + 5);
  let lastProcessedTs = -Infinity;
- // 単調増加タイムスタンプの起点(MediaPipe用)
- const baseTs = performance.now();
+ const baseTs = performance.now() + 1; // 既存landmarkerの最終ts より大きく
+ let attempted = 0;
 
- // フレーム1枚を処理
+ v.currentTime = 0;
+
  function processFrame(currentTimeSec) {
+ attempted++;
  const tsMs = baseTs + currentTimeSec * 1000;
- if (tsMs - lastProcessedTs < minFrameInterval) return; // 高フレームレート動画でも30fps相当に間引き
+ if (tsMs - lastProcessedTs < minFrameInterval) return;
  lastProcessedTs = tsMs;
  try {
  const result = poseLandmarker.detectForVideo(v, tsMs);
@@ -892,61 +1032,110 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  })),
  });
  }
- } catch (e) {
- console.warn('frame detect error:', e);
- }
+ } catch (e) { console.warn('[upload] play frame detect:', e.message); }
  }
 
- // requestVideoFrameCallback サポート判定
  const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
 
- await new Promise((resolve, reject) => {
- v.addEventListener('ended', () => {
- setUploadProgress(98, 'フレーム抽出完了', collected.length + 'フレーム取得');
- resolve();
- }, { once: true });
- v.addEventListener('error', () => reject(new Error('動画再生エラー')), { once: true });
+ await new Promise((resolve) => {
+ let finished = false;
+ const finish = () => { if (!finished) { finished = true; resolve(); } };
 
- // 万一の保険(動画長+5秒で打ち切り)
- const safetyTimeout = setTimeout(() => {
- try { v.pause(); } catch (e) {}
- resolve();
- }, (duration + 5) * 1000);
+ v.addEventListener('ended', finish, { once: true });
+ v.addEventListener('error', () => { console.warn('[upload] video error'); finish(); }, { once: true });
+ // 万一の保険
+ setTimeout(() => { try { v.pause(); } catch (e) {} finish(); }, (duration + 8) * 1000);
 
  if (hasRVFC) {
  const onFrame = (now, metadata) => {
- if (v.ended || v.paused) return;
+ if (finished) return;
  processFrame(metadata.mediaTime);
  const pct = Math.min(95, (metadata.mediaTime / duration) * 95);
- setUploadProgress(pct, '解析中…', '読込フレーム: ' + collected.length);
- v.requestVideoFrameCallback(onFrame);
+ setUploadProgress(pct, '解析中…', '読込: ' + collected.length + '枚');
+ if (!v.ended && !v.paused) v.requestVideoFrameCallback(onFrame);
  };
  v.requestVideoFrameCallback(onFrame);
  } else {
- // フォールバック: rAF + currentTime変化検出
  let lastTime = -1;
  const tick = () => {
- if (v.ended || v.paused) return;
+ if (finished) return;
  if (v.currentTime !== lastTime) {
  lastTime = v.currentTime;
  processFrame(v.currentTime);
  const pct = Math.min(95, (v.currentTime / duration) * 95);
- setUploadProgress(pct, '解析中…', '読込フレーム: ' + collected.length);
+ setUploadProgress(pct, '解析中…', '読込: ' + collected.length + '枚');
  }
- requestAnimationFrame(tick);
+ if (!v.ended && !v.paused) requestAnimationFrame(tick);
+ else finish();
  };
  requestAnimationFrame(tick);
  }
 
+ // 再生開始
  v.play().catch(err => {
- clearTimeout(safetyTimeout);
- reject(new Error('動画を再生できませんでした: ' + err.message));
+ console.warn('[upload] play() rejected:', err.message);
+ // play失敗してもseek戦略でリカバリ可能なので、ここでrejectせず終了
+ finish();
+ });
  });
 
- // ended ハンドラ起動時に safetyTimeout もクリア
- v.addEventListener('ended', () => clearTimeout(safetyTimeout), { once: true });
+ stats.frameCount = attempted;
+ stats.detectedCount = collected.length;
+ return { collected };
+ }
+
+ /**
+ * 戦略B: seek()ベース抽出(再生不要・Safari HEVCでも動作)
+ */
+ async function trySeekBasedExtraction(v, stats) {
+ const duration = v.duration;
+ const step = 1 / TARGET_PROCESS_FPS;
+ const collected = [];
+ const baseTs = performance.now() + 100000; // play戦略のtsと衝突しないよう大きめ
+ let attempted = 0;
+
+ try { v.pause(); } catch (e) {}
+ v.currentTime = 0;
+ // 最初のシーク完了待ち
+ await new Promise((resolve) => {
+ const h = () => { v.removeEventListener('seeked', h); resolve(); };
+ v.addEventListener('seeked', h);
+ setTimeout(resolve, 2000);
  });
 
+ const total = Math.floor(duration / step);
+ for (let i = 0; i < total; i++) {
+ const t = i * step;
+ // シーク
+ await new Promise((resolve) => {
+ const h = () => { v.removeEventListener('seeked', h); resolve(); };
+ v.addEventListener('seeked', h);
+ try { v.currentTime = t; } catch (e) { resolve(); return; }
+ setTimeout(resolve, 1500); // 1.5秒以内に seeked が来なければ諦め
+ });
+
+ attempted++;
+ const tsMs = baseTs + t * 1000;
+ try {
+ const result = poseLandmarker.detectForVideo(v, tsMs);
+ const landmarks = (result.landmarks && result.landmarks[0]) || null;
+ if (landmarks) {
+ collected.push({
+ t: t * 1000,
+ landmarks: landmarks.map(l => ({
+ x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+ z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+ })),
+ });
+ }
+ } catch (e) { console.warn('[upload] seek frame detect:', e.message); }
+
+ const pct = Math.min(95, (t / duration) * 95);
+ setUploadProgress(pct, 'フォールバック抽出中…', '読込: ' + collected.length + '/' + (i + 1) + '枚');
+ }
+
+ stats.frameCount = attempted;
+ stats.detectedCount = collected.length;
  return collected;
  }
 

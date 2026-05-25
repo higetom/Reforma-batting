@@ -148,6 +148,25 @@
  <div class="text-small text-muted" id="result-meta">--</div>
  </div>
 
+ <!-- 打席判定カード(手動切替可) -->
+ <div id="side-card" style="padding:14px 16px;background:var(--bg-card);border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle)">
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+ <div style="flex:1;min-width:0">
+ <div class="text-tertiary" style="font-size:10px;letter-spacing:1.5px;font-weight:600;margin-bottom:4px">BATTER SIDE / 打席</div>
+ <div style="font-size:16px;font-weight:500" id="side-display-name">--</div>
+ <div id="side-confidence-text" class="text-tertiary" style="margin-top:2px;font-size:11px;font-family:var(--font-family-mono)">判定信頼度: --</div>
+ </div>
+ <button id="btn-side-toggle" class="btn" style="padding:10px 14px;font-size:13px;flex-shrink:0;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border-subtle);font-weight:500">
+ 切替
+ </button>
+ </div>
+ <!-- 信頼度が低い時の警告 -->
+ <div id="side-warning" class="hidden" style="margin-top:10px;padding:10px 12px;background:rgba(245,158,11,0.08);border-left:3px solid var(--color-warning);border-radius:4px;font-size:12px;color:var(--color-warning);line-height:1.6">
+ <b>判定信頼度が低めです</b><br>
+ 違う場合は右上の「切替」ボタンを押してください。手動で切り替えると全指標が再計算されます。
+ </div>
+ </div>
+
  <!-- 総合スコア -->
  <div class="score-hero" id="score-hero">
  <div class="score-ring-wrap" id="score-ring-wrap"></div>
@@ -257,6 +276,7 @@
 
 <script src="js/user-profile.js"></script>
 <script src="js/batting-data.js"></script>
+<script src="js/batting-analyzer.js"></script>
 <script>
 (function () {
  'use strict';
@@ -277,8 +297,89 @@
  return;
  }
 
- const analysis = payload.analysis;
+ let analysis = payload.analysis;
  setTimeout(() => renderResult(analysis), 200);
+
+ // ─────────────────────────────────────────
+ // 打席手動切替の処理
+ // raw_frames が保存されていれば、force_side で再解析可能
+ // ─────────────────────────────────────────
+ function setupSideToggle(r) {
+ const card = $('side-card');
+ if (!card) return;
+
+ // 側名と信頼度を表示
+ const sideJp = r.side_jp || (r.side === 'right' ? '右打者' : '左打者');
+ const conf = r.side_confidence != null ? r.side_confidence : 1.0;
+ const overridden = r.side_overridden;
+
+ $('side-display-name').textContent = sideJp + 'として解析中';
+ if (overridden) {
+ $('side-confidence-text').textContent = '判定: 手動切替済(信頼度100%)';
+ } else {
+ $('side-confidence-text').textContent = '判定信頼度: ' + Math.round(conf * 100) + '%';
+ }
+
+ // 信頼度低い時は警告
+ if (!overridden && conf < 0.5) {
+ $('side-warning').classList.remove('hidden');
+ } else {
+ $('side-warning').classList.add('hidden');
+ }
+
+ // 切替ボタン
+ const oppositeSide = r.side === 'right' ? 'left' : 'right';
+ const oppositeJp = oppositeSide === 'right' ? '右打者' : '左打者';
+ $('btn-side-toggle').textContent = oppositeJp + 'に切替';
+ $('btn-side-toggle').disabled = false;
+
+ // raw_frames が無い場合(古いpayload等)はボタン無効化
+ if (!payload.raw_frames || payload.raw_frames.length < 12 ||
+ !window.ReformaBattingAnalyzer || !window.ReformaBattingAnalyzer.analyzeBatting) {
+ $('btn-side-toggle').disabled = true;
+ $('btn-side-toggle').textContent = '切替不可';
+ $('btn-side-toggle').style.opacity = '0.4';
+ return;
+ }
+
+ // 切替ハンドラ
+ $('btn-side-toggle').onclick = () => {
+ if (!confirm(oppositeJp + 'として再解析しますか?')) return;
+ reanalyzeWithSide(oppositeSide);
+ };
+ }
+
+ function reanalyzeWithSide(forceSide) {
+ try {
+ $('btn-side-toggle').disabled = true;
+ $('btn-side-toggle').textContent = '再計算中…';
+ // 再解析
+ const result = window.ReformaBattingAnalyzer.analyzeBatting({
+ frames: payload.raw_frames,
+ avg_fps: payload.raw_fps || 30,
+ rmp_type: payload.raw_rmp_type || 'フロー型',
+ force_side: forceSide,
+ });
+ if (result.error) {
+ alert('再解析に失敗しました: ' + result.error);
+ $('btn-side-toggle').disabled = false;
+ setupSideToggle(analysis);
+ return;
+ }
+ // 成功 → sessionStorageを更新して再描画
+ analysis = result;
+ payload.analysis = result;
+ try { sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload)); } catch (e) {}
+ // 結果を再描画(画面を一旦リセット)
+ $('result-content').classList.add('hidden');
+ $('loading-state').classList.remove('hidden');
+ setTimeout(() => renderResult(result), 200);
+ } catch (e) {
+ alert('再解析エラー: ' + e.message);
+ $('btn-side-toggle').disabled = false;
+ setupSideToggle(analysis);
+ }
+ }
 
  function renderResult(r) {
  $('loading-state').classList.add('hidden');
@@ -289,6 +390,9 @@
  $('result-greeting').textContent = greet;
  $('result-meta').textContent =
  `${r.side_jp} ・ ${r.n_frames}フレーム ・ ${r.fps.toFixed(0)}fps`;
+
+ // 打席切替セットアップ
+ setupSideToggle(r);
 
  // 総合スコア
  renderScore(r.total_score);
