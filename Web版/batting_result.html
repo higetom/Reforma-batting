@@ -121,6 +121,43 @@
  padding: 6px 10px; border-radius: 4px; color: var(--color-success);
  font-size: 11px; line-height: 1.7;
  }
+
+ /* ── タイプ特徴カード ── */
+ .type-feature-wrap {
+ display: flex; align-items: flex-start; gap: 14px;
+ background: var(--bg-card); border: 1px solid var(--border-subtle);
+ border-radius: var(--radius-md); padding: 14px 16px; margin: 0 16px 8px;
+ }
+ .type-label-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+ .type-eyebrow { font-size: 10px; letter-spacing: 1.5px; color: var(--text-tertiary); font-weight: 600; }
+ .type-badge {
+ font-size: 13px; font-weight: 700; padding: 2px 10px;
+ border-radius: 11px; background: rgba(59,130,246,0.15); color: #60a5fa;
+ }
+ .type-desc { font-size: 12.5px; color: var(--text-secondary); line-height: 1.75; margin-bottom: 7px; }
+ .type-strength { font-size: 12px; color: var(--color-success); margin-bottom: 3px; }
+ .type-caution-note { font-size: 12px; color: var(--color-warning); line-height: 1.65; }
+
+ /* ── Kinetic Chain 偏差バー ── */
+ .chain-bar-outer {
+ margin-top: 7px; height: 5px; background: #21262d; border-radius: 3px;
+ position: relative; overflow: visible;
+ }
+ .chain-bar-range {
+ position: absolute; height: 100%; border-radius: 3px; background: rgba(255,255,255,0.12);
+ }
+ .chain-bar-dot {
+ position: absolute; top: 50%; width: 9px; height: 9px;
+ border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #0b0e13;
+ }
+
+ /* ── 注意点セクション ── */
+ .attention-item {
+ background: var(--bg-card); border-left: 3px solid;
+ border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 10px;
+ }
+ .attention-title { font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
+ .attention-body { font-size: 12.5px; color: var(--text-secondary); line-height: 1.78; }
  </style>
 </head>
 <body>
@@ -191,6 +228,9 @@
  </div>
  </div>
 
+ <!-- タイプ特徴カード -->
+ <div id="type-feature-card" class="hidden"></div>
+
  <!-- 9フェーズ -->
  <div class="action-card" style="padding:16px 16px 8px">
  <div class="eyebrow">9フェーズ自動検出</div>
@@ -208,6 +248,16 @@
  <div id="chain-pills" class="mb-3"></div>
  </div>
  <div class="chain-cards-wrap" id="chain-cards"></div>
+
+ <!-- 注意点セクション -->
+ <div id="attention-section" class="hidden">
+ <div class="action-card" style="padding:20px 16px 8px">
+ <div class="eyebrow" style="color:#f59e0b">CLINICAL ATTENTION NOTES</div>
+ <h2 class="card-title">いまのスイングで気をつけたいこと</h2>
+ <p class="text-secondary text-small mb-3">理学療法士の視点から、怪我予防と動作改善のポイントをまとめました。</p>
+ </div>
+ <div style="padding:0 16px 4px" id="attention-items"></div>
+ </div>
 
  <!-- ボトルネック詳細 -->
  <div id="bottleneck-detail" class="hidden" style="margin:16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-radius:var(--radius-lg);padding:18px 20px">
@@ -397,11 +447,18 @@
  // 総合スコア
  renderScore(r.total_score);
 
+ // タイプ特徴カード
+ const rmpType = (payload.raw_rmp_type) || r.rmp_type || 'フロー型';
+ renderTypeFeature(rmpType);
+
  // 9フェーズ
  renderPhases(r.phases, r.fps);
 
  // Kinetic Chain
  renderKineticChain(r.kinetic_chain);
+
+ // 注意点セクション
+ renderAttentionNotes(r.kinetic_chain);
 
  // 改善ロードマップ
  if (r.kinetic_chain && r.kinetic_chain.bottleneck) {
@@ -497,6 +554,24 @@
  const rangeStr = l.typical_range
  ? `典型 ${l.typical_range[0]}〜${l.typical_range[1]}${l.unit || ''}` : '';
  const safeName = window.ReformaUserProfile.escapeHtml(l.label_friendly);
+
+ // 偏差バー HTML を生成(典型範囲 + 現在値ドット)
+ let barHtml = '';
+ if (l.measured && l.typical_range && l.typical_range.length === 2) {
+ const lo = l.typical_range[0], hi = l.typical_range[1];
+ const span = hi - lo;
+ // バーの表示幅: typical_rangeを中心に±50%の余白
+ const barMin = lo - span * 0.8, barMax = hi + span * 0.8;
+ const barSpan = barMax - barMin;
+ const rangeLeft = Math.max(0, Math.min(100, (lo - barMin) / barSpan * 100));
+ const rangeWidth = Math.max(0, Math.min(100 - rangeLeft, (hi - lo) / barSpan * 100));
+ const dotLeft = Math.max(2, Math.min(98, (Number(l.value) - barMin) / barSpan * 100));
+ barHtml = `<div class="chain-bar-outer">
+ <div class="chain-bar-range" style="left:${rangeLeft.toFixed(1)}%;width:${rangeWidth.toFixed(1)}%"></div>
+ <div class="chain-bar-dot" style="left:${dotLeft.toFixed(1)}%;background:${col}"></div>
+ </div>`;
+ }
+
  const card = document.createElement('div');
  card.className = 'chain-card';
  card.style.borderColor = col;
@@ -505,6 +580,7 @@
  <div class="chain-num">LINK ${i + 1}</div>
  <div class="chain-label">${safeName}</div>
  <div class="chain-value" style="color:${col}">${valStr}</div>
+ ${barHtml}
  <div class="chain-range">${rangeStr}</div>
  <div class="chain-status" style="color:${col}">${STATUS_LABEL[l.status]}</div>
  `;
@@ -554,6 +630,131 @@
  `;
  wrap.appendChild(card);
  });
+ }
+
+ // ─────────────────────────────────────────
+ // タイプ特徴カード
+ // ─────────────────────────────────────────
+ const RMP_TYPE_FEATURES = {
+ 'リーチ型': {
+ desc: '踏み込みを浅くして広いゾーンで捌くタイプ。バットコントロールとコンタクト率が武器になります。',
+ strength: '得意: 外角・流し打ちへの幅広い対応力',
+ caution: '意識: 内角を詰まられやすい傾向があります。ストライドをやや広めにとり、前腕をインサイドアウトの軌道で通す意識が有効です。',
+ },
+ 'ドライブ型': {
+ desc: '軸足でしっかり溜めて前足への踏み込みで力を解放するタイプ。地面反力を活かした長打力が特徴です。',
+ strength: '得意: 軸足→骨盤主導のパワー伝達',
+ caution: '意識: ストライドが深すぎると上体が前に倒れやすくなります。「骨盤を回してから肩を回す」順番を大切に。',
+ },
+ 'ウィップ型': {
+ desc: '腰と肩の分離（ひねり）を最大限に使い、体幹のしなりでバットを加速させるタイプ。スイングスピードが武器です。',
+ strength: '得意: 腰肩分離による鋭い体幹回旋とバットヘッドスピード',
+ caution: '意識: ひねりのタイミングが早いと力が逃げます。前足でブロックを作り切ってから回旋を始める「順序」が重要です。',
+ },
+ 'フロー型': {
+ desc: '特定の部位に頼らず全身の動きが自然につながるバランスタイプ。同じスイングを繰り返せる高い再現性が武器です。',
+ strength: '得意: 全身連動のバランスと安定した再現性',
+ caution: '意識: 疲労や調子の悪い日にバランスが崩れやすいです。定期的に再解析して変化を早めに捉えましょう。',
+ },
+ };
+
+ function renderTypeFeature(rmpType) {
+ const card = $('type-feature-card');
+ if (!card) return;
+ const tf = RMP_TYPE_FEATURES[rmpType] || RMP_TYPE_FEATURES['フロー型'];
+ const safeType = window.ReformaUserProfile.escapeHtml(rmpType);
+ card.classList.remove('hidden');
+ card.innerHTML = `
+ <div class="type-feature-wrap">
+ <div style="flex:1;min-width:0">
+ <div class="type-label-row">
+ <span class="type-eyebrow">YOUR SWING TYPE</span>
+ <span class="type-badge">${safeType}</span>
+ </div>
+ <div class="type-desc">${tf.desc}</div>
+ <div class="type-strength">${tf.strength}</div>
+ <div class="type-caution-note">${tf.caution}</div>
+ </div>
+ </div>
+ `;
+ }
+
+ // ─────────────────────────────────────────
+ // 注意点セクション(臨床的注意事項)
+ // ─────────────────────────────────────────
+ const ATTENTION_RULES = {
+ 'separation': {
+ low: { title: '体のひねりが不足気味です', color: '#f59e0b',
+ body: '腰と肩が同時に回っている可能性があります。「腰が先に回り、肩は後から」という順番を意識してみましょう。腕主体のスイングになると肩・肘への慢性的な負担が出やすい状態でもあります。' },
+ bottleneck: { title: '最重要: 体のひねりが動作連鎖のボトルネックです', color: '#ef4444',
+ body: '上半身と下半身を別々に動かす「分離動作」がスイングの核です。ここを改善するとバットスピードと安定性が大きく向上します。下の改善プログラムを参照してください。' },
+ },
+ 'front_block': {
+ high: { title: '前足ブロックを強める意識を', color: '#f59e0b',
+ body: 'コンタクト時に前膝が曲がりすぎると、下半身の回転が止まらず上体に力が伝わりにくくなります。「踏み込んだら前足を地面に根づかせる」イメージで。前膝・腰部への長期的な負担にもつながりやすいです。' },
+ bottleneck: { title: '最重要: 前足ブロックが弱い', color: '#ef4444',
+ body: '力の伝達は「軸足 → 踏み出し → 前足ブロック → 体幹回旋 → 腕 → バット」の順です。前足が止まらないと、その後のすべてのリンクで力が逃げてしまいます。' },
+ },
+ 'stride': {
+ low: { title: '踏み出しをもう少し広く', color: '#f59e0b',
+ body: '踏み出し幅が狭いと体重移動が不十分になり、腕主体のスイングになりやすくなります。目安は身長の60〜80%程度の幅を意識してみましょう。' },
+ high: { title: '踏み出しが大きすぎる可能性', color: '#f59e0b',
+ body: '踏み出しが大きすぎると上体の前への突っ込みにつながりやすくなります。力強さと安定性のバランスが取れた幅を探してみましょう。' },
+ },
+ 'trunk_balance': {
+ high: { title: '上体の突っ込みに注意', color: '#f97316',
+ body: 'スイング時に体幹が前に倒れすぎるとバットのヘッドが下がりやすくなります。「頭は動かさずに腰だけ回す」意識が助けになります。頸部・腰椎への慢性的な負担にもつながりやすい状態です。' },
+ },
+ 'elbow_height': {
+ low: { title: '後ろ肘をもう少し上げる', color: '#f59e0b',
+ body: '後ろ肘が下がりすぎているとバットのヘッドが内回りしやすくなり、引っ張り方向のスイングに偏ります。コンタクトゾーンが広がりにくい原因になることがあります。' },
+ high: { title: '後ろ肘が高すぎる', color: '#f59e0b',
+ body: '肘が肩より高く上がりすぎるとヘッドが残りやすく、バットスピードが落ちます。肘は肩の高さを基準に調整してみましょう。' },
+ },
+ 'load_leg': {
+ low: { title: '軸足への溜めが不足気味', color: '#f59e0b',
+ body: '軸足の沈み込みが浅いと下半身のバネを使えず、全身連動の起点が弱くなります。構えからロードへの動作で「軸足の上に乗る感覚」を意識してみましょう。' },
+ },
+ };
+
+ function renderAttentionNotes(chainDiag) {
+ const section = $('attention-section');
+ const itemsWrap = $('attention-items');
+ if (!section || !itemsWrap || !chainDiag || !chainDiag.links) return;
+
+ const notes = [];
+ const bnId = chainDiag.bottleneck ? chainDiag.bottleneck.id : null;
+
+ chainDiag.links.forEach(link => {
+ const rules = ATTENTION_RULES[link.id];
+ if (!rules || !link.measured) return;
+
+ // ボトルネックは専用メッセージ
+ if (link.id === bnId && rules.bottleneck) {
+ notes.push(rules.bottleneck);
+ return;
+ }
+
+ if (link.status !== 'off_range' && link.status !== 'caution' && link.status !== 'bottleneck') return;
+
+ const val = Number(link.value);
+ const range = link.typical_range;
+ if (!range || range.length < 2) return;
+ const dir = val < range[0] ? 'low' : (val > range[1] ? 'high' : null);
+ if (dir && rules[dir]) {
+ notes.push(rules[dir]);
+ }
+ });
+
+ if (notes.length === 0) { section.classList.add('hidden'); return; }
+
+ section.classList.remove('hidden');
+ itemsWrap.innerHTML = notes.map(n => `
+ <div class="attention-item" style="border-left-color:${n.color}">
+ <div class="attention-title" style="color:${n.color}">${n.title}</div>
+ <div class="attention-body">${n.body}</div>
+ </div>
+ `).join('');
  }
 
  function showError(msg) {
