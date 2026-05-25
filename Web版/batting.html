@@ -254,7 +254,9 @@
  </ul>
  </div>
 
- <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/x-m4v,video/*" style="display:none">
+ <input type="file" id="file-input" accept="video/mp4" style="display:none">
+ <!-- 注: accept="video/mp4" にすると iOS Safari は HEVC を選んだ際に変換してくれることがある -->
+ <!-- それでも HEVC が渡される場合は detectVideoCodec() で事前判定して別フローに分岐 -->
 
  <button class="btn btn-primary btn-block btn-large mt-4" id="btn-pick-file">
  動画ファイルを選択する
@@ -265,6 +267,25 @@
  <video id="upload-preview" controls playsinline muted style="width:100%;display:block"></video>
  </div>
  <div id="upload-info" class="text-small text-muted" style="margin-top:8px;font-family:var(--font-family-mono)"></div>
+
+ <!-- HEVC 動画の事前警告(iPhone標準形式は解析不可の可能性大) -->
+ <div id="upload-hevc-warning" class="hidden" style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#2d1a08 0%,#1a0f04 100%);border:1px solid #f59e0b66;border-left:3px solid var(--color-warning);border-radius:var(--radius-md)">
+ <div style="color:var(--color-warning);font-size:11px;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">
+ 注意: iPhone標準形式(HEVC)です
+ </div>
+ <div class="text-secondary" style="font-size:13px;line-height:1.75;margin-bottom:10px">
+ この動画は iPhone標準の HEVC(H.265)形式です。iPhone Safari の制約で姿勢検出ができない可能性があります。
+ </div>
+ <div style="background:rgba(255,255,255,0.03);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--text-secondary);line-height:1.75">
+ <b style="color:var(--text-primary)">解析できなかった場合の対処</b><br>
+ 1. iPhone「設定 → カメラ → フォーマット」を<b>「互換性優先」</b>に変更<br>
+ 2. その設定で動画を撮り直してアップロード<br>
+ または「<b>撮影を準備する</b>」から直接撮影(確実)
+ </div>
+ <div class="text-tertiary" style="font-size:11px;margin-top:8px">
+ ※ そのまま「解析する」を試してもOKです。一部の動画は通ることがあります。
+ </div>
+ </div>
 
  <button class="btn btn-success btn-block btn-large mt-3" id="btn-analyze-upload">
  ✓ この動画で解析する
@@ -710,6 +731,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  const TARGET_PROCESS_FPS = 30; // 解析用フレームレート目標
  let pickedFile = null;
  let pickedFileUrl = null;
+ let pickedFileCodec = 'unknown'; // 'hevc' | 'h264' | 'unknown'
 
  $('link-upload').addEventListener('click', (ev) => {
  ev.preventDefault();
@@ -800,14 +822,51 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  return;
  }
 
+ // コーデック早期検出(HEVCは iPhone Safari で解析失敗するので事前警告)
+ let codec = 'unknown';
+ try { codec = await detectVideoCodec(file); } catch (e) { console.warn('codec detect:', e.message); }
+ pickedFileCodec = codec;
+ console.log('[upload] codec detected:', codec, 'mime:', file.type);
+
  // 情報表示
+ const codecLabel = codec === 'hevc' ? 'HEVC (iPhone標準)' : codec === 'h264' ? 'H.264' : '不明';
  $('upload-info').textContent =
  '時間 ' + dur.toFixed(1) + '秒 / 解像度 ' + w + '×' + h +
+ ' / 形式 ' + codecLabel +
  ' / サイズ ' + (file.size / 1024 / 1024).toFixed(1) + 'MB';
  $('upload-preview-wrap').classList.remove('hidden');
- // 入力をリセットしておく(同じファイルを再選択できるように)
+
+ // HEVC は iPhone Safari で解析失敗の可能性大 → 事前警告
+ const warnBanner = $('upload-hevc-warning');
+ if (warnBanner) {
+ if (codec === 'hevc') warnBanner.classList.remove('hidden');
+ else warnBanner.classList.add('hidden');
+ }
+
+ // 入力をリセット(同じファイルを再選択できるように)
  ev.target.value = '';
  });
+
+ /**
+ * 動画ファイルの先頭4KBを読み、コーデックを判別。
+ * MP4/MOV コンテナ内の FourCC を検索する。
+ * - 'hev1' / 'hvc1' → HEVC(H.265) ← iPhone標準・Safari解析不可
+ * - 'avc1' → H.264 ← 解析可能
+ */
+ async function detectVideoCodec(file) {
+ const blob = file.slice(0, 4096);
+ const buf = new Uint8Array(await blob.arrayBuffer());
+ let s = '';
+ for (let i = 0; i < buf.length; i++) {
+ const c = buf[i];
+ s += (c >= 32 && c < 127) ? String.fromCharCode(c) : '.';
+ }
+ if (s.indexOf('hev1') >= 0 || s.indexOf('hvc1') >= 0) return 'hevc';
+ if (s.indexOf('avc1') >= 0) return 'h264';
+ if (file.type === 'video/mp4') return 'h264';
+ if (file.type === 'video/quicktime') return 'hevc';
+ return 'unknown';
+ }
 
  $('btn-analyze-upload').addEventListener('click', async () => {
  if (!pickedFile || !pickedFileUrl) return;
@@ -878,40 +937,68 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  console.error(e);
  // エラー種別に応じて改善ヒントを変える
  const msg = e.message || '不明なエラー';
- let hints, title;
- if (/HEVC_BLACKOUT/.test(msg)) {
- // iPhone HEVC ブラックアウト専用
- title = 'iPhone動画の形式が対応していません';
- hints = [
- '【最も簡単】iPhoneの「写真」アプリで動画を開き、共有 → 「ファイルに保存」で書き出してから、もう一度アップロードしてください',
- '【今後の予防策】iPhone「設定 > カメラ > フォーマット」で「互換性優先」を選択すると、今後撮影する動画は H.264 形式になり問題なく解析できます',
- '【別の手段】Re\'forma の「撮影を準備する」から、その場で撮影すれば確実に解析できます',
- ];
+ if (/HEVC_BLACKOUT/.test(msg) || pickedFileCodec === 'hevc') {
+ // iPhone HEVC ブラックアウト → 専用UI(離脱を防ぐシンプルなガイド)
+ showHevcGuide();
  } else if (/EXTRACT_FAILED/.test(msg)) {
- title = '動画からフレームを取得できませんでした';
- hints = [
+ showRichError('動画からフレームを読み込めませんでした', [
  'mp4(H.264)形式の動画でお試しください',
- '別の動画(短めの mp4 等)で動作確認してください',
- 'iCloud 共有ではなく、端末ローカルに保存された動画を選んでください',
- ];
+ '別の動画で動作確認してください',
+ 'iCloud共有ではなく、端末に保存された動画を選んでください',
+ ]);
  } else if (/メタデータ/.test(msg) || /解像度/.test(msg) || /長さ/.test(msg)) {
- title = '動画ファイルを読み込めませんでした';
- hints = [
+ showRichError('動画ファイルを読み込めませんでした', [
  '動画ファイルが破損している可能性があります',
  '別の動画で再試行してください',
- ];
+ ]);
  } else {
- title = '解析中にエラーが発生しました';
- hints = [
+ showRichError('解析中にエラーが発生しました', [
  '別の動画で再度お試しください',
  'ページを再読み込みしてから再試行してください',
- ];
+ ]);
  }
- // 技術的な詳細(HEVC_BLACKOUT等のプレフィックス)はユーザーに見せない
- const userMsg = msg.replace(/^[A-Z_]+:\s*/, '');
- showRichError(title + '\n' + userMsg, hints);
  }
  });
+
+ /**
+ * HEVC ブラックアウト専用ガイド画面を表示。
+ * 「離脱しない」を最優先にしたUI: 撮影フローへのワンタップ誘導 + 設定変更手順
+ */
+ function showHevcGuide() {
+ const html = `
+ <div style="text-align:left">
+ <b style="font-size:15px;color:var(--text-primary)">この動画は iPhone Safari で解析できません</b>
+ <div style="margin:10px 0 16px;font-size:13px;color:var(--text-secondary);line-height:1.75">
+ iPhone標準形式(HEVC)の動画は、Safari のブラウザ制約で姿勢検出ができません。
+ これは Re'forma の不具合ではなく、Apple の仕様によるものです。
+ </div>
+
+ <div style="background:rgba(16,185,129,0.08);border-left:3px solid var(--color-success);border-radius:6px;padding:12px 14px;margin-bottom:12px">
+ <b style="font-size:12.5px;color:var(--color-success);letter-spacing:0.5px">最も確実な方法</b>
+ <div style="margin-top:6px;font-size:13px;color:var(--text-secondary);line-height:1.75">
+ Re'forma の「撮影を準備する」からその場で撮影すれば、形式の問題なく確実に解析できます。
+ </div>
+ </div>
+
+ <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-subtle);border-radius:6px;padding:12px 14px;margin-bottom:12px">
+ <b style="font-size:12.5px;color:var(--text-primary);letter-spacing:0.5px">今後アップロードしたい場合</b>
+ <div style="margin-top:8px;font-size:12.5px;color:var(--text-secondary);line-height:1.85">
+ iPhoneの<br>
+ <b>「設定」 → 「カメラ」 → 「フォーマット」 → 「互換性優先」</b><br>
+ を選択してから撮影した動画は H.264 形式になり、問題なくアップロードできます。
+ </div>
+ </div>
+ </div>
+ `;
+ $('error-text').innerHTML = html;
+ showScreen('error');
+ // エラー画面のボタンを「撮影フローへ」中心に変更
+ const errCard = document.querySelector('#screen-error .container');
+ if (errCard) {
+ const primaryBtn = errCard.querySelector('button.btn-primary');
+ if (primaryBtn) primaryBtn.textContent = '撮影画面で その場で撮影する';
+ }
+ }
 
  function setUploadProgress(pct, text, detail) {
  $('upload-progress-bar').style.width = Math.max(0, Math.min(100, pct)) + '%';
@@ -1040,6 +1127,29 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  );
  } finally {
  cleanup();
+ }
+ }
+
+ /**
+ * video の現フレームを canvas に描画。
+ * 1段目: drawImage(video) - 多くの環境で動作
+ * 2段目: createImageBitmap(video) → drawImage(bitmap) - 一部HEVC環境で通る場合あり
+ * 戻り値: true = 成功, false = 失敗
+ */
+ async function drawCurrentFrame(v, canvas, ctx) {
+ try {
+ ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+ return true;
+ } catch (e1) {
+ try {
+ if (typeof createImageBitmap === 'function') {
+ const bitmap = await createImageBitmap(v);
+ ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+ if (bitmap.close) bitmap.close();
+ return true;
+ }
+ } catch (e2) {}
+ return false;
  }
  }
 
