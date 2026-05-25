@@ -7,10 +7,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b0e13">
 
-  <!-- セキュリティヘッダー -->
+  <!-- セキュリティヘッダー(MediaPipe WebAssembly のため wasm-unsafe-eval 必要) -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
-    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
+    script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
     style-src 'self' 'unsafe-inline';
     img-src 'self' data: blob:;
     media-src 'self' blob:;
@@ -24,10 +24,10 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
 
   <!-- SEO・OG -->
-  <title>Re'forma — 理学療法士監修・バッティング動作解析</title>
-  <meta name="description" content="スマホで30秒撮るだけで、理学療法士監修の動作解析。動物図鑑のように自分のタイプを知り、改善ロードマップを手に入れる。">
-  <meta property="og:title" content="Re'forma — 理学療法士監修・バッティング動作解析">
-  <meta property="og:description" content="スマホで30秒撮るだけで、PT監修・学術文献ベースの動作診断。">
+  <title>Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析</title>
+  <meta name="description" content="スマホで30秒撮るだけで、理学療法士・パーソナルトレーナー監修の動作解析。動物図鑑のように自分のタイプを知り、改善ロードマップを手に入れる。">
+  <meta property="og:title" content="Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析">
+  <meta property="og:description" content="スマホで30秒撮るだけで、専門家監修・学術文献ベースの動作診断。">
   <meta property="og:type" content="website">
 
   <link rel="stylesheet" href="css/common.css">
@@ -55,11 +55,11 @@
       </h1>
       <p class="text-secondary mb-5" style="font-size:15px;line-height:1.85;max-width:480px;margin-left:auto;margin-right:auto">
         スマートフォンのカメラで撮影するだけ。<br>
-        理学療法士監修・学術文献54件根拠の動作診断と、<br>
+        理学療法士・パーソナルトレーナー監修の動作診断と、<br>
         個別最適化された改善プログラムが手に入ります。
       </p>
       <a href="welcome.html" class="btn btn-primary btn-large" id="start-btn">
-        無料で動作タイプを診断する(60秒)
+        動作タイプを診断する(60秒)
       </a>
       <div class="text-tertiary text-small mt-3">
         ※ アカウント登録不要・データは端末のみに保存されます
@@ -71,15 +71,15 @@
       <div class="flex gap-4" style="flex-wrap:wrap;justify-content:space-around;text-align:center">
         <div>
           <div style="font-size:24px">🏆</div>
-          <div class="text-small text-secondary">社会人野球日本一<br>チーム選手協力</div>
+          <div class="text-small text-secondary">社会人野球優勝<br>チーム選手協力</div>
         </div>
         <div>
           <div style="font-size:24px">👨‍⚕️</div>
-          <div class="text-small text-secondary">理学療法士監修<br>+ パーソナルトレーナー</div>
+          <div class="text-small text-secondary">理学療法士・<br>パーソナルトレーナー監修</div>
         </div>
         <div>
           <div style="font-size:24px">📚</div>
-          <div class="text-small text-secondary">学術文献54件根拠<br>引用元PubMed直リンク</div>
+          <div class="text-small text-secondary">学術文献をもとに<br>作成</div>
         </div>
       </div>
     </div>
