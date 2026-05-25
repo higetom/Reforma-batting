@@ -1,152 +1,155 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0b0e13">
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="theme-color" content="#0b0e13">
 
-  <!-- セキュリティヘッダー(MediaPipe WebAssembly のため wasm-unsafe-eval 必要) -->
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' data: blob:;
-    media-src 'self' blob:;
-    connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
-    font-src 'self' data:;
-    object-src 'none';
-    base-uri 'self';
-    form-action 'self';
-    frame-ancestors 'self' https://*.vercel.app;
-  ">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
+ <!-- セキュリティヘッダー(MediaPipe WebAssembly のため wasm-unsafe-eval 必要) -->
+ <meta http-equiv="Content-Security-Policy" content="
+ default-src 'self';
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+ style-src 'self' 'unsafe-inline';
+ img-src 'self' data: blob:;
+ media-src 'self' blob:;
+ connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
+ font-src 'self' data:;
+ object-src 'none';
+ base-uri 'self';
+ form-action 'self';
+ frame-ancestors 'self' https://*.vercel.app;
+ ">
+ <meta name="referrer" content="strict-origin-when-cross-origin">
 
-  <!-- SEO・OG -->
-  <title>Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析</title>
-  <meta name="description" content="スマホで30秒撮るだけで、理学療法士・パーソナルトレーナー監修の動作解析。動物図鑑のように自分のタイプを知り、改善ロードマップを手に入れる。">
-  <meta property="og:title" content="Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析">
-  <meta property="og:description" content="スマホで30秒撮るだけで、専門家監修・学術文献ベースの動作診断。">
-  <meta property="og:type" content="website">
+ <!-- SEO・OG -->
+ <title>Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析</title>
+ <meta name="description" content="スマホで30秒撮るだけで、理学療法士・パーソナルトレーナー監修の動作解析。動物図鑑のように自分のタイプを知り、改善ロードマップを手に入れる。">
+ <meta property="og:title" content="Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析">
+ <meta property="og:description" content="スマホで30秒撮るだけで、専門家監修・学術文献ベースの動作診断。">
+ <meta property="og:type" content="website">
 
-  <link rel="stylesheet" href="css/common.css">
+ <link rel="stylesheet" href="css/common.css">
 </head>
 <body>
 
 <header class="rf-header">
-  <div class="rf-brand">
-    <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
-    <span class="rf-sub">バッティング動作解析</span>
-  </div>
-  <a href="rmst.html" class="text-small text-muted" id="continue-link" style="display:none">続きから →</a>
+ <div class="rf-brand">
+ <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
+ <span class="rf-sub">バッティング動作解析</span>
+ </div>
+ <a href="rmst.html" class="text-small text-muted" id="continue-link" style="display:none">続きから →</a>
 </header>
 
 <main>
-  <div class="container">
+ <div class="container">
 
-    <!-- メインキャッチ -->
-    <div class="card-emphasized card" style="text-align:center;padding:48px 24px">
-      <div class="eyebrow" style="color: var(--reforma-red); margin-bottom: 16px">
-        WORLD-CLASS BATTING ANALYSIS
-      </div>
-      <h1 style="font-size:28px;font-weight:400;margin-bottom:16px;letter-spacing:-0.02em">
-        あなたのバッティング、<br>30秒で動作解析
-      </h1>
-      <p class="text-secondary mb-5" style="font-size:15px;line-height:1.85;max-width:480px;margin-left:auto;margin-right:auto">
-        スマートフォンのカメラで撮影するだけ。<br>
-        理学療法士・パーソナルトレーナー監修の動作診断と、<br>
-        個別最適化された改善プログラムが手に入ります。
-      </p>
-      <a href="welcome.html" class="btn btn-primary btn-large" id="start-btn">
-        動作タイプを診断する(60秒)
-      </a>
-      <div class="text-tertiary text-small mt-3">
-        ※ アカウント登録不要・データは端末のみに保存されます
-      </div>
-    </div>
+ <!-- メインキャッチ -->
+ <div class="card-emphasized card" style="text-align:center;padding:48px 24px">
+ <div class="eyebrow" style="color: var(--reforma-red); margin-bottom: 16px">
+ WORLD-CLASS BATTING ANALYSIS
+ </div>
+ <h1 style="font-size:28px;font-weight:400;margin-bottom:16px;letter-spacing:-0.02em">
+ あなたのバッティング、<br>30秒で動作解析
+ </h1>
+ <p class="text-secondary mb-5" style="font-size:15px;line-height:1.85;max-width:480px;margin-left:auto;margin-right:auto">
+ スマートフォンのカメラで撮影するだけ。<br>
+ 理学療法士・パーソナルトレーナー監修の動作診断と、<br>
+ 個別最適化された改善プログラムが手に入ります。
+ </p>
+ <a href="batting.html" class="btn btn-primary btn-large btn-block" id="start-batting-btn">
+ バッティングを解析する
+ </a>
+ <a href="welcome.html" class="btn btn-secondary btn-block mt-2" id="start-btn" style="font-weight:500">
+ 動作タイプを診断する(60秒)
+ </a>
+ <div class="text-tertiary text-small mt-3">
+ ※ アカウント登録不要・データは端末のみに保存されます
+ </div>
+ </div>
 
-    <!-- 信頼バッジ -->
-    <div class="card" style="padding:20px">
-      <div class="flex gap-4" style="flex-wrap:wrap;justify-content:space-around;text-align:center">
-        <div>
-          <div style="font-size:24px">🏆</div>
-          <div class="text-small text-secondary">社会人野球優勝<br>チーム選手協力</div>
-        </div>
-        <div>
-          <div style="font-size:24px">👨‍⚕️</div>
-          <div class="text-small text-secondary">理学療法士・<br>パーソナルトレーナー監修</div>
-        </div>
-        <div>
-          <div style="font-size:24px">📚</div>
-          <div class="text-small text-secondary">学術文献をもとに<br>作成</div>
-        </div>
-      </div>
-    </div>
+ <!-- 信頼バッジ -->
+ <div class="card" style="padding:20px">
+ <div class="flex gap-4" style="flex-wrap:wrap;justify-content:space-around;text-align:center">
+ <div>
+ <div style="font-size:24px"></div>
+ <div class="text-small text-secondary">社会人野球優勝<br>チーム選手協力</div>
+ </div>
+ <div>
+ <div style="font-size:24px"></div>
+ <div class="text-small text-secondary">理学療法士・<br>パーソナルトレーナー監修</div>
+ </div>
+ <div>
+ <div style="font-size:24px"></div>
+ <div class="text-small text-secondary">学術文献をもとに<br>作成</div>
+ </div>
+ </div>
+ </div>
 
-    <!-- 特徴3つ -->
-    <h2 class="mb-3" style="margin-top:32px">Re'forma の独自価値</h2>
+ <!-- 特徴3つ -->
+ <h2 class="mb-3" style="margin-top:32px">Re'forma の独自価値</h2>
 
-    <div class="card">
-      <div class="card-title">🔗 Kinetic Chain 診断</div>
-      <p class="text-secondary text-small">
-        バッティングを「軸足→踏み出し→前足ブロック→ひねり→上体→肘→バット」の7リンクの連鎖として分析。
-        あなたの動作の<b>最弱リンク(ボトルネック)</b>を特定し、改善優先順位を明確にします。
-      </p>
-    </div>
+ <div class="card">
+ <div class="card-title">🔗 Kinetic Chain 診断</div>
+ <p class="text-secondary text-small">
+ バッティングを「軸足→踏み出し→前足ブロック→ひねり→上体→肘→バット」の7リンクの連鎖として分析。
+ あなたの動作の<b>最弱リンク(ボトルネック)</b>を特定し、改善優先順位を明確にします。
+ </p>
+ </div>
 
-    <div class="card">
-      <div class="card-title">🐍 動物図鑑タイプ分類</div>
-      <p class="text-secondary text-small">
-        Janda(1987)の姿勢分類理論をベースに、あなたの動作タイプを<b>4タイプ(鷲・サイ・蛇・猫)</b>に分類。
-        タイプ別の特性と最適な動作改善を提案します。
-      </p>
-    </div>
+ <div class="card">
+ <div class="card-title">動物図鑑タイプ分類</div>
+ <p class="text-secondary text-small">
+ Janda(1987)の姿勢分類理論をベースに、あなたの動作タイプを<b>4タイプ(鷲・サイ・蛇・猫)</b>に分類。
+ タイプ別の特性と最適な動作改善を提案します。
+ </p>
+ </div>
 
-    <div class="card">
-      <div class="card-title">📋 個別化改善ロードマップ</div>
-      <p class="text-secondary text-small">
-        診断結果に基づき、<b>4段階(可動性→強化→統合→フォーム再構築)</b>の改善プログラムを自動生成。
-        各段階の「次へ進む基準」も明確に提示します。
-      </p>
-    </div>
+ <div class="card">
+ <div class="card-title">📋 個別化改善ロードマップ</div>
+ <p class="text-secondary text-small">
+ 診断結果に基づき、<b>4段階(可動性→強化→統合→フォーム再構築)</b>の改善プログラムを自動生成。
+ 各段階の「次へ進む基準」も明確に提示します。
+ </p>
+ </div>
 
-    <!-- 精度の正直な開示 -->
-    <div class="alert alert-info mt-5">
-      <b>精度について</b>:
-      本解析は2Dスマートフォン動画による測定で、関節角度の誤差は撮影面内で±5-10°、撮影面外で±15-30°を含みます。
-      研究グレードの3Dモーションキャプチャ(±1°)とは異なりますが、自己改善とフォーム比較には十分な精度です。
-    </div>
+ <!-- 精度の正直な開示 -->
+ <div class="alert alert-info mt-5">
+ <b>精度について</b>:
+ 本解析は2Dスマートフォン動画による測定で、関節角度の誤差は撮影面内で±5-10°、撮影面外で±15-30°を含みます。
+ 研究グレードの3Dモーションキャプチャ(±1°)とは異なりますが、自己改善とフォーム比較には十分な精度です。
+ </div>
 
-  </div>
+ </div>
 </main>
 
 <footer class="rf-footer">
-  <div>Re'forma バッティング動作解析 — 監修:理学療法士+パーソナルトレーナー</div>
-  <div class="precision-note">
-    根拠:Welch (1995), Werner (2008), DeRenne (2007), Janda (1987) ほか54件の学術文献・教科書
-  </div>
+ <div>Re'forma バッティング動作解析 — 監修:理学療法士+パーソナルトレーナー</div>
+ <div class="precision-note">
+ 根拠:Welch (1995), Werner (2008), DeRenne (2007), Janda (1987) ほか54件の学術文献・教科書
+ </div>
 </footer>
 
 <script src="js/user-profile.js"></script>
 <script>
-  // 登録済ユーザーには「続きから」を表示
-  (function () {
-    'use strict';
-    try {
-      if (window.ReformaUserProfile && window.ReformaUserProfile.isRegistered()) {
-        const link = document.getElementById('continue-link');
-        if (link) {
-          link.style.display = '';
-          const name = window.ReformaUserProfile.getDisplayName();
-          // textContent でセットしているので XSS安全
-          link.textContent = name + 'さん、続きから →';
-        }
-      }
-    } catch (e) {
-      console.warn('user check error:', e);
-    }
-  })();
+ // 登録済ユーザーには「続きから」を表示
+ (function () {
+ 'use strict';
+ try {
+ if (window.ReformaUserProfile && window.ReformaUserProfile.isRegistered()) {
+ const link = document.getElementById('continue-link');
+ if (link) {
+ link.style.display = '';
+ const name = window.ReformaUserProfile.getDisplayName();
+ // textContent でセットしているので XSS安全
+ link.textContent = name + 'さん、続きから →';
+ }
+ }
+ } catch (e) {
+ console.warn('user check error:', e);
+ }
+ })();
 </script>
 
 </body>

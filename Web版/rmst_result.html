@@ -1,348 +1,348 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0b0e13">
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1.0">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="theme-color" content="#0b0e13">
 
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' data: blob:;
-    object-src 'none';
-    base-uri 'self';
-  ">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
+ <meta http-equiv="Content-Security-Policy" content="
+ default-src 'self';
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
+ style-src 'self' 'unsafe-inline';
+ img-src 'self' data: blob:;
+ object-src 'none';
+ base-uri 'self';
+ ">
+ <meta name="referrer" content="strict-origin-when-cross-origin">
 
-  <title>動作タイプ判定結果 — Re'forma</title>
-  <link rel="stylesheet" href="css/common.css">
+ <title>動作タイプ判定結果 — Re'forma</title>
+ <link rel="stylesheet" href="css/common.css">
 
-  <style>
-    /* 結果画面専用スタイル — 品ある演出 */
-    .result-hero {
-      text-align: center;
-      padding: 40px 24px 32px;
-      background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 100%);
-      border-radius: var(--radius-lg);
-      margin: 16px;
-      position: relative;
-      overflow: hidden;
-    }
-    .result-hero.fade-in {
-      animation: heroFadeIn 0.8s ease-out;
-    }
-    @keyframes heroFadeIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    .hero-eyebrow {
-      font-size: 11px;
-      letter-spacing: 3px;
-      color: var(--text-tertiary);
-      font-weight: 700;
-      margin-bottom: 16px;
-    }
-    .hero-animal {
-      font-size: 80px;
-      line-height: 1;
-      margin: 16px 0 24px;
-      animation: animalEntrance 1.2s ease-out;
-    }
-    @keyframes animalEntrance {
-      0% { transform: scale(0.3); opacity: 0; }
-      60% { transform: scale(1.1); opacity: 1; }
-      100% { transform: scale(1); opacity: 1; }
-    }
-    .hero-type-name {
-      font-size: 32px;
-      font-weight: 300;
-      letter-spacing: -0.5px;
-      margin-bottom: 8px;
-    }
-    .hero-type-en {
-      font-size: 12px;
-      letter-spacing: 2px;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
-    .hero-characteristic {
-      font-size: 15px;
-      line-height: 1.85;
-      color: var(--text-secondary);
-      max-width: 400px;
-      margin: 0 auto;
-    }
-    .hero-confidence {
-      margin-top: 20px;
-      font-size: 12px;
-      color: var(--text-tertiary);
-      font-family: var(--font-family-mono);
-    }
+ <style>
+ /* 結果画面専用スタイル — 品ある演出 */
+ .result-hero {
+ text-align: center;
+ padding: 40px 24px 32px;
+ background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 100%);
+ border-radius: var(--radius-lg);
+ margin: 16px;
+ position: relative;
+ overflow: hidden;
+ }
+ .result-hero.fade-in {
+ animation: heroFadeIn 0.8s ease-out;
+ }
+ @keyframes heroFadeIn {
+ from { opacity: 0; transform: translateY(20px); }
+ to { opacity: 1; transform: translateY(0); }
+ }
+ .hero-eyebrow {
+ font-size: 11px;
+ letter-spacing: 3px;
+ color: var(--text-tertiary);
+ font-weight: 700;
+ margin-bottom: 16px;
+ }
+ .hero-animal {
+ font-size: 80px;
+ line-height: 1;
+ margin: 16px 0 24px;
+ animation: animalEntrance 1.2s ease-out;
+ }
+ @keyframes animalEntrance {
+ 0% { transform: scale(0.3); opacity: 0; }
+ 60% { transform: scale(1.1); opacity: 1; }
+ 100% { transform: scale(1); opacity: 1; }
+ }
+ .hero-type-name {
+ font-size: 32px;
+ font-weight: 300;
+ letter-spacing: -0.5px;
+ margin-bottom: 8px;
+ }
+ .hero-type-en {
+ font-size: 12px;
+ letter-spacing: 2px;
+ color: var(--text-muted);
+ margin-bottom: 16px;
+ }
+ .hero-characteristic {
+ font-size: 15px;
+ line-height: 1.85;
+ color: var(--text-secondary);
+ max-width: 400px;
+ margin: 0 auto;
+ }
+ .hero-confidence {
+ margin-top: 20px;
+ font-size: 12px;
+ color: var(--text-tertiary);
+ font-family: var(--font-family-mono);
+ }
 
-    /* ステータスバー(品のあるポケモン図鑑風) */
-    .stats-grid {
-      display: grid;
-      gap: 10px;
-      padding: 16px;
-    }
-    .stat-row {
-      display: grid;
-      grid-template-columns: 110px 1fr 35px;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 14px;
-      background: var(--bg-card);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-subtle);
-    }
-    .stat-name { font-size: 13px; color: var(--text-secondary); }
-    .stat-bar {
-      height: 6px;
-      background: var(--border-subtle);
-      border-radius: var(--radius-full);
-      overflow: hidden;
-    }
-    .stat-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--color-info), var(--color-success));
-      border-radius: var(--radius-full);
-    }
-    .stat-value { font-size: 13px; font-family: var(--font-family-mono); text-align: right; color: var(--text-primary); }
+ /* ステータスバー(品のあるポケモン図鑑風) */
+ .stats-grid {
+ display: grid;
+ gap: 10px;
+ padding: 16px;
+ }
+ .stat-row {
+ display: grid;
+ grid-template-columns: 110px 1fr 35px;
+ align-items: center;
+ gap: 10px;
+ padding: 8px 14px;
+ background: var(--bg-card);
+ border-radius: var(--radius-md);
+ border: 1px solid var(--border-subtle);
+ }
+ .stat-name { font-size: 13px; color: var(--text-secondary); }
+ .stat-bar {
+ height: 6px;
+ background: var(--border-subtle);
+ border-radius: var(--radius-full);
+ overflow: hidden;
+ }
+ .stat-bar-fill {
+ height: 100%;
+ background: linear-gradient(90deg, var(--color-info), var(--color-success));
+ border-radius: var(--radius-full);
+ }
+ .stat-value { font-size: 13px; font-family: var(--font-family-mono); text-align: right; color: var(--text-primary); }
 
-    /* 怪我リスクスコア */
-    .risk-card {
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-    .risk-circle {
-      width: 70px;
-      height: 70px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      font-weight: 300;
-      flex-shrink: 0;
-    }
-    .risk-circle.good { background: rgba(16, 185, 129, 0.15); color: var(--color-success); border: 2px solid var(--color-success); }
-    .risk-circle.caution { background: rgba(245, 158, 11, 0.15); color: var(--color-warning); border: 2px solid var(--color-warning); }
-    .risk-circle.warn { background: rgba(239, 68, 68, 0.15); color: var(--color-danger); border: 2px solid var(--color-danger); }
-    .risk-info { flex: 1; }
-    .risk-label { font-size: 11px; letter-spacing: 1.5px; color: var(--text-tertiary); font-weight: 600; }
-    .risk-status { font-size: 16px; font-weight: 500; }
+ /* 怪我リスクスコア */
+ .risk-card {
+ padding: 16px;
+ display: flex;
+ align-items: center;
+ gap: 16px;
+ }
+ .risk-circle {
+ width: 70px;
+ height: 70px;
+ border-radius: 50%;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ font-size: 22px;
+ font-weight: 300;
+ flex-shrink: 0;
+ }
+ .risk-circle.good { background: rgba(16, 185, 129, 0.15); color: var(--color-success); border: 2px solid var(--color-success); }
+ .risk-circle.caution { background: rgba(245, 158, 11, 0.15); color: var(--color-warning); border: 2px solid var(--color-warning); }
+ .risk-circle.warn { background: rgba(239, 68, 68, 0.15); color: var(--color-danger); border: 2px solid var(--color-danger); }
+ .risk-info { flex: 1; }
+ .risk-label { font-size: 11px; letter-spacing: 1.5px; color: var(--text-tertiary); font-weight: 600; }
+ .risk-status { font-size: 16px; font-weight: 500; }
 
-    /* CTAボタン */
-    .cta-area {
-      padding: 24px 16px;
-      text-align: center;
-    }
+ /* CTAボタン */
+ .cta-area {
+ padding: 24px 16px;
+ text-align: center;
+ }
 
-    /* シェアボタン */
-    .share-row {
-      display: flex;
-      gap: 10px;
-      padding: 16px;
-      flex-wrap: wrap;
-    }
-    .share-row .btn { flex: 1; min-width: 120px; }
+ /* シェアボタン */
+ .share-row {
+ display: flex;
+ gap: 10px;
+ padding: 16px;
+ flex-wrap: wrap;
+ }
+ .share-row .btn { flex: 1; min-width: 120px; }
 
-    /* 詳細セクション(展開可) */
-    details.detail-block {
-      margin: 12px 16px;
-      background: var(--bg-card);
-      border-radius: var(--radius-md);
-      border: 1px solid var(--border-subtle);
-    }
-    details.detail-block summary {
-      padding: 14px 18px;
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      list-style: none;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    details.detail-block summary::after {
-      content: "▼";
-      font-size: 10px;
-      color: var(--text-muted);
-    }
-    details.detail-block[open] summary::after { content: "▲"; }
-    details.detail-block .detail-body {
-      padding: 0 18px 16px;
-      font-size: 13.5px;
-      line-height: 1.85;
-      color: var(--text-secondary);
-    }
-  </style>
+ /* 詳細セクション(展開可) */
+ details.detail-block {
+ margin: 12px 16px;
+ background: var(--bg-card);
+ border-radius: var(--radius-md);
+ border: 1px solid var(--border-subtle);
+ }
+ details.detail-block summary {
+ padding: 14px 18px;
+ cursor: pointer;
+ font-size: 14px;
+ font-weight: 500;
+ color: var(--text-secondary);
+ list-style: none;
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ }
+ details.detail-block summary::after {
+ content: "▼";
+ font-size: 10px;
+ color: var(--text-muted);
+ }
+ details.detail-block[open] summary::after { content: "▲"; }
+ details.detail-block .detail-body {
+ padding: 0 18px 16px;
+ font-size: 13.5px;
+ line-height: 1.85;
+ color: var(--text-secondary);
+ }
+ </style>
 </head>
 <body>
 
 <header class="rf-header">
-  <div class="rf-brand">
-    <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
-  </div>
-  <a href="index.html" class="text-small text-muted">マイページ →</a>
+ <div class="rf-brand">
+ <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
+ </div>
+ <a href="index.html" class="text-small text-muted">マイページ →</a>
 </header>
 
 <main id="result-main">
 
-  <!-- 解析中(初期表示) -->
-  <div id="loading-state" class="container" style="padding:80px 24px;text-align:center">
-    <div style="font-size:48px;margin-bottom:16px">⏳</div>
-    <h2>解析中...</h2>
-    <p class="text-secondary text-small">あなたの動作タイプを判定しています</p>
-  </div>
+ <!-- 解析中(初期表示) -->
+ <div id="loading-state" class="container" style="padding:80px 24px;text-align:center">
+ <div style="font-size:48px;margin-bottom:16px"></div>
+ <h2>解析中...</h2>
+ <p class="text-secondary text-small">あなたの動作タイプを判定しています</p>
+ </div>
 
-  <!-- 結果表示エリア(解析完了後に表示) -->
-  <div id="result-content" class="hidden">
+ <!-- 結果表示エリア(解析完了後に表示) -->
+ <div id="result-content" class="hidden">
 
-    <!-- ヒーロー: 2大分類 + 4タイプの階層表示 -->
-    <div class="result-hero card-emphasized fade-in" id="hero-card">
-      <div class="hero-eyebrow" id="hero-greeting">あなたの動作タイプ</div>
+ <!-- ヒーロー: 2大分類 + 4タイプの階層表示 -->
+ <div class="result-hero card-emphasized fade-in" id="hero-card">
+ <div class="hero-eyebrow" id="hero-greeting">あなたの動作タイプ</div>
 
-      <!-- 上位: 動作起源タイプ(大きく、目立つ) -->
-      <div id="hero-origin-row" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 12px">
-        <span id="hero-origin-icon" style="font-size:32px">🦵</span>
-        <span id="hero-origin-name" style="font-size:24px;font-weight:500;letter-spacing:-0.02em">下半身始動型</span>
-      </div>
-      <div id="hero-origin-desc" class="text-secondary text-small mb-3" style="line-height:1.85">
-        下肢から始まる運動連鎖でパワーを生み出すタイプです
-      </div>
+ <!-- 上位: 動作起源タイプ(大きく、目立つ) -->
+ <div id="hero-origin-row" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0 12px">
+ <span id="hero-origin-icon" style="font-size:32px"></span>
+ <span id="hero-origin-name" style="font-size:24px;font-weight:500;letter-spacing:-0.02em">下半身始動型</span>
+ </div>
+ <div id="hero-origin-desc" class="text-secondary text-small mb-3" style="line-height:1.85">
+ 下肢から始まる運動連鎖でパワーを生み出すタイプです
+ </div>
 
-      <!-- 区切り線 -->
-      <div style="height:1px;background:var(--border-subtle);margin:18px 32px"></div>
+ <!-- 区切り線 -->
+ <div style="height:1px;background:var(--border-subtle);margin:18px 32px"></div>
 
-      <!-- 下位: 4タイプの細分類(動物図鑑) -->
-      <div class="hero-eyebrow mt-3" style="font-size:10px">その中でも、あなたは</div>
-      <div class="hero-animal" id="hero-animal">🐍</div>
-      <div class="hero-type-name" id="hero-type-name">蛇(ウィップ型)</div>
-      <div class="hero-type-en" id="hero-type-en">Rotational-Driven</div>
-      <div class="hero-characteristic" id="hero-characteristic">
-        体のしなりとひねりで打つタイプ
-      </div>
-      <div class="hero-confidence" id="hero-confidence">
-        確信度: 78%
-      </div>
-    </div>
+ <!-- 下位: 4タイプの細分類(動物図鑑) -->
+ <div class="hero-eyebrow mt-3" style="font-size:10px">その中でも、あなたは</div>
+ <div class="hero-animal" id="hero-animal"></div>
+ <div class="hero-type-name" id="hero-type-name">蛇(ウィップ型)</div>
+ <div class="hero-type-en" id="hero-type-en">Rotational-Driven</div>
+ <div class="hero-characteristic" id="hero-characteristic">
+ 体のしなりとひねりで打つタイプ
+ </div>
+ <div class="hero-confidence" id="hero-confidence">
+ 確信度: 78%
+ </div>
+ </div>
 
-    <!-- 5次元ステータス -->
-    <div class="card">
-      <div class="eyebrow">YOUR MOVEMENT STATS</div>
-      <div class="card-title">動作スタッツ(5段階)</div>
-      <div class="stats-grid" id="stats-grid">
-        <!-- 動的生成 -->
-      </div>
-    </div>
+ <!-- 5次元ステータス -->
+ <div class="card">
+ <div class="eyebrow">YOUR MOVEMENT STATS</div>
+ <div class="card-title">動作スタッツ(5段階)</div>
+ <div class="stats-grid" id="stats-grid">
+ <!-- 動的生成 -->
+ </div>
+ </div>
 
-    <!-- 怪我リスクスコア -->
-    <div class="card">
-      <div class="risk-card">
-        <div class="risk-circle good" id="risk-circle">
-          <span id="risk-score">12</span>
-        </div>
-        <div class="risk-info">
-          <div class="risk-label">怪我リスクスコア</div>
-          <div class="risk-status" id="risk-status">良好な状態です</div>
-          <div class="text-tertiary text-small mt-1" id="risk-detail">
-            姿勢・動作とも特に懸念点はありません
-          </div>
-        </div>
-      </div>
-    </div>
+ <!-- 怪我リスクスコア -->
+ <div class="card">
+ <div class="risk-card">
+ <div class="risk-circle good" id="risk-circle">
+ <span id="risk-score">12</span>
+ </div>
+ <div class="risk-info">
+ <div class="risk-label">怪我リスクスコア</div>
+ <div class="risk-status" id="risk-status">良好な状態です</div>
+ <div class="text-tertiary text-small mt-1" id="risk-detail">
+ 姿勢・動作とも特に懸念点はありません
+ </div>
+ </div>
+ </div>
+ </div>
 
-    <!-- 特性詳細(展開可) -->
-    <details class="detail-block">
-      <summary>このタイプの特性を詳しく</summary>
-      <div class="detail-body">
-        <div class="mb-3">
-          <div class="eyebrow">あなたの強み</div>
-          <div id="detail-strength"></div>
-        </div>
-        <div class="mb-3">
-          <div class="eyebrow">陥りやすい弱点</div>
-          <div id="detail-weakness"></div>
-        </div>
-        <div>
-          <div class="eyebrow">スイング時の最優先意識</div>
-          <div id="detail-focus" style="color:var(--text-primary)"></div>
-        </div>
-      </div>
-    </details>
+ <!-- 特性詳細(展開可) -->
+ <details class="detail-block">
+ <summary>このタイプの特性を詳しく</summary>
+ <div class="detail-body">
+ <div class="mb-3">
+ <div class="eyebrow">あなたの強み</div>
+ <div id="detail-strength"></div>
+ </div>
+ <div class="mb-3">
+ <div class="eyebrow">陥りやすい弱点</div>
+ <div id="detail-weakness"></div>
+ </div>
+ <div>
+ <div class="eyebrow">スイング時の最優先意識</div>
+ <div id="detail-focus" style="color:var(--text-primary)"></div>
+ </div>
+ </div>
+ </details>
 
-    <!-- 日常トレーニング -->
-    <details class="detail-block">
-      <summary>あなたにおすすめの日常トレーニング</summary>
-      <div class="detail-body">
-        <ul id="detail-training" style="list-style:disc;margin-left:20px"></ul>
-      </div>
-    </details>
+ <!-- 日常トレーニング -->
+ <details class="detail-block">
+ <summary>あなたにおすすめの日常トレーニング</summary>
+ <div class="detail-body">
+ <ul id="detail-training" style="list-style:disc;margin-left:20px"></ul>
+ </div>
+ </details>
 
-    <!-- 怪我注意(条件付き表示) -->
-    <details class="detail-block hidden" id="injury-detail-block">
-      <summary>このタイプで注意したい怪我リスク</summary>
-      <div class="detail-body">
-        <div id="detail-injury"></div>
-        <div class="text-small text-tertiary mt-3">
-          ※ 痛みや違和感がある場合は、整形外科専門医にご相談ください。
-        </div>
-      </div>
-    </details>
+ <!-- 怪我注意(条件付き表示) -->
+ <details class="detail-block hidden" id="injury-detail-block">
+ <summary>このタイプで注意したい怪我リスク</summary>
+ <div class="detail-body">
+ <div id="detail-injury"></div>
+ <div class="text-small text-tertiary mt-3">
+ ※ 痛みや違和感がある場合は、整形外科専門医にご相談ください。
+ </div>
+ </div>
+ </details>
 
-    <!-- CTA -->
-    <div class="cta-area">
-      <a href="#" class="btn btn-primary btn-large btn-block" id="next-cta">
-        実際のバッティングも分析してみる(無料・近日公開)
-      </a>
-      <div class="text-small text-tertiary mt-3">
-        Step 2/3 — お子さんのスイング動画を撮ります
-      </div>
-    </div>
+ <!-- CTA -->
+ <div class="cta-area">
+ <a href="#" class="btn btn-primary btn-large btn-block" id="next-cta">
+ 実際のバッティングも分析してみる(無料・近日公開)
+ </a>
+ <div class="text-small text-tertiary mt-3">
+ Step 2/3 — お子さんのスイング動画を撮ります
+ </div>
+ </div>
 
-    <!-- シェアと再撮影 -->
-    <div class="share-row">
-      <button class="btn btn-secondary" id="retake-btn">🔄 もう一度判定する</button>
-    </div>
+ <!-- シェアと再撮影 -->
+ <div class="share-row">
+ <button class="btn btn-secondary" id="retake-btn">もう一度判定する</button>
+ </div>
 
-    <!-- 精度の正直な開示 -->
-    <div class="alert alert-info" style="margin:16px">
-      <b>精度について</b>
-      <div class="text-small mt-2">
-        本判定は2Dスマートフォン動画によるもので、関節角度の測定誤差を含みます。
-        判定結果は<b>あなたの動作の参考</b>として活用してください。
-        プロ選手・コーチによる対面評価とは異なる場合があります。
-      </div>
-    </div>
+ <!-- 精度の正直な開示 -->
+ <div class="alert alert-info" style="margin:16px">
+ <b>精度について</b>
+ <div class="text-small mt-2">
+ 本判定は2Dスマートフォン動画によるもので、関節角度の測定誤差を含みます。
+ 判定結果は<b>あなたの動作の参考</b>として活用してください。
+ プロ選手・コーチによる対面評価とは異なる場合があります。
+ </div>
+ </div>
 
-  </div>
+ </div>
 
-  <!-- エラー画面 -->
-  <div id="error-state" class="hidden">
-    <div class="container" style="padding:32px 24px">
-      <div class="alert alert-danger">
-        <b>解析に失敗しました</b><br>
-        <span id="error-msg"></span>
-      </div>
-      <button class="btn btn-primary btn-block mt-4" onclick="location.href='rmst.html'">
-        もう一度撮影する
-      </button>
-    </div>
-  </div>
+ <!-- エラー画面 -->
+ <div id="error-state" class="hidden">
+ <div class="container" style="padding:32px 24px">
+ <div class="alert alert-danger">
+ <b>解析に失敗しました</b><br>
+ <span id="error-msg"></span>
+ </div>
+ <button class="btn btn-primary btn-block mt-4" onclick="location.href='rmst.html'">
+ もう一度撮影する
+ </button>
+ </div>
+ </div>
 
 </main>
 
 <footer class="rf-footer">
-  <div class="precision-note">
-    ※ 本解析は2Dスマートフォン動画によるもので、測定誤差を含みます。
-  </div>
+ <div class="precision-note">
+ ※ 本解析は2Dスマートフォン動画によるもので、測定誤差を含みます。
+ </div>
 </footer>
 
 <script src="js/user-profile.js"></script>
@@ -350,179 +350,179 @@
 <script src="js/type-advice.js"></script>
 <script>
 (function () {
-  'use strict';
+ 'use strict';
 
-  const loadingState = document.getElementById('loading-state');
-  const resultContent = document.getElementById('result-content');
-  const errorState = document.getElementById('error-state');
-  const errorMsg = document.getElementById('error-msg');
+ const loadingState = document.getElementById('loading-state');
+ const resultContent = document.getElementById('result-content');
+ const errorState = document.getElementById('error-state');
+ const errorMsg = document.getElementById('error-msg');
 
-  // ユーザー名取得
-  const userName = (window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName()) || '';
+ // ユーザー名取得
+ const userName = (window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName()) || '';
 
-  // セッションストレージから撮影データを取得
-  let captureData = null;
-  try {
-    const raw = sessionStorage.getItem('reforma_last_rmst');
-    if (raw) captureData = JSON.parse(raw);
-  } catch (e) {
-    showError('撮影データの読込に失敗しました。もう一度撮影してください。');
-    return;
-  }
+ // セッションストレージから撮影データを取得
+ let captureData = null;
+ try {
+ const raw = sessionStorage.getItem('reforma_last_rmst');
+ if (raw) captureData = JSON.parse(raw);
+ } catch (e) {
+ showError('撮影データの読込に失敗しました。もう一度撮影してください。');
+ return;
+ }
 
-  if (!captureData) {
-    showError('撮影データが見つかりません。撮影画面に戻ってください。');
-    return;
-  }
+ if (!captureData) {
+ showError('撮影データが見つかりません。撮影画面に戻ってください。');
+ return;
+ }
 
-  // 解析実行
-  setTimeout(() => {
-    try {
-      const result = window.ReformaRMSTAnalyzer.analyzeRMSTv2(captureData);
-      if (result.error) {
-        showError('解析エラー: ' + result.error);
-        return;
-      }
-      renderResult(result);
-    } catch (e) {
-      console.error(e);
-      showError('解析処理で予期しないエラー: ' + e.message);
-    }
-  }, 800);
+ // 解析実行
+ setTimeout(() => {
+ try {
+ const result = window.ReformaRMSTAnalyzer.analyzeRMSTv2(captureData);
+ if (result.error) {
+ showError('解析エラー: ' + result.error);
+ return;
+ }
+ renderResult(result);
+ } catch (e) {
+ console.error(e);
+ showError('解析処理で予期しないエラー: ' + e.message);
+ }
+ }, 800);
 
-  // ─────────────────────────────────────────
-  // 結果レンダリング
-  // ─────────────────────────────────────────
-  function renderResult(result) {
-    loadingState.classList.add('hidden');
-    resultContent.classList.remove('hidden');
+ // ─────────────────────────────────────────
+ // 結果レンダリング
+ // ─────────────────────────────────────────
+ function renderResult(result) {
+ loadingState.classList.add('hidden');
+ resultContent.classList.remove('hidden');
 
-    // ユーザー名で個別化(品ある敬体)
-    const greetingText = userName
-      ? userName + 'さんの動作タイプ'
-      : 'あなたの動作タイプ';
-    document.getElementById('hero-greeting').textContent = greetingText;
+ // ユーザー名で個別化(品ある敬体)
+ const greetingText = userName
+ ? userName + 'さんの動作タイプ'
+ : 'あなたの動作タイプ';
+ document.getElementById('hero-greeting').textContent = greetingText;
 
-    // 上位: 動作起源タイプ
-    const origin = result.movement_origin_info || {};
-    document.getElementById('hero-origin-icon').textContent = origin.icon || '⚾';
-    document.getElementById('hero-origin-name').textContent = result.movement_origin || '判定中';
-    document.getElementById('hero-origin-desc').textContent =
-      origin.characteristic_friendly || origin.characteristic || '';
+ // 上位: 動作起源タイプ
+ const origin = result.movement_origin_info || {};
+ document.getElementById('hero-origin-icon').textContent = origin.icon || '';
+ document.getElementById('hero-origin-name').textContent = result.movement_origin || '判定中';
+ document.getElementById('hero-origin-desc').textContent =
+ origin.characteristic_friendly || origin.characteristic || '';
 
-    // 下位: 動物図鑑(4タイプ)
-    document.getElementById('hero-animal').textContent = result.animal_emoji;
-    document.getElementById('hero-type-name').textContent =
-      result.animal_jp + '(' + result.rmp_type + ')';
-    document.getElementById('hero-type-en').textContent = result.type_en;
+ // 下位: 動物図鑑(4タイプ)
+ document.getElementById('hero-animal').textContent = result.animal_emoji;
+ document.getElementById('hero-type-name').textContent =
+ result.animal_jp + '(' + result.rmp_type + ')';
+ document.getElementById('hero-type-en').textContent = result.type_en;
 
-    // 特性(品ある敬体)
-    const advice = window.ReformaTypeAdvice.getAdvice(result.rmp_type);
-    document.getElementById('hero-characteristic').textContent =
-      advice.characteristic_friendly + 'です。';
+ // 特性(品ある敬体)
+ const advice = window.ReformaTypeAdvice.getAdvice(result.rmp_type);
+ document.getElementById('hero-characteristic').textContent =
+ advice.characteristic_friendly + 'です。';
 
-    // 確信度(信頼区間を必ず表示 — G3)
-    const confidenceLabel = result.confidence >= 0.75 ? '確定'
-                          : result.confidence >= 0.50 ? '推定'
-                          : '参考';
-    document.getElementById('hero-confidence').textContent =
-      `${confidenceLabel} ・ 確信度 ${Math.round(result.confidence * 100)}%`;
+ // 確信度(信頼区間を必ず表示 — G3)
+ const confidenceLabel = result.confidence >= 0.75 ? '確定'
+ : result.confidence >= 0.50 ? '推定'
+ : '参考';
+ document.getElementById('hero-confidence').textContent =
+ `${confidenceLabel} ・ 確信度 ${Math.round(result.confidence * 100)}%`;
 
-    // タイプカラー
-    document.getElementById('hero-card').style.borderColor = advice.type_color + '88';
+ // タイプカラー
+ document.getElementById('hero-card').style.borderColor = advice.type_color + '88';
 
-    // 5次元ステータス
-    renderStats(result.stats);
+ // 5次元ステータス
+ renderStats(result.stats);
 
-    // 怪我リスク
-    renderRiskScore(result.injury_risk_score);
+ // 怪我リスク
+ renderRiskScore(result.injury_risk_score);
 
-    // 詳細セクション
-    document.getElementById('detail-strength').textContent = advice.strength_default;
-    document.getElementById('detail-weakness').textContent = advice.weakness_default;
-    document.getElementById('detail-focus').textContent = advice.swing_focus_friendly;
+ // 詳細セクション
+ document.getElementById('detail-strength').textContent = advice.strength_default;
+ document.getElementById('detail-weakness').textContent = advice.weakness_default;
+ document.getElementById('detail-focus').textContent = advice.swing_focus_friendly;
 
-    // トレーニングリスト
-    const trainingUl = document.getElementById('detail-training');
-    trainingUl.innerHTML = '';
-    advice.daily_training.forEach(t => {
-      const li = document.createElement('li');
-      li.textContent = t;
-      trainingUl.appendChild(li);
-    });
+ // トレーニングリスト
+ const trainingUl = document.getElementById('detail-training');
+ trainingUl.innerHTML = '';
+ advice.daily_training.forEach(t => {
+ const li = document.createElement('li');
+ li.textContent = t;
+ trainingUl.appendChild(li);
+ });
 
-    // 怪我リスクが高い時のみ注意セクションを表示
-    if (result.injury_risk_score >= 30) {
-      const injuryBlock = document.getElementById('injury-detail-block');
-      injuryBlock.classList.remove('hidden');
-      document.getElementById('detail-injury').textContent = advice.injury_caution;
-    }
-  }
+ // 怪我リスクが高い時のみ注意セクションを表示
+ if (result.injury_risk_score >= 30) {
+ const injuryBlock = document.getElementById('injury-detail-block');
+ injuryBlock.classList.remove('hidden');
+ document.getElementById('detail-injury').textContent = advice.injury_caution;
+ }
+ }
 
-  function renderStats(stats) {
-    const grid = document.getElementById('stats-grid');
-    grid.innerHTML = '';
-    Object.entries(stats).forEach(([name, value]) => {
-      const row = document.createElement('div');
-      row.className = 'stat-row';
-      const safeName = window.ReformaUserProfile.escapeHtml(name);
-      row.innerHTML = `
-        <div class="stat-name">${safeName}</div>
-        <div class="stat-bar">
-          <div class="stat-bar-fill" style="width:${value * 20}%"></div>
-        </div>
-        <div class="stat-value">${value}/5</div>
-      `;
-      grid.appendChild(row);
-    });
-  }
+ function renderStats(stats) {
+ const grid = document.getElementById('stats-grid');
+ grid.innerHTML = '';
+ Object.entries(stats).forEach(([name, value]) => {
+ const row = document.createElement('div');
+ row.className = 'stat-row';
+ const safeName = window.ReformaUserProfile.escapeHtml(name);
+ row.innerHTML = `
+ <div class="stat-name">${safeName}</div>
+ <div class="stat-bar">
+ <div class="stat-bar-fill" style="width:${value * 20}%"></div>
+ </div>
+ <div class="stat-value">${value}/5</div>
+ `;
+ grid.appendChild(row);
+ });
+ }
 
-  function renderRiskScore(score) {
-    const circle = document.getElementById('risk-circle');
-    const scoreEl = document.getElementById('risk-score');
-    const statusEl = document.getElementById('risk-status');
-    const detailEl = document.getElementById('risk-detail');
+ function renderRiskScore(score) {
+ const circle = document.getElementById('risk-circle');
+ const scoreEl = document.getElementById('risk-score');
+ const statusEl = document.getElementById('risk-status');
+ const detailEl = document.getElementById('risk-detail');
 
-    scoreEl.textContent = score;
+ scoreEl.textContent = score;
 
-    let cls, status, detail;
-    if (score < 20) {
-      cls = 'good';
-      status = '良好な状態です';
-      detail = '姿勢・動作とも特に懸念点はありません';
-    } else if (score < 50) {
-      cls = 'caution';
-      status = '注意したい点があります';
-      detail = '柔軟性や姿勢の改善で軽減できる可能性があります';
-    } else {
-      cls = 'warn';
-      status = '改善をおすすめします';
-      detail = '痛みや違和感があれば整形外科専門医にご相談ください';
-    }
-    circle.className = 'risk-circle ' + cls;
-    statusEl.textContent = status;
-    detailEl.textContent = detail;
-  }
+ let cls, status, detail;
+ if (score < 20) {
+ cls = 'good';
+ status = '良好な状態です';
+ detail = '姿勢・動作とも特に懸念点はありません';
+ } else if (score < 50) {
+ cls = 'caution';
+ status = '注意したい点があります';
+ detail = '柔軟性や姿勢の改善で軽減できる可能性があります';
+ } else {
+ cls = 'warn';
+ status = '改善をおすすめします';
+ detail = '痛みや違和感があれば整形外科専門医にご相談ください';
+ }
+ circle.className = 'risk-circle ' + cls;
+ statusEl.textContent = status;
+ detailEl.textContent = detail;
+ }
 
-  function showError(msg) {
-    loadingState.classList.add('hidden');
-    errorState.classList.remove('hidden');
-    errorMsg.textContent = msg;
-  }
+ function showError(msg) {
+ loadingState.classList.add('hidden');
+ errorState.classList.remove('hidden');
+ errorMsg.textContent = msg;
+ }
 
-  // ─────────────────────────────────────────
-  // ボタンイベント
-  // ─────────────────────────────────────────
-  document.getElementById('retake-btn').addEventListener('click', () => {
-    if (confirm('もう一度撮影しますか?(現在の結果は保存されません)')) {
-      window.location.href = 'rmst.html';
-    }
-  });
+ // ─────────────────────────────────────────
+ // ボタンイベント
+ // ─────────────────────────────────────────
+ document.getElementById('retake-btn').addEventListener('click', () => {
+ if (confirm('もう一度撮影しますか?(現在の結果は保存されません)')) {
+ window.location.href = 'rmst.html';
+ }
+ });
 
-  document.getElementById('next-cta').addEventListener('click', (e) => {
-    e.preventDefault();
-    alert('バッティング解析は近日公開です。完成までお待ちください。');
-  });
+ document.getElementById('next-cta').addEventListener('click', (e) => {
+ e.preventDefault();
+ alert('バッティング解析は近日公開です。完成までお待ちください。');
+ });
 
 })();
 </script>

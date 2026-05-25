@@ -1,540 +1,540 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#0b0e13">
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="theme-color" content="#0b0e13">
 
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
-    style-src 'self' 'unsafe-inline';
-    img-src 'self' data: blob:;
-    media-src 'self' blob:;
-    connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
-    object-src 'none';
-    base-uri 'self';
-    worker-src 'self' blob:;
-  ">
-  <meta name="referrer" content="strict-origin-when-cross-origin">
+ <meta http-equiv="Content-Security-Policy" content="
+ default-src 'self';
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+ style-src 'self' 'unsafe-inline';
+ img-src 'self' data: blob:;
+ media-src 'self' blob:;
+ connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
+ object-src 'none';
+ base-uri 'self';
+ worker-src 'self' blob:;
+ ">
+ <meta name="referrer" content="strict-origin-when-cross-origin">
 
-  <title>動作タイプ判定 — Re'forma</title>
-  <link rel="stylesheet" href="css/common.css">
+ <title>動作タイプ判定 — Re'forma</title>
+ <link rel="stylesheet" href="css/common.css">
 
-  <style>
-    body { overflow-x: hidden; }
+ <style>
+ body { overflow-x: hidden; }
 
-    /* ステップヘッダー */
-    #step-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 16px;
-      background: var(--bg-secondary);
-      border-bottom: 1px solid var(--border-subtle);
-      gap: 10px;
-    }
-    .step-label {
-      font-size: 11px;
-      color: var(--text-tertiary);
-      letter-spacing: 1.5px;
-      font-weight: 600;
-    }
-    .step-title {
-      font-size: 15px;
-      color: var(--text-primary);
-      margin-top: 2px;
-    }
-    .step-progress-mini {
-      display: flex;
-      gap: 4px;
-      margin-top: 6px;
-    }
-    .step-dot {
-      width: 18px;
-      height: 4px;
-      background: var(--border-subtle);
-      border-radius: 2px;
-    }
-    .step-dot.active { background: var(--reforma-red); }
-    .step-dot.done { background: var(--color-success); }
+ /* ステップヘッダー */
+ #step-header {
+ display: flex;
+ justify-content: space-between;
+ align-items: center;
+ padding: 12px 16px;
+ background: var(--bg-secondary);
+ border-bottom: 1px solid var(--border-subtle);
+ gap: 10px;
+ }
+ .step-label {
+ font-size: 11px;
+ color: var(--text-tertiary);
+ letter-spacing: 1.5px;
+ font-weight: 600;
+ }
+ .step-title {
+ font-size: 15px;
+ color: var(--text-primary);
+ margin-top: 2px;
+ }
+ .step-progress-mini {
+ display: flex;
+ gap: 4px;
+ margin-top: 6px;
+ }
+ .step-dot {
+ width: 18px;
+ height: 4px;
+ background: var(--border-subtle);
+ border-radius: 2px;
+ }
+ .step-dot.active { background: var(--reforma-red); }
+ .step-dot.done { background: var(--color-success); }
 
-    /* 動作説明カード */
-    .action-card {
-      padding: 20px 16px;
-    }
-    .action-eyebrow {
-      font-size: 11px;
-      letter-spacing: 2px;
-      color: var(--reforma-red);
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-    .action-title {
-      font-size: 22px;
-      font-weight: 500;
-      letter-spacing: -0.02em;
-      margin-bottom: 4px;
-    }
-    .action-duration {
-      font-size: 13px;
-      color: var(--text-muted);
-      font-family: var(--font-family-mono);
-      margin-bottom: 16px;
-    }
+ /* 動作説明カード */
+ .action-card {
+ padding: 20px 16px;
+ }
+ .action-eyebrow {
+ font-size: 11px;
+ letter-spacing: 2px;
+ color: var(--reforma-red);
+ font-weight: 700;
+ margin-bottom: 6px;
+ }
+ .action-title {
+ font-size: 22px;
+ font-weight: 500;
+ letter-spacing: -0.02em;
+ margin-bottom: 4px;
+ }
+ .action-duration {
+ font-size: 13px;
+ color: var(--text-muted);
+ font-family: var(--font-family-mono);
+ margin-bottom: 16px;
+ }
 
-    .role-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-left: 3px solid;
-      border-radius: var(--radius-md);
-      padding: 14px 16px;
-      margin-bottom: 12px;
-    }
-    .role-card.role-camera { border-left-color: var(--color-info); }
-    .role-card.role-subject { border-left-color: var(--color-success); }
-    .role-label {
-      font-size: 11px;
-      letter-spacing: 1.5px;
-      font-weight: 700;
-      margin-bottom: 6px;
-    }
-    .role-camera .role-label { color: var(--color-info); }
-    .role-subject .role-label { color: var(--color-success); }
-    .role-text {
-      font-size: 14px;
-      color: var(--text-secondary);
-      line-height: 1.85;
-    }
-    .role-icon {
-      display: inline-block;
-      width: 22px;
-      text-align: center;
-      margin-right: 4px;
-    }
+ .role-card {
+ background: var(--bg-card);
+ border: 1px solid var(--border-subtle);
+ border-left: 3px solid;
+ border-radius: var(--radius-md);
+ padding: 14px 16px;
+ margin-bottom: 12px;
+ }
+ .role-card.role-camera { border-left-color: var(--color-info); }
+ .role-card.role-subject { border-left-color: var(--color-success); }
+ .role-label {
+ font-size: 11px;
+ letter-spacing: 1.5px;
+ font-weight: 700;
+ margin-bottom: 6px;
+ }
+ .role-camera .role-label { color: var(--color-info); }
+ .role-subject .role-label { color: var(--color-success); }
+ .role-text {
+ font-size: 14px;
+ color: var(--text-secondary);
+ line-height: 1.85;
+ }
+ .role-icon {
+ display: inline-block;
+ width: 22px;
+ text-align: center;
+ margin-right: 4px;
+ }
 
-    /* 撮影画面 */
-    #video-wrap {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 9/16;
-      max-height: 60vh;
-      background: #000;
-      overflow: hidden;
-    }
-    #video, #overlay {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }
-    #video { z-index: 1; }
-    #overlay { z-index: 2; pointer-events: none; }
-    body.cam-front #video,
-    body.cam-front #overlay { transform: scaleX(-1); }
+ /* 撮影画面 */
+ #video-wrap {
+ position: relative;
+ width: 100%;
+ aspect-ratio: 9/16;
+ max-height: 60vh;
+ background: #000;
+ overflow: hidden;
+ }
+ #video, #overlay {
+ position: absolute;
+ inset: 0;
+ width: 100%;
+ height: 100%;
+ object-fit: contain;
+ }
+ #video { z-index: 1; }
+ #overlay { z-index: 2; pointer-events: none; }
+ body.cam-front #video,
+ body.cam-front #overlay { transform: scaleX(-1); }
 
-    #status-overlay {
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      right: 8px;
-      z-index: 3;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 8px;
-      pointer-events: none;
-    }
-    .status-pill {
-      background: rgba(0, 0, 0, 0.7);
-      color: #fff;
-      padding: 6px 12px;
-      border-radius: var(--radius-full);
-      font-size: 11px;
-      font-family: var(--font-family-mono);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-    .status-pill.fps-good { color: var(--color-success); }
-    .status-pill.fps-warn { color: var(--color-warning); }
-    .status-pill.fps-bad { color: var(--color-danger); }
+ #status-overlay {
+ position: absolute;
+ top: 8px;
+ left: 8px;
+ right: 8px;
+ z-index: 3;
+ display: flex;
+ justify-content: space-between;
+ align-items: flex-start;
+ gap: 8px;
+ pointer-events: none;
+ }
+ .status-pill {
+ background: rgba(0, 0, 0, 0.7);
+ color: #fff;
+ padding: 6px 12px;
+ border-radius: var(--radius-full);
+ font-size: 11px;
+ font-family: var(--font-family-mono);
+ backdrop-filter: blur(8px);
+ -webkit-backdrop-filter: blur(8px);
+ }
+ .status-pill.fps-good { color: var(--color-success); }
+ .status-pill.fps-warn { color: var(--color-warning); }
+ .status-pill.fps-bad { color: var(--color-danger); }
 
-    /* カウントダウン */
-    #countdown-overlay {
-      position: absolute;
-      inset: 0;
-      z-index: 5;
-      background: rgba(0, 0, 0, 0.7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 12px;
-      color: #fff;
-      pointer-events: none;
-    }
-    #countdown-number {
-      font-size: 96px;
-      font-weight: 200;
-      line-height: 1;
-      font-family: var(--font-family-mono);
-    }
-    #countdown-label {
-      font-size: 16px;
-      letter-spacing: 1px;
-    }
+ /* カウントダウン */
+ #countdown-overlay {
+ position: absolute;
+ inset: 0;
+ z-index: 5;
+ background: rgba(0, 0, 0, 0.7);
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ flex-direction: column;
+ gap: 12px;
+ color: #fff;
+ pointer-events: none;
+ }
+ #countdown-number {
+ font-size: 96px;
+ font-weight: 200;
+ line-height: 1;
+ font-family: var(--font-family-mono);
+ }
+ #countdown-label {
+ font-size: 16px;
+ letter-spacing: 1px;
+ }
 
-    /* 撮影中バッジ */
-    #recording-badge {
-      position: absolute;
-      top: 50px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 4;
-      background: rgba(239, 68, 68, 0.95);
-      color: #fff;
-      padding: 8px 16px;
-      border-radius: var(--radius-full);
-      font-size: 14px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: var(--shadow-md);
-    }
-    #recording-badge .rec-dot {
-      width: 10px;
-      height: 10px;
-      background: #fff;
-      border-radius: 50%;
-      animation: blink 1s infinite;
-    }
-    @keyframes blink {
-      50% { opacity: 0.3; }
-    }
-    #recording-timer {
-      font-family: var(--font-family-mono);
-      font-size: 16px;
-    }
+ /* 撮影中バッジ */
+ #recording-badge {
+ position: absolute;
+ top: 50px;
+ left: 50%;
+ transform: translateX(-50%);
+ z-index: 4;
+ background: rgba(239, 68, 68, 0.95);
+ color: #fff;
+ padding: 8px 16px;
+ border-radius: var(--radius-full);
+ font-size: 14px;
+ font-weight: 600;
+ display: flex;
+ align-items: center;
+ gap: 8px;
+ box-shadow: var(--shadow-md);
+ }
+ #recording-badge .rec-dot {
+ width: 10px;
+ height: 10px;
+ background: #fff;
+ border-radius: 50%;
+ animation: blink 1s infinite;
+ }
+ @keyframes blink {
+ 50% { opacity: 0.3; }
+ }
+ #recording-timer {
+ font-family: var(--font-family-mono);
+ font-size: 16px;
+ }
 
-    /* 撮影完了バナー */
-    #capture-complete-banner {
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 4;
-      background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0));
-      padding: 30px 16px 16px;
-      text-align: center;
-      color: #fff;
-    }
+ /* 撮影完了バナー */
+ #capture-complete-banner {
+ position: absolute;
+ bottom: 0;
+ left: 0;
+ right: 0;
+ z-index: 4;
+ background: linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0));
+ padding: 30px 16px 16px;
+ text-align: center;
+ color: #fff;
+ }
 
-    /* コントロール */
-    .controls {
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background: var(--bg-tertiary);
-    }
-    #model-status-mini {
-      text-align: center;
-      font-size: 12px;
-      color: var(--text-tertiary);
-      padding: 8px;
-    }
-    #model-status-mini.ready { color: var(--color-success); }
-    #model-status-mini.error { color: var(--color-danger); }
+ /* コントロール */
+ .controls {
+ padding: 16px;
+ display: flex;
+ flex-direction: column;
+ gap: 10px;
+ background: var(--bg-tertiary);
+ }
+ #model-status-mini {
+ text-align: center;
+ font-size: 12px;
+ color: var(--text-tertiary);
+ padding: 8px;
+ }
+ #model-status-mini.ready { color: var(--color-success); }
+ #model-status-mini.error { color: var(--color-danger); }
 
-    /* 中断ボタンエリア */
-    #abort-area {
-      padding: 12px 16px;
-      background: var(--bg-tertiary);
-      border-top: 1px solid var(--border-subtle);
-      text-align: center;
-    }
+ /* 中断ボタンエリア */
+ #abort-area {
+ padding: 12px 16px;
+ background: var(--bg-tertiary);
+ border-top: 1px solid var(--border-subtle);
+ text-align: center;
+ }
 
-    /* 進捗バー */
-    .progress-bar {
-      width: 100%;
-      height: 4px;
-      background: var(--border-subtle);
-      border-radius: var(--radius-full);
-      overflow: hidden;
-    }
-    .progress-bar-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--color-info), var(--color-success));
-      width: 0%;
-      transition: width 0.3s linear;
-    }
-  </style>
+ /* 進捗バー */
+ .progress-bar {
+ width: 100%;
+ height: 4px;
+ background: var(--border-subtle);
+ border-radius: var(--radius-full);
+ overflow: hidden;
+ }
+ .progress-bar-fill {
+ height: 100%;
+ background: linear-gradient(90deg, var(--color-info), var(--color-success));
+ width: 0%;
+ transition: width 0.3s linear;
+ }
+ </style>
 </head>
 <body>
 
 <header id="step-header">
-  <div style="flex:1">
-    <div class="step-label" id="step-num">STEP 0 / 6</div>
-    <div class="step-title" id="step-title-text">準備</div>
-    <div class="step-progress-mini" id="step-progress-dots"></div>
-  </div>
-  <a href="welcome.html" class="text-small text-muted">× 中止</a>
+ <div style="flex:1">
+ <div class="step-label" id="step-num">STEP 0 / 6</div>
+ <div class="step-title" id="step-title-text">準備</div>
+ <div class="step-progress-mini" id="step-progress-dots"></div>
+ </div>
+ <a href="welcome.html" class="text-small text-muted">× 中止</a>
 </header>
 
 <main id="screen-container">
 
-  <!-- ─────────────────────────────────────────
-       Screen A: イントロ画面(全体ガイド)
-       ───────────────────────────────────────── -->
-  <div id="screen-intro">
-    <div class="action-card">
-      <div class="action-eyebrow">RMST 動作タイプ判定</div>
-      <h1 class="action-title" id="intro-greeting">動作タイプを判定します</h1>
-      <p class="text-secondary mt-2 mb-4" style="font-size:14px;line-height:1.85">
-        全部で <b>6つの動作</b> を、1つずつ撮影します。
-        各動作は数秒〜15秒程度。途中でやり直しもできます。
-      </p>
+ <!-- ─────────────────────────────────────────
+ Screen A: イントロ画面(全体ガイド)
+ ───────────────────────────────────────── -->
+ <div id="screen-intro">
+ <div class="action-card">
+ <div class="action-eyebrow">RMST 動作タイプ判定</div>
+ <h1 class="action-title" id="intro-greeting">動作タイプを判定します</h1>
+ <p class="text-secondary mt-2 mb-4" style="font-size:14px;line-height:1.85">
+ 全部で <b>6つの動作</b> を、1つずつ撮影します。
+ 各動作は数秒〜15秒程度。途中でやり直しもできます。
+ </p>
 
-      <div class="role-card role-camera">
-        <div class="role-label"><span class="role-icon">📱</span>撮影する方へ(ママ・友人など)</div>
-        <div class="role-text">
-          スマートフォンを<b>両手でしっかり持って</b>、被験者の全身が画面に収まるように撮影してください。
-          各ステップで「カメラの位置」(正面/横)が指示されます。
-        </div>
-      </div>
+ <div class="role-card role-camera">
+ <div class="role-label"><span class="role-icon"></span>撮影する方へ(ママ・友人など)</div>
+ <div class="role-text">
+ スマートフォンを<b>両手でしっかり持って</b>、被験者の全身が画面に収まるように撮影してください。
+ 各ステップで「カメラの位置」(正面/横)が指示されます。
+ </div>
+ </div>
 
-      <!-- 撮影者の絶対ルール3つ(現場フィードバックから追加) -->
-      <div class="card-emphasized card" style="padding:18px 16px;margin-top:12px;border-left:3px solid var(--color-info)">
-        <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
-          📸 撮影者の3つの絶対ルール
-        </div>
+ <!-- 撮影者の絶対ルール3つ(現場フィードバックから追加) -->
+ <div class="card-emphasized card" style="padding:18px 16px;margin-top:12px;border-left:3px solid var(--color-info)">
+ <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
+ 撮影者の3つの絶対ルール
+ </div>
 
-        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
-          <div style="font-size:24px;flex-shrink:0">📱</div>
-          <div style="flex:1">
-            <div style="font-weight:600;font-size:14px;margin-bottom:2px">スマホは縦向き</div>
-            <div class="text-tertiary text-small">横向きで撮らないでください。被験者の全身が縦長に映ります。</div>
-          </div>
-        </div>
+ <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+ <div style="font-size:24px;flex-shrink:0"></div>
+ <div style="flex:1">
+ <div style="font-weight:600;font-size:14px;margin-bottom:2px">スマホは縦向き</div>
+ <div class="text-tertiary text-small">横向きで撮らないでください。被験者の全身が縦長に映ります。</div>
+ </div>
+ </div>
 
-        <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
-          <div style="font-size:24px;flex-shrink:0">📏</div>
-          <div style="flex:1">
-            <div style="font-weight:600;font-size:14px;margin-bottom:2px">カメラの高さは被験者のおへそ〜胸</div>
-            <div class="text-tertiary text-small">
-              大人がお子さんを撮るときは <b>しゃがんで</b>ください。
-              上から見下ろす画角だと正確な解析ができません。
-            </div>
-          </div>
-        </div>
+ <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+ <div style="font-size:24px;flex-shrink:0"></div>
+ <div style="flex:1">
+ <div style="font-weight:600;font-size:14px;margin-bottom:2px">カメラの高さは被験者のおへそ〜胸</div>
+ <div class="text-tertiary text-small">
+ 大人がお子さんを撮るときは <b>しゃがんで</b>ください。
+ 上から見下ろす画角だと正確な解析ができません。
+ </div>
+ </div>
+ </div>
 
-        <div style="display:flex;gap:12px;align-items:flex-start">
-          <div style="font-size:24px;flex-shrink:0">📐</div>
-          <div style="flex:1">
-            <div style="font-weight:600;font-size:14px;margin-bottom:2px">距離は2〜4m</div>
-            <div class="text-tertiary text-small">
-              全身(頭から足先まで)が画面に収まる距離をキープしてください。
-            </div>
-          </div>
-        </div>
-      </div>
+ <div style="display:flex;gap:12px;align-items:flex-start">
+ <div style="font-size:24px;flex-shrink:0"></div>
+ <div style="flex:1">
+ <div style="font-weight:600;font-size:14px;margin-bottom:2px">距離は2〜4m</div>
+ <div class="text-tertiary text-small">
+ 全身(頭から足先まで)が画面に収まる距離をキープしてください。
+ </div>
+ </div>
+ </div>
+ </div>
 
-      <div class="role-card role-subject" style="margin-top:12px">
-        <div class="role-label"><span class="role-icon">⚾️</span>動作する方へ</div>
-        <div class="role-text">
-          動きやすい服装で、リラックスして動作してください。
-          各動作の前に説明と準備時間があります。
-        </div>
-      </div>
+ <div class="role-card role-subject" style="margin-top:12px">
+ <div class="role-label"><span class="role-icon"></span>動作する方へ</div>
+ <div class="role-text">
+ 動きやすい服装で、リラックスして動作してください。
+ 各動作の前に説明と準備時間があります。
+ </div>
+ </div>
 
-      <div class="alert alert-info mt-3">
-        <b>所要時間: 約3-5分</b><br>
-        撮影に不安なときは「やり直す」「中止」がいつでも押せます。
-      </div>
+ <div class="alert alert-info mt-3">
+ <b>所要時間: 約3-5分</b><br>
+ 撮影に不安なときは「やり直す」「中止」がいつでも押せます。
+ </div>
 
-      <button class="btn btn-primary btn-large btn-block mt-4" id="btn-start-rmst">
-        撮影をはじめる →
-      </button>
-    </div>
-  </div>
+ <button class="btn btn-primary btn-large btn-block mt-4" id="btn-start-rmst">
+ 撮影をはじめる →
+ </button>
+ </div>
+ </div>
 
-  <!-- ─────────────────────────────────────────
-       Screen B: 各ステップの動作説明
-       ───────────────────────────────────────── -->
-  <div id="screen-step-intro" class="hidden">
-    <div class="action-card">
-      <div class="action-eyebrow" id="step-eyebrow">STEP 1 / 6</div>
-      <h1 class="action-title" id="step-title">立ち姿(正面+横)</h1>
-      <div class="action-duration" id="step-duration">撮影時間: 3秒</div>
+ <!-- ─────────────────────────────────────────
+ Screen B: 各ステップの動作説明
+ ───────────────────────────────────────── -->
+ <div id="screen-step-intro" class="hidden">
+ <div class="action-card">
+ <div class="action-eyebrow" id="step-eyebrow">STEP 1 / 6</div>
+ <h1 class="action-title" id="step-title">立ち姿(正面+横)</h1>
+ <div class="action-duration" id="step-duration">撮影時間: 3秒</div>
 
-      <div class="role-card role-camera">
-        <div class="role-label"><span class="role-icon">📱</span>撮影する方</div>
-        <div style="font-size:13px;color:var(--color-info);font-weight:600;margin-bottom:6px" id="step-camera-position">
-          📱 スマホ縦持ち・被験者の正面から
-        </div>
-        <div class="role-text" id="step-camera-instr">真正面から、被験者の全身が映るよう撮影してください。</div>
-      </div>
+ <div class="role-card role-camera">
+ <div class="role-label"><span class="role-icon"></span>撮影する方</div>
+ <div style="font-size:13px;color:var(--color-info);font-weight:600;margin-bottom:6px" id="step-camera-position">
+ スマホ縦持ち・被験者の正面から
+ </div>
+ <div class="role-text" id="step-camera-instr">真正面から、被験者の全身が映るよう撮影してください。</div>
+ </div>
 
-      <div class="role-card role-subject">
-        <div class="role-label"><span class="role-icon">⚾️</span>動作する方</div>
-        <div class="role-text" id="step-subject-instr">カメラの方を向いて、自然に立ってください。</div>
-      </div>
+ <div class="role-card role-subject">
+ <div class="role-label"><span class="role-icon"></span>動作する方</div>
+ <div class="role-text" id="step-subject-instr">カメラの方を向いて、自然に立ってください。</div>
+ </div>
 
-      <!-- 視覚的ダイアグラム(動作によっては必須、ない動作は非表示) -->
-      <div id="step-visual-aid" style="display:none;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px 16px;margin-top:12px">
-        <div style="color:var(--text-tertiary);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:8px">📐 撮影アングル</div>
-        <pre id="step-visual-aid-content" style="font-family:var(--font-family-mono);font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;margin:0"></pre>
-      </div>
+ <!-- 視覚的ダイアグラム(動作によっては必須、ない動作は非表示) -->
+ <div id="step-visual-aid" style="display:none;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:14px 16px;margin-top:12px">
+ <div style="color:var(--text-tertiary);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:8px">撮影アングル</div>
+ <pre id="step-visual-aid-content" style="font-family:var(--font-family-mono);font-size:13px;color:var(--text-secondary);line-height:1.7;white-space:pre-wrap;margin:0"></pre>
+ </div>
 
-      <!-- チュートリアル動画(将来 video_url が設定されたら表示) -->
-      <div id="step-tutorial-video" class="hidden" style="margin-top:12px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:12px;text-align:center">
-        <div style="color:var(--text-tertiary);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:8px">🎬 撮影と動作のお手本</div>
-        <video id="step-tutorial-video-player" controls playsinline preload="metadata" style="width:100%;max-height:300px;border-radius:var(--radius-sm)">
-          お使いのブラウザは動画再生に対応していません。
-        </video>
-        <div id="step-tutorial-video-caption" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
-      </div>
+ <!-- チュートリアル動画(将来 video_url が設定されたら表示) -->
+ <div id="step-tutorial-video" class="hidden" style="margin-top:12px;background:var(--bg-card);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:12px;text-align:center">
+ <div style="color:var(--text-tertiary);font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:8px">撮影と動作のお手本</div>
+ <video id="step-tutorial-video-player" controls playsinline preload="metadata" style="width:100%;max-height:300px;border-radius:var(--radius-sm)">
+ お使いのブラウザは動画再生に対応していません。
+ </video>
+ <div id="step-tutorial-video-caption" style="font-size:11.5px;color:var(--text-muted);margin-top:6px"></div>
+ </div>
 
-      <!-- 「何を測定しているか」セクション(該当動作のみ表示) -->
-      <div id="step-what-we-measure" style="display:none;background:linear-gradient(135deg,#0a1a14,#0d2818);border:1px solid #10b98144;border-radius:var(--radius-md);padding:14px 16px;margin-top:12px">
-        <div style="color:#10b981;font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:6px">🔬 この動作で見ていること</div>
-        <div id="step-what-we-measure-content" style="font-size:13px;color:var(--text-secondary);line-height:1.85"></div>
-      </div>
+ <!-- 「何を測定しているか」セクション(該当動作のみ表示) -->
+ <div id="step-what-we-measure" style="display:none;background:linear-gradient(135deg,#0a1a14,#0d2818);border:1px solid #10b98144;border-radius:var(--radius-md);padding:14px 16px;margin-top:12px">
+ <div style="color:#10b981;font-size:11px;font-weight:600;letter-spacing:1.5px;margin-bottom:6px">この動作で見ていること</div>
+ <div id="step-what-we-measure-content" style="font-size:13px;color:var(--text-secondary);line-height:1.85"></div>
+ </div>
 
-      <div class="alert alert-info mt-3" id="step-tips" style="display:none">
-        <b>ヒント:</b> <span id="step-tips-text"></span>
-      </div>
+ <div class="alert alert-info mt-3" id="step-tips" style="display:none">
+ <b>ヒント:</b> <span id="step-tips-text"></span>
+ </div>
 
-      <button class="btn btn-primary btn-large btn-block mt-4" id="btn-start-capture">
-        準備できました ・ 撮影開始 →
-      </button>
-      <button class="btn btn-secondary btn-block mt-2" id="btn-skip-step">
-        この動作をスキップ
-      </button>
-    </div>
-  </div>
+ <button class="btn btn-primary btn-large btn-block mt-4" id="btn-start-capture">
+ 準備できました ・ 撮影開始 →
+ </button>
+ <button class="btn btn-secondary btn-block mt-2" id="btn-skip-step">
+ この動作をスキップ
+ </button>
+ </div>
+ </div>
 
-  <!-- ─────────────────────────────────────────
-       Screen C: 撮影画面(カメラ起動中)
-       ───────────────────────────────────────── -->
-  <div id="screen-capture" class="hidden">
-    <div style="padding:8px 12px;background:var(--bg-secondary);font-size:12px;color:var(--text-secondary);text-align:center;border-bottom:1px solid var(--border-subtle)">
-      📱 スマホ縦向き ・ 📏 カメラ高さは被験者のおへそ〜胸
-    </div>
-    <div id="video-wrap">
-      <video id="video" autoplay playsinline muted></video>
-      <canvas id="overlay"></canvas>
-      <div id="status-overlay">
-        <div class="status-pill" id="model-pill">モデル準備中…</div>
-        <div class="status-pill fps-good" id="fps-pill">-- fps</div>
-      </div>
-      <div id="recording-badge" class="hidden">
-        <span class="rec-dot"></span>
-        <span>撮影中</span>
-        <span id="recording-timer">--秒</span>
-      </div>
-      <div id="countdown-overlay" class="hidden">
-        <div id="countdown-number">3</div>
-        <div id="countdown-label">準備…</div>
-      </div>
-    </div>
+ <!-- ─────────────────────────────────────────
+ Screen C: 撮影画面(カメラ起動中)
+ ───────────────────────────────────────── -->
+ <div id="screen-capture" class="hidden">
+ <div style="padding:8px 12px;background:var(--bg-secondary);font-size:12px;color:var(--text-secondary);text-align:center;border-bottom:1px solid var(--border-subtle)">
+ スマホ縦向き ・ カメラ高さは被験者のおへそ〜胸
+ </div>
+ <div id="video-wrap">
+ <video id="video" autoplay playsinline muted></video>
+ <canvas id="overlay"></canvas>
+ <div id="status-overlay">
+ <div class="status-pill" id="model-pill">モデル準備中…</div>
+ <div class="status-pill fps-good" id="fps-pill">-- fps</div>
+ </div>
+ <div id="recording-badge" class="hidden">
+ <span class="rec-dot"></span>
+ <span>撮影中</span>
+ <span id="recording-timer">--秒</span>
+ </div>
+ <div id="countdown-overlay" class="hidden">
+ <div id="countdown-number">3</div>
+ <div id="countdown-label">準備…</div>
+ </div>
+ </div>
 
-    <div class="controls">
-      <div id="model-status-mini">⏳ Pose モデルを読み込んでいます…</div>
+ <div class="controls">
+ <div id="model-status-mini">...Pose モデルを読み込んでいます…</div>
 
-      <!-- 動作完了ボタン(撮影中、3秒以上経過で活性化) -->
-      <button class="btn btn-success btn-block btn-large hidden" id="btn-finish-capture" disabled>
-        ✓ 動作完了 ・ 次へ進む
-      </button>
-      <div id="finish-hint" class="hidden" style="text-align:center;font-size:12px;color:var(--text-tertiary);margin-top:-4px">
-        動作が終わったら、規定時間を待たずに押せます
-      </div>
+ <!-- 動作完了ボタン(撮影中、3秒以上経過で活性化) -->
+ <button class="btn btn-success btn-block btn-large hidden" id="btn-finish-capture" disabled>
+ ✓ 動作完了 ・ 次へ進む
+ </button>
+ <div id="finish-hint" class="hidden" style="text-align:center;font-size:12px;color:var(--text-tertiary);margin-top:-4px">
+ 動作が終わったら、規定時間を待たずに押せます
+ </div>
 
-      <button class="btn btn-secondary btn-block hidden" id="btn-switch-cam">
-        🔄 カメラ切替(前後)
-      </button>
-      <button class="btn btn-secondary btn-block hidden" id="btn-abort-capture" style="background:transparent;color:var(--color-danger);border:1px solid var(--color-danger);font-weight:500">
-        × 撮影を中断する
-      </button>
-    </div>
-  </div>
+ <button class="btn btn-secondary btn-block hidden" id="btn-switch-cam">
+ カメラ切替(前後)
+ </button>
+ <button class="btn btn-secondary btn-block hidden" id="btn-abort-capture" style="background:transparent;color:var(--color-danger);border:1px solid var(--color-danger);font-weight:500">
+ × 撮影を中断する
+ </button>
+ </div>
+ </div>
 
-  <!-- ─────────────────────────────────────────
-       Screen D: 撮影後の確認
-       ───────────────────────────────────────── -->
-  <div id="screen-review" class="hidden">
-    <div class="action-card">
-      <div class="action-eyebrow">撮影結果</div>
-      <h1 class="action-title" id="review-title">立ち姿 完了</h1>
+ <!-- ─────────────────────────────────────────
+ Screen D: 撮影後の確認
+ ───────────────────────────────────────── -->
+ <div id="screen-review" class="hidden">
+ <div class="action-card">
+ <div class="action-eyebrow">撮影結果</div>
+ <h1 class="action-title" id="review-title">立ち姿 完了</h1>
 
-      <div class="card mt-3" id="review-summary">
-        <div class="flex justify-between mb-2">
-          <span class="text-tertiary text-small">撮影フレーム数</span>
-          <span class="text-mono" id="review-frames">--</span>
-        </div>
-        <div class="flex justify-between mb-2">
-          <span class="text-tertiary text-small">検出率</span>
-          <span class="text-mono" id="review-detection">--%</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-tertiary text-small">平均FPS</span>
-          <span class="text-mono" id="review-fps">-- fps</span>
-        </div>
-      </div>
+ <div class="card mt-3" id="review-summary">
+ <div class="flex justify-between mb-2">
+ <span class="text-tertiary text-small">撮影フレーム数</span>
+ <span class="text-mono" id="review-frames">--</span>
+ </div>
+ <div class="flex justify-between mb-2">
+ <span class="text-tertiary text-small">検出率</span>
+ <span class="text-mono" id="review-detection">--%</span>
+ </div>
+ <div class="flex justify-between">
+ <span class="text-tertiary text-small">平均FPS</span>
+ <span class="text-mono" id="review-fps">-- fps</span>
+ </div>
+ </div>
 
-      <div id="review-warning" class="alert alert-warning hidden mt-3">
-        <b>動作品質が低めです</b>
-        <div class="text-small mt-2" id="review-warning-text"></div>
-      </div>
+ <div id="review-warning" class="alert alert-warning hidden mt-3">
+ <b>動作品質が低めです</b>
+ <div class="text-small mt-2" id="review-warning-text"></div>
+ </div>
 
-      <button class="btn btn-primary btn-large btn-block mt-4" id="btn-next-step">
-        次の動作へ →
-      </button>
-      <button class="btn btn-secondary btn-block mt-2" id="btn-retry-step">
-        🔄 この動作をもう一度
-      </button>
-    </div>
-  </div>
+ <button class="btn btn-primary btn-large btn-block mt-4" id="btn-next-step">
+ 次の動作へ →
+ </button>
+ <button class="btn btn-secondary btn-block mt-2" id="btn-retry-step">
+ この動作をもう一度
+ </button>
+ </div>
+ </div>
 
-  <!-- ─────────────────────────────────────────
-       Screen E: 全ステップ完了 → 解析中
-       ───────────────────────────────────────── -->
-  <div id="screen-analyzing" class="hidden">
-    <div class="container" style="padding:48px 24px;text-align:center">
-      <div style="font-size:48px;margin-bottom:16px">⏳</div>
-      <h2 class="mb-2">解析中…</h2>
-      <p class="text-secondary text-small mb-4">
-        全動作のデータを統合して、あなたの動作タイプを判定しています。
-      </p>
-      <div class="progress-bar"><div class="progress-bar-fill" id="analyze-progress"></div></div>
-    </div>
-  </div>
+ <!-- ─────────────────────────────────────────
+ Screen E: 全ステップ完了 → 解析中
+ ───────────────────────────────────────── -->
+ <div id="screen-analyzing" class="hidden">
+ <div class="container" style="padding:48px 24px;text-align:center">
+ <div style="font-size:48px;margin-bottom:16px"></div>
+ <h2 class="mb-2">解析中…</h2>
+ <p class="text-secondary text-small mb-4">
+ 全動作のデータを統合して、あなたの動作タイプを判定しています。
+ </p>
+ <div class="progress-bar"><div class="progress-bar-fill" id="analyze-progress"></div></div>
+ </div>
+ </div>
 
-  <!-- ─────────────────────────────────────────
-       Screen F: エラー
-       ───────────────────────────────────────── -->
-  <div id="screen-error" class="hidden">
-    <div class="container" style="padding:32px 24px">
-      <div class="alert alert-danger">
-        <b>エラーが発生しました</b><br>
-        <span id="error-text"></span>
-      </div>
-      <button class="btn btn-secondary btn-block mt-4" onclick="location.reload()">
-        最初からやり直す
-      </button>
-    </div>
-  </div>
+ <!-- ─────────────────────────────────────────
+ Screen F: エラー
+ ───────────────────────────────────────── -->
+ <div id="screen-error" class="hidden">
+ <div class="container" style="padding:32px 24px">
+ <div class="alert alert-danger">
+ <b>エラーが発生しました</b><br>
+ <span id="error-text"></span>
+ </div>
+ <button class="btn btn-secondary btn-block mt-4" onclick="location.reload()">
+ 最初からやり直す
+ </button>
+ </div>
+ </div>
 
 </main>
 
 <footer class="rf-footer">
-  <div class="precision-note">
-    ※ 本解析は2Dスマートフォン動画によるもので、関節角度の測定誤差は撮影面内で±5-10°を含みます。
-  </div>
+ <div class="precision-note">
+ ※ 本解析は2Dスマートフォン動画によるもので、関節角度の測定誤差は撮影面内で±5-10°を含みます。
+ </div>
 </footer>
 
 <script src="js/user-profile.js"></script>
@@ -544,615 +544,615 @@
 import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/vision_bundle.mjs';
 
 (function () {
-  'use strict';
+ 'use strict';
 
-  // ─────────────────────────────────────────
-  // ステップ定義(各動作)
-  // ─────────────────────────────────────────
-  const STEPS = [
-    {
-      id: 'stance_front',
-      title: '立ち姿 ①(正面から)',
-      duration_sec: 3,
-      camera_position: '📱 スマホ縦持ち・被験者の正面から',
-      camera_instr: '被験者の正面に立ち、3秒間そのまま撮影してください。',
-      subject_instr: 'カメラの方を向いて、自然に立ってください。両手は体の横に下ろしたままで。',
-      tips: '体の左右どちらが下がっているかをチェックする動作です。',
-      what_we_measure: '【何を見ているか】左右の肩・骨盤・足首の高さの差(前額面の非対称)。投球側・打撃側の影響で生じる構造的・機能的な左右差を評価しています。',
-      facing: 'environment',
-    },
-    {
-      id: 'stance_side',
-      title: '立ち姿 ②(横から)',
-      duration_sec: 3,
-      camera_position: '📱 スマホ縦持ち・被験者の真横(左or右どちらでもOK)から',
-      camera_instr: '今度は被験者の真横(左or右)に移動して、3秒間そのまま撮影してください。',
-      subject_instr: '撮影者が横に回るまで、その場で動かず立っていてください。撮影開始の合図で自然に立つだけ。',
-      tips: '撮影者が動く動作です。被験者は立ち姿のまま待つだけでOK。',
-      what_we_measure: '【何を見ているか】頭部前方位・胸椎後弯・腰椎前弯のバランス(矢状面姿勢)。Janda の UCS/LCS 分類の評価軸です。',
-      facing: 'environment',
-    },
-    {
-      id: 'overhead_squat',
-      title: 'オーバーヘッドスクワット(3回)',
-      duration_sec: 15,
-      camera_position: '📱 スマホ縦持ち・被験者の正面から(2-3m)',
-      camera_instr: '正面から、被験者の全身が映るよう撮影。少し離れた位置から(目安2-3m)。',
-      subject_instr: '両手を頭の真上に挙げたまま、ゆっくり3回スクワットしてください。深く座ろうと頑張らなくてOK、自然な可動域で。',
-      tips: '15秒の間にゆっくり3回。1回 = 下ろす+立ち上がる で5秒くらい。',
-      what_we_measure: '【何を見ているか】下肢可動性(足関節・膝・股関節の屈曲)、膝の入り(valgus collapse)、肩甲帯柔軟性(腕の落ち)、体幹安定性。Cook の FMS Deep Squat Test 準拠の全身評価です。',
-      facing: 'environment',
-    },
-    {
-      id: 'hip_90_90',
-      title: '下半身〜体幹の連動チェック',
-      title_pro: 'Hip-Spine Coupling (proximal kinetic chain)',
-      duration_sec: 15,
-      camera_position: '📱 スマホ縦持ち・被験者の足元側に立ち、頭の方に向けて撮影',
-      camera_instr:
-        '【撮影者の立ち位置】被験者は仰向けに寝ています。あなたは被験者の足元側(つま先の延長線上)に立ち、スマホを縦に持って被験者の頭の方を画面の奥に向けて撮ってください。' +
-        '\n【画面に映る景色】手前: 立てた両膝(90°曲げた状態)/真ん中: 体/奥: 顔。両膝が左右に倒れる動きが、画面の左右移動として見えればOK。',
-      subject_instr:
-        '床に仰向けで寝てください。両膝を90°に立てて、その状態で両足を揃えたまま左右にゆっくり倒します(膝が床に近づくイメージ)。痛い角度まで無理をしないこと。',
-      tips: '15秒で左右各2回ずつ ゆっくり。難しければスキップしてOK(全身評価には他5動作で十分です)。',
-      // この動作の本質: 股関節は始動、観察するのは下半身→骨盤→腰椎→体幹の連動性
-      what_we_measure:
-        '【何を見ているか】膝の動きはあくまで「きっかけ」です。本質は股関節→骨盤→腰椎→体幹の運動連鎖(proximal kinetic chain)の評価。下半身始動の打撃で力がスムーズに上に伝わるかを判断します。',
-      what_we_measure_pro:
-        '【測定対象】股関節内外旋ROM、骨盤回旋可動性、腰椎側方シフト・回旋、胸椎反応・代償パターン。Sahrmann (2002) Movement System Impairment, Janda の関節連鎖モデル準拠。',
-      visual_aid:
-        '       😊  ← 被験者の頭(画面の奥)\n' +
-        '       ▽▽\n' +
-        '       ││  ← 体\n' +
-        '       ││\n' +
-        '       ⌐⌐  ← 立てた膝 90°\n' +
-        '        ↑\n' +
-        '       📱  ← あなた(足元側に立つ)\n' +
-        '\n' +
-        '   この向きで撮ると、両膝が左右に倒れる動きが\n' +
-        '   画面の左右移動として明確に見えます。',
-      facing: 'environment',
-    },
-    {
-      id: 't_spine_rot',
-      title: '胸椎回旋(座って)',
-      duration_sec: 10,
-      camera_position: '📱 スマホ縦持ち・被験者の正面から(座面の高さ)',
-      camera_instr: '被験者の正面、上半身がよく見える距離で撮影。カメラは被験者の胸の高さに合わせて。',
-      subject_instr: '椅子に座り、両手を胸の前で組みます。胸から上を、ゆっくり右に回旋 → 戻る → 左に回旋 → 戻るを行います。',
-      tips: '腰は固定して、胸から回す意識で。10秒で左右各1回ずつ。',
-      what_we_measure: '【何を見ているか】胸椎の回旋可動域(座位で骨盤を固定することで胸椎を選択的に測定)。バッティング・投球の分離角を生み出す主要要素。Burkhart (2003) SICK scapula 評価の応用です。',
-      facing: 'environment',
-    },
-    {
-      id: 'cmj',
-      title: 'ジャンプ(3回)',
-      duration_sec: 10,
-      camera_position: '📱 スマホ縦持ち・被験者の真横から(3-4m離れて)',
-      camera_instr: '真横から、全身(頭の少し上から足先まで)が画面に縦長に収まるよう、3-4m離れて撮影。',
-      subject_instr: 'リラックスして立ち、深くしゃがんでから真上に高くジャンプを3回繰り返してください。',
-      tips: '1回ジャンプしたら少し休んで、また飛ぶ感じで。安全な場所(滑らない床)で。',
-      what_we_measure: '【何を見ているか】下肢爆発力(伸張-短縮サイクル: SSC)・着地時の左右非対称・膝の安定性。Kraemer (2012) の CMJ 評価準拠で、打撃のパワー指標として活用します。',
-      facing: 'environment',
-    },
-  ];
+ // ─────────────────────────────────────────
+ // ステップ定義(各動作)
+ // ─────────────────────────────────────────
+ const STEPS = [
+ {
+ id: 'stance_front',
+ title: '立ち姿 ①(正面から)',
+ duration_sec: 3,
+ camera_position: 'スマホ縦持ち・被験者の正面から',
+ camera_instr: '被験者の正面に立ち、3秒間そのまま撮影してください。',
+ subject_instr: 'カメラの方を向いて、自然に立ってください。両手は体の横に下ろしたままで。',
+ tips: '体の左右どちらが下がっているかをチェックする動作です。',
+ what_we_measure: '【何を見ているか】左右の肩・骨盤・足首の高さの差(前額面の非対称)。投球側・打撃側の影響で生じる構造的・機能的な左右差を評価しています。',
+ facing: 'environment',
+ },
+ {
+ id: 'stance_side',
+ title: '立ち姿 ②(横から)',
+ duration_sec: 3,
+ camera_position: 'スマホ縦持ち・被験者の真横(左or右どちらでもOK)から',
+ camera_instr: '今度は被験者の真横(左or右)に移動して、3秒間そのまま撮影してください。',
+ subject_instr: '撮影者が横に回るまで、その場で動かず立っていてください。撮影開始の合図で自然に立つだけ。',
+ tips: '撮影者が動く動作です。被験者は立ち姿のまま待つだけでOK。',
+ what_we_measure: '【何を見ているか】頭部前方位・胸椎後弯・腰椎前弯のバランス(矢状面姿勢)。Janda の UCS/LCS 分類の評価軸です。',
+ facing: 'environment',
+ },
+ {
+ id: 'overhead_squat',
+ title: 'オーバーヘッドスクワット(3回)',
+ duration_sec: 15,
+ camera_position: 'スマホ縦持ち・被験者の正面から(2-3m)',
+ camera_instr: '正面から、被験者の全身が映るよう撮影。少し離れた位置から(目安2-3m)。',
+ subject_instr: '両手を頭の真上に挙げたまま、ゆっくり3回スクワットしてください。深く座ろうと頑張らなくてOK、自然な可動域で。',
+ tips: '15秒の間にゆっくり3回。1回 = 下ろす+立ち上がる で5秒くらい。',
+ what_we_measure: '【何を見ているか】下肢可動性(足関節・膝・股関節の屈曲)、膝の入り(valgus collapse)、肩甲帯柔軟性(腕の落ち)、体幹安定性。Cook の FMS Deep Squat Test 準拠の全身評価です。',
+ facing: 'environment',
+ },
+ {
+ id: 'hip_90_90',
+ title: '下半身〜体幹の連動チェック',
+ title_pro: 'Hip-Spine Coupling (proximal kinetic chain)',
+ duration_sec: 15,
+ camera_position: 'スマホ縦持ち・被験者の足元側に立ち、頭の方に向けて撮影',
+ camera_instr:
+ '【撮影者の立ち位置】被験者は仰向けに寝ています。あなたは被験者の足元側(つま先の延長線上)に立ち、スマホを縦に持って被験者の頭の方を画面の奥に向けて撮ってください。' +
+ '\n【画面に映る景色】手前: 立てた両膝(90°曲げた状態)/真ん中: 体/奥: 顔。両膝が左右に倒れる動きが、画面の左右移動として見えればOK。',
+ subject_instr:
+ '床に仰向けで寝てください。両膝を90°に立てて、その状態で両足を揃えたまま左右にゆっくり倒します(膝が床に近づくイメージ)。痛い角度まで無理をしないこと。',
+ tips: '15秒で左右各2回ずつ ゆっくり。難しければスキップしてOK(全身評価には他5動作で十分です)。',
+ // この動作の本質: 股関節は始動、観察するのは下半身→骨盤→腰椎→体幹の連動性
+ what_we_measure:
+ '【何を見ているか】膝の動きはあくまで「きっかけ」です。本質は股関節→骨盤→腰椎→体幹の運動連鎖(proximal kinetic chain)の評価。下半身始動の打撃で力がスムーズに上に伝わるかを判断します。',
+ what_we_measure_pro:
+ '【測定対象】股関節内外旋ROM、骨盤回旋可動性、腰椎側方シフト・回旋、胸椎反応・代償パターン。Sahrmann (2002) Movement System Impairment, Janda の関節連鎖モデル準拠。',
+ visual_aid:
+ ' (頭) ← 被験者の頭(画面の奥)\n' +
+ ' ▽▽\n' +
+ ' ││ ← 体\n' +
+ ' ││\n' +
+ ' ⌐⌐ ← 立てた膝 90°\n' +
+ ' ↑\n' +
+ ' ← あなた(足元側に立つ)\n' +
+ '\n' +
+ ' この向きで撮ると、両膝が左右に倒れる動きが\n' +
+ ' 画面の左右移動として明確に見えます。',
+ facing: 'environment',
+ },
+ {
+ id: 't_spine_rot',
+ title: '胸椎回旋(座って)',
+ duration_sec: 10,
+ camera_position: 'スマホ縦持ち・被験者の正面から(座面の高さ)',
+ camera_instr: '被験者の正面、上半身がよく見える距離で撮影。カメラは被験者の胸の高さに合わせて。',
+ subject_instr: '椅子に座り、両手を胸の前で組みます。胸から上を、ゆっくり右に回旋 → 戻る → 左に回旋 → 戻るを行います。',
+ tips: '腰は固定して、胸から回す意識で。10秒で左右各1回ずつ。',
+ what_we_measure: '【何を見ているか】胸椎の回旋可動域(座位で骨盤を固定することで胸椎を選択的に測定)。バッティング・投球の分離角を生み出す主要要素。Burkhart (2003) SICK scapula 評価の応用です。',
+ facing: 'environment',
+ },
+ {
+ id: 'cmj',
+ title: 'ジャンプ(3回)',
+ duration_sec: 10,
+ camera_position: 'スマホ縦持ち・被験者の真横から(3-4m離れて)',
+ camera_instr: '真横から、全身(頭の少し上から足先まで)が画面に縦長に収まるよう、3-4m離れて撮影。',
+ subject_instr: 'リラックスして立ち、深くしゃがんでから真上に高くジャンプを3回繰り返してください。',
+ tips: '1回ジャンプしたら少し休んで、また飛ぶ感じで。安全な場所(滑らない床)で。',
+ what_we_measure: '【何を見ているか】下肢爆発力(伸張-短縮サイクル: SSC)・着地時の左右非対称・膝の安定性。Kraemer (2012) の CMJ 評価準拠で、打撃のパワー指標として活用します。',
+ facing: 'environment',
+ },
+ ];
 
-  // ─────────────────────────────────────────
-  // 要素取得
-  // ─────────────────────────────────────────
-  const $ = id => document.getElementById(id);
-  const screens = {
-    intro: $('screen-intro'),
-    stepIntro: $('screen-step-intro'),
-    capture: $('screen-capture'),
-    review: $('screen-review'),
-    analyzing: $('screen-analyzing'),
-    error: $('screen-error'),
-  };
+ // ─────────────────────────────────────────
+ // 要素取得
+ // ─────────────────────────────────────────
+ const $ = id => document.getElementById(id);
+ const screens = {
+ intro: $('screen-intro'),
+ stepIntro: $('screen-step-intro'),
+ capture: $('screen-capture'),
+ review: $('screen-review'),
+ analyzing: $('screen-analyzing'),
+ error: $('screen-error'),
+ };
 
-  const video = $('video');
-  const overlay = $('overlay');
-  const ctx = overlay.getContext('2d');
+ const video = $('video');
+ const overlay = $('overlay');
+ const ctx = overlay.getContext('2d');
 
-  // ─────────────────────────────────────────
-  // 状態
-  // ─────────────────────────────────────────
-  let currentStepIdx = -1; // -1 = intro
-  let stream = null;
-  let usingFront = false; // 背面カメラ優先
-  let poseLandmarker = null;
-  let drawing = null;
-  let detecting = false;
-  let lastVideoTime = -1;
+ // ─────────────────────────────────────────
+ // 状態
+ // ─────────────────────────────────────────
+ let currentStepIdx = -1; // -1 = intro
+ let stream = null;
+ let usingFront = false; // 背面カメラ優先
+ let poseLandmarker = null;
+ let drawing = null;
+ let detecting = false;
+ let lastVideoTime = -1;
 
-  let recording = false;
-  let recordedFrames = []; // 現ステップの記録
-  let recordingStartTime = 0;
-  let recordingTimer = null;
-  let captureRequestedStop = false;
-  let captureWasAborted = false;
+ let recording = false;
+ let recordedFrames = []; // 現ステップの記録
+ let recordingStartTime = 0;
+ let recordingTimer = null;
+ let captureRequestedStop = false;
+ let captureWasAborted = false;
 
-  const allStepResults = {}; // {step_id: {frames: [...], summary: {...}}}
-  let monitor = null;
+ const allStepResults = {}; // {step_id: {frames: [...], summary: {...}}}
+ let monitor = null;
 
-  // ─────────────────────────────────────────
-  // 画面遷移
-  // ─────────────────────────────────────────
-  function showScreen(name) {
-    Object.values(screens).forEach(s => s.classList.add('hidden'));
-    screens[name].classList.remove('hidden');
-  }
+ // ─────────────────────────────────────────
+ // 画面遷移
+ // ─────────────────────────────────────────
+ function showScreen(name) {
+ Object.values(screens).forEach(s => s.classList.add('hidden'));
+ screens[name].classList.remove('hidden');
+ }
 
-  function renderStepProgress(currentIdx) {
-    const dots = $('step-progress-dots');
-    dots.innerHTML = '';
-    STEPS.forEach((s, i) => {
-      const dot = document.createElement('div');
-      dot.className = 'step-dot' + (i < currentIdx ? ' done' : (i === currentIdx ? ' active' : ''));
-      dots.appendChild(dot);
-    });
-    $('step-num').textContent = `STEP ${Math.max(1, currentIdx + 1)} / ${STEPS.length}`;
-  }
+ function renderStepProgress(currentIdx) {
+ const dots = $('step-progress-dots');
+ dots.innerHTML = '';
+ STEPS.forEach((s, i) => {
+ const dot = document.createElement('div');
+ dot.className = 'step-dot' + (i < currentIdx ? ' done' : (i === currentIdx ? ' active' : ''));
+ dots.appendChild(dot);
+ });
+ $('step-num').textContent = `STEP ${Math.max(1, currentIdx + 1)} / ${STEPS.length}`;
+ }
 
-  // ─────────────────────────────────────────
-  // イントロ画面
-  // ─────────────────────────────────────────
-  try {
-    const name = window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName();
-    if (name) {
-      $('intro-greeting').textContent = name + 'さん、動作タイプを判定します';
-    }
-  } catch (e) {}
+ // ─────────────────────────────────────────
+ // イントロ画面
+ // ─────────────────────────────────────────
+ try {
+ const name = window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName();
+ if (name) {
+ $('intro-greeting').textContent = name + 'さん、動作タイプを判定します';
+ }
+ } catch (e) {}
 
-  $('btn-start-rmst').addEventListener('click', () => {
-    currentStepIdx = 0;
-    showStepIntro();
-  });
+ $('btn-start-rmst').addEventListener('click', () => {
+ currentStepIdx = 0;
+ showStepIntro();
+ });
 
-  // ─────────────────────────────────────────
-  // ステップ説明画面
-  // ─────────────────────────────────────────
-  function showStepIntro() {
-    if (currentStepIdx >= STEPS.length) {
-      finishAndAnalyze();
-      return;
-    }
-    const step = STEPS[currentStepIdx];
-    $('step-eyebrow').textContent = `STEP ${currentStepIdx + 1} / ${STEPS.length}`;
-    $('step-title').textContent = step.title;
-    $('step-title-text').textContent = step.title;
-    $('step-duration').textContent = `撮影時間: ${step.duration_sec}秒(ゆっくりやって大丈夫)`;
-    $('step-camera-position').textContent = step.camera_position || '📱 スマホ縦持ち';
-    $('step-camera-instr').textContent = step.camera_instr;
-    $('step-subject-instr').textContent = step.subject_instr;
-    if (step.tips) {
-      $('step-tips').style.display = '';
-      $('step-tips-text').textContent = step.tips;
-    } else {
-      $('step-tips').style.display = 'none';
-    }
-    // 視覚ダイアグラム(該当ステップのみ表示)
-    if (step.visual_aid) {
-      $('step-visual-aid').style.display = '';
-      $('step-visual-aid-content').textContent = step.visual_aid;
-    } else {
-      $('step-visual-aid').style.display = 'none';
-    }
-    // 「何を測定しているか」(該当ステップのみ表示)
-    if (step.what_we_measure) {
-      $('step-what-we-measure').style.display = '';
-      $('step-what-we-measure-content').textContent = step.what_we_measure;
-    } else {
-      $('step-what-we-measure').style.display = 'none';
-    }
-    // チュートリアル動画(将来 video_url が設定された場合のみ表示)
-    if (step.video_url) {
-      const tv = $('step-tutorial-video');
-      const player = $('step-tutorial-video-player');
-      tv.classList.remove('hidden');
-      player.src = step.video_url;
-      if (step.video_caption) {
-        $('step-tutorial-video-caption').textContent = step.video_caption;
-      }
-    } else {
-      $('step-tutorial-video').classList.add('hidden');
-      $('step-tutorial-video-player').removeAttribute('src');
-    }
-    renderStepProgress(currentStepIdx);
-    showScreen('stepIntro');
-  }
+ // ─────────────────────────────────────────
+ // ステップ説明画面
+ // ─────────────────────────────────────────
+ function showStepIntro() {
+ if (currentStepIdx >= STEPS.length) {
+ finishAndAnalyze();
+ return;
+ }
+ const step = STEPS[currentStepIdx];
+ $('step-eyebrow').textContent = `STEP ${currentStepIdx + 1} / ${STEPS.length}`;
+ $('step-title').textContent = step.title;
+ $('step-title-text').textContent = step.title;
+ $('step-duration').textContent = `撮影時間: ${step.duration_sec}秒(ゆっくりやって大丈夫)`;
+ $('step-camera-position').textContent = step.camera_position || 'スマホ縦持ち';
+ $('step-camera-instr').textContent = step.camera_instr;
+ $('step-subject-instr').textContent = step.subject_instr;
+ if (step.tips) {
+ $('step-tips').style.display = '';
+ $('step-tips-text').textContent = step.tips;
+ } else {
+ $('step-tips').style.display = 'none';
+ }
+ // 視覚ダイアグラム(該当ステップのみ表示)
+ if (step.visual_aid) {
+ $('step-visual-aid').style.display = '';
+ $('step-visual-aid-content').textContent = step.visual_aid;
+ } else {
+ $('step-visual-aid').style.display = 'none';
+ }
+ // 「何を測定しているか」(該当ステップのみ表示)
+ if (step.what_we_measure) {
+ $('step-what-we-measure').style.display = '';
+ $('step-what-we-measure-content').textContent = step.what_we_measure;
+ } else {
+ $('step-what-we-measure').style.display = 'none';
+ }
+ // チュートリアル動画(将来 video_url が設定された場合のみ表示)
+ if (step.video_url) {
+ const tv = $('step-tutorial-video');
+ const player = $('step-tutorial-video-player');
+ tv.classList.remove('hidden');
+ player.src = step.video_url;
+ if (step.video_caption) {
+ $('step-tutorial-video-caption').textContent = step.video_caption;
+ }
+ } else {
+ $('step-tutorial-video').classList.add('hidden');
+ $('step-tutorial-video-player').removeAttribute('src');
+ }
+ renderStepProgress(currentStepIdx);
+ showScreen('stepIntro');
+ }
 
-  $('btn-start-capture').addEventListener('click', async () => {
-    const btn = $('btn-start-capture');
-    btn.disabled = true;
-    btn.textContent = '⏳ カメラ準備中…';
-    try {
-      await prepareForCapture(STEPS[currentStepIdx]);
-    } catch (e) {
-      showError('準備失敗: ' + e.message);
-    }
-    btn.disabled = false;
-    btn.textContent = '準備できました ・ 撮影開始 →';
-  });
+ $('btn-start-capture').addEventListener('click', async () => {
+ const btn = $('btn-start-capture');
+ btn.disabled = true;
+ btn.textContent = '...カメラ準備中…';
+ try {
+ await prepareForCapture(STEPS[currentStepIdx]);
+ } catch (e) {
+ showError('準備失敗: ' + e.message);
+ }
+ btn.disabled = false;
+ btn.textContent = '準備できました ・ 撮影開始 →';
+ });
 
-  $('btn-skip-step').addEventListener('click', () => {
-    if (!confirm('この動作をスキップしますか?判定精度がやや下がる可能性があります。')) return;
-    allStepResults[STEPS[currentStepIdx].id] = { skipped: true, frames: [], summary: {} };
-    currentStepIdx++;
-    showStepIntro();
-  });
+ $('btn-skip-step').addEventListener('click', () => {
+ if (!confirm('この動作をスキップしますか?判定精度がやや下がる可能性があります。')) return;
+ allStepResults[STEPS[currentStepIdx].id] = { skipped: true, frames: [], summary: {} };
+ currentStepIdx++;
+ showStepIntro();
+ });
 
-  // ─────────────────────────────────────────
-  // 撮影準備(カメラ+モデル起動)
-  // ─────────────────────────────────────────
-  async function prepareForCapture(step) {
-    showScreen('capture');
+ // ─────────────────────────────────────────
+ // 撮影準備(カメラ+モデル起動)
+ // ─────────────────────────────────────────
+ async function prepareForCapture(step) {
+ showScreen('capture');
 
-    // モデル読込(初回のみ)
-    if (!poseLandmarker) {
-      window.ReformaMediaPipe.onProgress((event) => {
-        $('model-status-mini').textContent = event.message;
-        $('model-pill').textContent = event.message;
-        if (event.stage === 'ready') $('model-status-mini').classList.add('ready');
-        else if (event.stage === 'error') $('model-status-mini').classList.add('error');
-      });
-      poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker({ preferLite: false });
-      drawing = new DrawingUtils(ctx);
-    }
-    $('model-status-mini').textContent = '✅ 準備完了';
-    $('model-status-mini').classList.add('ready');
+ // モデル読込(初回のみ)
+ if (!poseLandmarker) {
+ window.ReformaMediaPipe.onProgress((event) => {
+ $('model-status-mini').textContent = event.message;
+ $('model-pill').textContent = event.message;
+ if (event.stage === 'ready') $('model-status-mini').classList.add('ready');
+ else if (event.stage === 'error') $('model-status-mini').classList.add('error');
+ });
+ poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker({ preferLite: false });
+ drawing = new DrawingUtils(ctx);
+ }
+ $('model-status-mini').textContent = '✓ 準備完了';
+ $('model-status-mini').classList.add('ready');
 
-    // カメラ起動(背面カメラ優先)
-    usingFront = (step.facing === 'user');
-    await startCamera();
+ // カメラ起動(背面カメラ優先)
+ usingFront = (step.facing === 'user');
+ await startCamera();
 
-    // モニター初期化
-    monitor = new window.ReformaQualityGate.QualityMonitor({
-      windowSize: 30, minDetectionRate: 0.5, minFps: 20,
-    });
+ // モニター初期化
+ monitor = new window.ReformaQualityGate.QualityMonitor({
+ windowSize: 30, minDetectionRate: 0.5, minFps: 20,
+ });
 
-    detecting = true;
-    requestAnimationFrame(detect);
+ detecting = true;
+ requestAnimationFrame(detect);
 
-    // カウントダウン → 録画開始
-    $('btn-switch-cam').classList.remove('hidden');
-    startCountdown(3, () => startRecording(step));
-  }
+ // カウントダウン → 録画開始
+ $('btn-switch-cam').classList.remove('hidden');
+ startCountdown(3, () => startRecording(step));
+ }
 
-  async function startCamera() {
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: usingFront ? 'user' : { ideal: 'environment' },
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-        frameRate: { ideal: 30, max: 60 },
-      },
-      audio: false,
-    });
-    video.srcObject = stream;
-    await new Promise((resolve, reject) => {
-      video.onloadedmetadata = resolve;
-      video.onerror = reject;
-      setTimeout(() => reject(new Error('camera timeout')), 5000);
-    });
-    await video.play();
-    overlay.width = video.videoWidth;
-    overlay.height = video.videoHeight;
-    document.body.classList.toggle('cam-front', usingFront);
-  }
+ async function startCamera() {
+ if (stream) stream.getTracks().forEach(t => t.stop());
+ stream = await navigator.mediaDevices.getUserMedia({
+ video: {
+ facingMode: usingFront ? 'user' : { ideal: 'environment' },
+ width: { ideal: 1280 },
+ height: { ideal: 720 },
+ frameRate: { ideal: 30, max: 60 },
+ },
+ audio: false,
+ });
+ video.srcObject = stream;
+ await new Promise((resolve, reject) => {
+ video.onloadedmetadata = resolve;
+ video.onerror = reject;
+ setTimeout(() => reject(new Error('camera timeout')), 5000);
+ });
+ await video.play();
+ overlay.width = video.videoWidth;
+ overlay.height = video.videoHeight;
+ document.body.classList.toggle('cam-front', usingFront);
+ }
 
-  $('btn-switch-cam').addEventListener('click', async () => {
-    usingFront = !usingFront;
-    try {
-      await startCamera();
-    } catch (e) {
-      showError('カメラ切替失敗: ' + e.message);
-    }
-  });
+ $('btn-switch-cam').addEventListener('click', async () => {
+ usingFront = !usingFront;
+ try {
+ await startCamera();
+ } catch (e) {
+ showError('カメラ切替失敗: ' + e.message);
+ }
+ });
 
-  // ─────────────────────────────────────────
-  // カウントダウン
-  // ─────────────────────────────────────────
-  function startCountdown(seconds, onComplete) {
-    const ov = $('countdown-overlay');
-    ov.classList.remove('hidden');
-    let remaining = seconds;
-    $('countdown-number').textContent = remaining;
-    $('countdown-label').textContent = '準備…';
+ // ─────────────────────────────────────────
+ // カウントダウン
+ // ─────────────────────────────────────────
+ function startCountdown(seconds, onComplete) {
+ const ov = $('countdown-overlay');
+ ov.classList.remove('hidden');
+ let remaining = seconds;
+ $('countdown-number').textContent = remaining;
+ $('countdown-label').textContent = '準備…';
 
-    const iv = setInterval(() => {
-      remaining--;
-      if (remaining > 0) {
-        $('countdown-number').textContent = remaining;
-        $('countdown-label').textContent = '準備…';
-      } else if (remaining === 0) {
-        $('countdown-number').textContent = '!';
-        $('countdown-label').textContent = 'スタート';
-      } else {
-        clearInterval(iv);
-        ov.classList.add('hidden');
-        if (typeof onComplete === 'function') onComplete();
-      }
-    }, 800);
-  }
+ const iv = setInterval(() => {
+ remaining--;
+ if (remaining > 0) {
+ $('countdown-number').textContent = remaining;
+ $('countdown-label').textContent = '準備…';
+ } else if (remaining === 0) {
+ $('countdown-number').textContent = '!';
+ $('countdown-label').textContent = 'スタート';
+ } else {
+ clearInterval(iv);
+ ov.classList.add('hidden');
+ if (typeof onComplete === 'function') onComplete();
+ }
+ }, 800);
+ }
 
-  // ─────────────────────────────────────────
-  // 録画
-  // ─────────────────────────────────────────
-  // 動作完了ボタンを押せるまでの最小撮影秒数(早すぎる完了を防ぐ)
-  const MIN_CAPTURE_SEC_BEFORE_FINISH = 3;
+ // ─────────────────────────────────────────
+ // 録画
+ // ─────────────────────────────────────────
+ // 動作完了ボタンを押せるまでの最小撮影秒数(早すぎる完了を防ぐ)
+ const MIN_CAPTURE_SEC_BEFORE_FINISH = 3;
 
-  function startRecording(step) {
-    recording = true;
-    recordedFrames = [];
-    monitor.reset();
-    recordingStartTime = performance.now();
-    captureRequestedStop = false;
-    captureWasAborted = false;
+ function startRecording(step) {
+ recording = true;
+ recordedFrames = [];
+ monitor.reset();
+ recordingStartTime = performance.now();
+ captureRequestedStop = false;
+ captureWasAborted = false;
 
-    $('recording-badge').classList.remove('hidden');
-    $('btn-finish-capture').classList.remove('hidden');
-    $('btn-finish-capture').disabled = true;
-    $('btn-finish-capture').textContent = `✓ ${MIN_CAPTURE_SEC_BEFORE_FINISH}秒後に押せます…`;
-    $('finish-hint').classList.add('hidden');
-    $('btn-abort-capture').classList.remove('hidden');
-    $('btn-switch-cam').classList.add('hidden');
+ $('recording-badge').classList.remove('hidden');
+ $('btn-finish-capture').classList.remove('hidden');
+ $('btn-finish-capture').disabled = true;
+ $('btn-finish-capture').textContent = `✓ ${MIN_CAPTURE_SEC_BEFORE_FINISH}秒後に押せます…`;
+ $('finish-hint').classList.add('hidden');
+ $('btn-abort-capture').classList.remove('hidden');
+ $('btn-switch-cam').classList.add('hidden');
 
-    const totalMs = step.duration_sec * 1000;
-    const finishEnableMs = MIN_CAPTURE_SEC_BEFORE_FINISH * 1000;
+ const totalMs = step.duration_sec * 1000;
+ const finishEnableMs = MIN_CAPTURE_SEC_BEFORE_FINISH * 1000;
 
-    recordingTimer = setInterval(() => {
-      const elapsed = performance.now() - recordingStartTime;
-      const remain = totalMs - elapsed;
-      $('recording-timer').textContent = `残り ${Math.max(0, remain / 1000).toFixed(1)}秒`;
+ recordingTimer = setInterval(() => {
+ const elapsed = performance.now() - recordingStartTime;
+ const remain = totalMs - elapsed;
+ $('recording-timer').textContent = `残り ${Math.max(0, remain / 1000).toFixed(1)}秒`;
 
-      // 完了ボタンを活性化(3秒経過後)
-      if (elapsed >= finishEnableMs && $('btn-finish-capture').disabled) {
-        $('btn-finish-capture').disabled = false;
-        $('btn-finish-capture').textContent = '✓ 動作完了 ・ 次へ進む';
-        $('finish-hint').classList.remove('hidden');
-      }
+ // 完了ボタンを活性化(3秒経過後)
+ if (elapsed >= finishEnableMs && $('btn-finish-capture').disabled) {
+ $('btn-finish-capture').disabled = false;
+ $('btn-finish-capture').textContent = '✓ 動作完了 ・ 次へ進む';
+ $('finish-hint').classList.remove('hidden');
+ }
 
-      if (elapsed >= totalMs || captureRequestedStop) {
-        finishRecording(step);
-      }
-    }, 100);
-  }
+ if (elapsed >= totalMs || captureRequestedStop) {
+ finishRecording(step);
+ }
+ }, 100);
+ }
 
-  // 動作完了ボタン: 規定時間前でも次へ進める
-  $('btn-finish-capture').addEventListener('click', () => {
-    if (recording && !$('btn-finish-capture').disabled) {
-      captureRequestedStop = true;
-    }
-  });
+ // 動作完了ボタン: 規定時間前でも次へ進める
+ $('btn-finish-capture').addEventListener('click', () => {
+ if (recording && !$('btn-finish-capture').disabled) {
+ captureRequestedStop = true;
+ }
+ });
 
-  // 中断ボタン: 撮影を破棄して動作説明画面に戻る
-  $('btn-abort-capture').addEventListener('click', () => {
-    if (!recording) return;
-    if (!confirm('この動作の撮影を中断しますか?(データは破棄されます)')) return;
-    captureWasAborted = true;
-    captureRequestedStop = true;
-  });
+ // 中断ボタン: 撮影を破棄して動作説明画面に戻る
+ $('btn-abort-capture').addEventListener('click', () => {
+ if (!recording) return;
+ if (!confirm('この動作の撮影を中断しますか?(データは破棄されます)')) return;
+ captureWasAborted = true;
+ captureRequestedStop = true;
+ });
 
-  function finishRecording(step) {
-    if (!recording) return;
-    recording = false;
-    clearInterval(recordingTimer);
-    recordingTimer = null;
-    $('recording-badge').classList.add('hidden');
-    $('btn-finish-capture').classList.add('hidden');
-    $('finish-hint').classList.add('hidden');
-    $('btn-abort-capture').classList.add('hidden');
+ function finishRecording(step) {
+ if (!recording) return;
+ recording = false;
+ clearInterval(recordingTimer);
+ recordingTimer = null;
+ $('recording-badge').classList.add('hidden');
+ $('btn-finish-capture').classList.add('hidden');
+ $('finish-hint').classList.add('hidden');
+ $('btn-abort-capture').classList.add('hidden');
 
-    // カメラ停止
-    detecting = false;
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-    }
+ // カメラ停止
+ detecting = false;
+ if (stream) {
+ stream.getTracks().forEach(t => t.stop());
+ stream = null;
+ }
 
-    // 中断時はデータ破棄して説明画面に戻る
-    if (captureWasAborted) {
-      recordedFrames = [];
-      showStepIntro();
-      return;
-    }
+ // 中断時はデータ破棄して説明画面に戻る
+ if (captureWasAborted) {
+ recordedFrames = [];
+ showStepIntro();
+ return;
+ }
 
-    // 結果集計
-    const finalCheck = monitor.finalCheck();
-    allStepResults[step.id] = {
-      step_id: step.id,
-      step_title: step.title,
-      duration_sec: step.duration_sec,
-      frames: recordedFrames,
-      summary: finalCheck.summary,
-      passed: finalCheck.passed,
-      issues: finalCheck.issues,
-      // 実際の撮影秒数(完了ボタンで早く終わった場合の記録)
-      actual_capture_sec: (performance.now() - recordingStartTime) / 1000,
-    };
+ // 結果集計
+ const finalCheck = monitor.finalCheck();
+ allStepResults[step.id] = {
+ step_id: step.id,
+ step_title: step.title,
+ duration_sec: step.duration_sec,
+ frames: recordedFrames,
+ summary: finalCheck.summary,
+ passed: finalCheck.passed,
+ issues: finalCheck.issues,
+ // 実際の撮影秒数(完了ボタンで早く終わった場合の記録)
+ actual_capture_sec: (performance.now() - recordingStartTime) / 1000,
+ };
 
-    showReview(step, allStepResults[step.id]);
-  }
+ showReview(step, allStepResults[step.id]);
+ }
 
-  // ─────────────────────────────────────────
-  // 検出ループ
-  // ─────────────────────────────────────────
-  async function detect() {
-    if (!detecting) return;
-    if (video.currentTime !== lastVideoTime) {
-      lastVideoTime = video.currentTime;
-      const now = performance.now();
-      try {
-        const result = poseLandmarker.detectForVideo(video, now);
-        const landmarks = (result.landmarks && result.landmarks[0]) || null;
+ // ─────────────────────────────────────────
+ // 検出ループ
+ // ─────────────────────────────────────────
+ async function detect() {
+ if (!detecting) return;
+ if (video.currentTime !== lastVideoTime) {
+ lastVideoTime = video.currentTime;
+ const now = performance.now();
+ try {
+ const result = poseLandmarker.detectForVideo(video, now);
+ const landmarks = (result.landmarks && result.landmarks[0]) || null;
 
-        ctx.clearRect(0, 0, overlay.width, overlay.height);
-        if (landmarks) {
-          drawing.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, {
-            color: '#87ceeb', lineWidth: 3,
-          });
-          drawing.drawLandmarks(landmarks.slice(11), {
-            color: '#ffff00', radius: 4, lineWidth: 1,
-          });
-        }
+ ctx.clearRect(0, 0, overlay.width, overlay.height);
+ if (landmarks) {
+ drawing.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, {
+ color: '#87ceeb', lineWidth: 3,
+ });
+ drawing.drawLandmarks(landmarks.slice(11), {
+ color: '#ffff00', radius: 4, lineWidth: 1,
+ });
+ }
 
-        monitor.onFrame(landmarks, now);
+ monitor.onFrame(landmarks, now);
 
-        if (recording && landmarks) {
-          recordedFrames.push({
-            t: now - recordingStartTime,
-            landmarks: landmarks.map(l => ({
-              x: +l.x.toFixed(4), y: +l.y.toFixed(4),
-              z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
-            })),
-          });
-        }
+ if (recording && landmarks) {
+ recordedFrames.push({
+ t: now - recordingStartTime,
+ landmarks: landmarks.map(l => ({
+ x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+ z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+ })),
+ });
+ }
 
-        const snap = monitor.getSnapshot();
-        $('fps-pill').textContent = snap.fps.toFixed(0) + ' fps';
-        $('fps-pill').className = 'status-pill ' + (
-          snap.fps >= 25 ? 'fps-good' : (snap.fps >= 15 ? 'fps-warn' : 'fps-bad')
-        );
-      } catch (e) {
-        console.warn('detect error:', e);
-      }
-    }
-    requestAnimationFrame(detect);
-  }
+ const snap = monitor.getSnapshot();
+ $('fps-pill').textContent = snap.fps.toFixed(0) + ' fps';
+ $('fps-pill').className = 'status-pill ' + (
+ snap.fps >= 25 ? 'fps-good' : (snap.fps >= 15 ? 'fps-warn' : 'fps-bad')
+ );
+ } catch (e) {
+ console.warn('detect error:', e);
+ }
+ }
+ requestAnimationFrame(detect);
+ }
 
-  // ─────────────────────────────────────────
-  // 撮影後の確認画面
-  // ─────────────────────────────────────────
-  function showReview(step, result) {
-    $('review-title').textContent = step.title + ' 完了';
-    const sec = (result.actual_capture_sec || 0).toFixed(1);
-    $('review-frames').textContent = `${result.frames.length} フレーム(撮影時間 ${sec}秒)`;
-    $('review-detection').textContent = Math.round((result.summary.detectionRate || 0) * 100) + '%';
-    $('review-fps').textContent = (result.summary.fps || 0).toFixed(0) + ' fps';
+ // ─────────────────────────────────────────
+ // 撮影後の確認画面
+ // ─────────────────────────────────────────
+ function showReview(step, result) {
+ $('review-title').textContent = step.title + ' 完了';
+ const sec = (result.actual_capture_sec || 0).toFixed(1);
+ $('review-frames').textContent = `${result.frames.length} フレーム(撮影時間 ${sec}秒)`;
+ $('review-detection').textContent = Math.round((result.summary.detectionRate || 0) * 100) + '%';
+ $('review-fps').textContent = (result.summary.fps || 0).toFixed(0) + ' fps';
 
-    if (result.issues && result.issues.length > 0) {
-      $('review-warning').classList.remove('hidden');
-      $('review-warning-text').textContent = result.issues.map(i => i.message).join(' / ');
-    } else {
-      $('review-warning').classList.add('hidden');
-    }
-    showScreen('review');
-  }
+ if (result.issues && result.issues.length > 0) {
+ $('review-warning').classList.remove('hidden');
+ $('review-warning-text').textContent = result.issues.map(i => i.message).join(' / ');
+ } else {
+ $('review-warning').classList.add('hidden');
+ }
+ showScreen('review');
+ }
 
-  $('btn-next-step').addEventListener('click', () => {
-    currentStepIdx++;
-    showStepIntro();
-  });
+ $('btn-next-step').addEventListener('click', () => {
+ currentStepIdx++;
+ showStepIntro();
+ });
 
-  $('btn-retry-step').addEventListener('click', () => {
-    delete allStepResults[STEPS[currentStepIdx].id];
-    showStepIntro();
-  });
+ $('btn-retry-step').addEventListener('click', () => {
+ delete allStepResults[STEPS[currentStepIdx].id];
+ showStepIntro();
+ });
 
-  // ─────────────────────────────────────────
-  // 全ステップ完了 → 解析
-  // ─────────────────────────────────────────
-  function finishAndAnalyze() {
-    showScreen('analyzing');
-    const progress = $('analyze-progress');
-    let p = 0;
-    const iv = setInterval(() => {
-      p = Math.min(p + 10, 90);
-      progress.style.width = p + '%';
-    }, 100);
+ // ─────────────────────────────────────────
+ // 全ステップ完了 → 解析
+ // ─────────────────────────────────────────
+ function finishAndAnalyze() {
+ showScreen('analyzing');
+ const progress = $('analyze-progress');
+ let p = 0;
+ const iv = setInterval(() => {
+ p = Math.min(p + 10, 90);
+ progress.style.width = p + '%';
+ }, 100);
 
-    // 全動作のフレームを統合して、time を全体タイムラインに合わせる
-    const merged = mergeFrames(allStepResults);
+ // 全動作のフレームを統合して、time を全体タイムラインに合わせる
+ const merged = mergeFrames(allStepResults);
 
-    setTimeout(() => {
-      clearInterval(iv);
-      progress.style.width = '100%';
-      // sessionStorage に保存して結果ページへ
-      try {
-        const payload = {
-          frames: merged.frames,
-          step_results: Object.values(allStepResults).map(r => ({
-            step_id: r.step_id,
-            step_title: r.step_title,
-            n_frames: r.frames ? r.frames.length : 0,
-            summary: r.summary || {},
-            skipped: r.skipped || false,
-          })),
-          avg_fps: merged.avgFps,
-          captured_at: new Date().toISOString(),
-        };
-        const json = JSON.stringify(payload);
-        if (json.length < 4_000_000) {
-          sessionStorage.setItem('reforma_last_rmst', json);
-        } else {
-          // 大きい場合: 半分に間引き
-          const reduced = { ...payload, frames: merged.frames.filter((_, i) => i % 2 === 0) };
-          sessionStorage.setItem('reforma_last_rmst', JSON.stringify(reduced));
-        }
-        setTimeout(() => { window.location.href = 'rmst_result.html'; }, 200);
-      } catch (e) {
-        showError('解析データ保存失敗: ' + e.message);
-      }
-    }, 1500);
-  }
+ setTimeout(() => {
+ clearInterval(iv);
+ progress.style.width = '100%';
+ // sessionStorage に保存して結果ページへ
+ try {
+ const payload = {
+ frames: merged.frames,
+ step_results: Object.values(allStepResults).map(r => ({
+ step_id: r.step_id,
+ step_title: r.step_title,
+ n_frames: r.frames ? r.frames.length : 0,
+ summary: r.summary || {},
+ skipped: r.skipped || false,
+ })),
+ avg_fps: merged.avgFps,
+ captured_at: new Date().toISOString(),
+ };
+ const json = JSON.stringify(payload);
+ if (json.length < 4_000_000) {
+ sessionStorage.setItem('reforma_last_rmst', json);
+ } else {
+ // 大きい場合: 半分に間引き
+ const reduced = { ...payload, frames: merged.frames.filter((_, i) => i % 2 === 0) };
+ sessionStorage.setItem('reforma_last_rmst', JSON.stringify(reduced));
+ }
+ setTimeout(() => { window.location.href = 'rmst_result.html'; }, 200);
+ } catch (e) {
+ showError('解析データ保存失敗: ' + e.message);
+ }
+ }, 1500);
+ }
 
-  /**
-   * 各ステップのフレームを統合(time をプロトコル時刻に変換)
-   * Step 0 (stance): 0-6秒区間に
-   * Step 1 (squat): 7-22秒区間
-   * Step 2 (hip): 22-37秒区間
-   * Step 3 (tspine): 38-48秒区間
-   * Step 4 (cmj): 49-59秒区間
-   * これでサーバーサイド解析互換のタイムラインを構築
-   */
-  function mergeFrames(results) {
-    // 動画解析サーバー側の PROTOCOL タイムラインに合わせて offset を設定
-    // (Python版 movement_signature_test_v2.py の PROTOCOL と互換)
-    const PROTOCOL_OFFSETS = {
-      'stance_front':   0,   // 0-3秒
-      'stance_side':    4,   // 4-7秒(向き変えの1秒スキップ後)
-      'overhead_squat': 7,   // 7-19秒
-      'hip_90_90':      19,  // 19-31秒
-      't_spine_rot':    31,  // 31-41秒
-      'cmj':            41,  // 41-55秒
-    };
-    const merged = [];
-    let totalFps = 0, fpsCount = 0;
-    Object.values(results).forEach(r => {
-      if (r.skipped || !r.frames) return;
-      const offsetSec = PROTOCOL_OFFSETS[r.step_id] || 0;
-      const offsetMs = offsetSec * 1000;
-      r.frames.forEach(f => {
-        merged.push({ t: f.t + offsetMs, landmarks: f.landmarks });
-      });
-      if (r.summary && r.summary.fps) {
-        totalFps += r.summary.fps;
-        fpsCount++;
-      }
-    });
-    merged.sort((a, b) => a.t - b.t);
-    return { frames: merged, avgFps: fpsCount > 0 ? totalFps / fpsCount : 30 };
-  }
+ /**
+ * 各ステップのフレームを統合(time をプロトコル時刻に変換)
+ * Step 0 (stance): 0-6秒区間に
+ * Step 1 (squat): 7-22秒区間
+ * Step 2 (hip): 22-37秒区間
+ * Step 3 (tspine): 38-48秒区間
+ * Step 4 (cmj): 49-59秒区間
+ * これでサーバーサイド解析互換のタイムラインを構築
+ */
+ function mergeFrames(results) {
+ // 動画解析サーバー側の PROTOCOL タイムラインに合わせて offset を設定
+ // (Python版 movement_signature_test_v2.py の PROTOCOL と互換)
+ const PROTOCOL_OFFSETS = {
+ 'stance_front': 0, // 0-3秒
+ 'stance_side': 4, // 4-7秒(向き変えの1秒スキップ後)
+ 'overhead_squat': 7, // 7-19秒
+ 'hip_90_90': 19, // 19-31秒
+ 't_spine_rot': 31, // 31-41秒
+ 'cmj': 41, // 41-55秒
+ };
+ const merged = [];
+ let totalFps = 0, fpsCount = 0;
+ Object.values(results).forEach(r => {
+ if (r.skipped || !r.frames) return;
+ const offsetSec = PROTOCOL_OFFSETS[r.step_id] || 0;
+ const offsetMs = offsetSec * 1000;
+ r.frames.forEach(f => {
+ merged.push({ t: f.t + offsetMs, landmarks: f.landmarks });
+ });
+ if (r.summary && r.summary.fps) {
+ totalFps += r.summary.fps;
+ fpsCount++;
+ }
+ });
+ merged.sort((a, b) => a.t - b.t);
+ return { frames: merged, avgFps: fpsCount > 0 ? totalFps / fpsCount : 30 };
+ }
 
-  // ─────────────────────────────────────────
-  // エラー
-  // ─────────────────────────────────────────
-  function showError(msg) {
-    $('error-text').textContent = msg;
-    showScreen('error');
-  }
+ // ─────────────────────────────────────────
+ // エラー
+ // ─────────────────────────────────────────
+ function showError(msg) {
+ $('error-text').textContent = msg;
+ showScreen('error');
+ }
 
-  // 中断: 中止リンクで welcome に戻る前にカメラ停止
-  window.addEventListener('beforeunload', () => {
-    detecting = false;
-    if (stream) stream.getTracks().forEach(t => t.stop());
-    if (window.ReformaMediaPipe) window.ReformaMediaPipe.release();
-  });
+ // 中断: 中止リンクで welcome に戻る前にカメラ停止
+ window.addEventListener('beforeunload', () => {
+ detecting = false;
+ if (stream) stream.getTracks().forEach(t => t.stop());
+ if (window.ReformaMediaPipe) window.ReformaMediaPipe.release();
+ });
 
-  // 初期表示
-  showScreen('intro');
+ // 初期表示
+ showScreen('intro');
 })();
 </script>
 

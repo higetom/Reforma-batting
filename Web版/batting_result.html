@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1.0">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="theme-color" content="#0b0e13">
+
+ <meta http-equiv="Content-Security-Policy" content="
+ default-src 'self';
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
+ style-src 'self' 'unsafe-inline';
+ img-src 'self' data: blob:;
+ object-src 'none';
+ base-uri 'self';
+ ">
+ <meta name="referrer" content="strict-origin-when-cross-origin">
+
+ <title>バッティング解析結果 — Re'forma</title>
+ <link rel="stylesheet" href="css/common.css">
+
+ <style>
+ /* 総合スコア */
+ .score-hero {
+ padding: 24px 20px;
+ background: linear-gradient(135deg, #0d1117 0%, #1a1f2e 100%);
+ border: 1px solid var(--border-default);
+ border-radius: var(--radius-lg);
+ margin: 16px;
+ display: flex;
+ align-items: center;
+ gap: 18px;
+ }
+ .score-ring-wrap { flex-shrink: 0; }
+ .score-info { flex: 1; min-width: 0; }
+ .score-band {
+ font-size: 22px; font-weight: 400; letter-spacing: -0.3px; margin-bottom: 4px;
+ }
+ .score-meta {
+ font-size: 13px; color: var(--text-secondary); line-height: 1.7;
+ }
+ .score-bars {
+ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 12px;
+ }
+ .score-bar-item .bar-label {
+ display: flex; justify-content: space-between;
+ font-size: 11px; color: var(--text-tertiary); margin-bottom: 3px;
+ }
+ .score-bar-item .bar-track {
+ height: 6px; background: var(--border-subtle); border-radius: 3px; overflow: hidden;
+ }
+ .score-bar-item .bar-fill { height: 100%; }
+
+ /* 9フェーズグリッド */
+ .phase-grid {
+ display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 16px;
+ }
+ .phase-card-mini {
+ background: var(--bg-card); border: 1px solid var(--border-subtle);
+ border-radius: var(--radius-md); padding: 10px 8px; text-align: center;
+ }
+ .phase-num {
+ font-size: 11px; color: var(--text-muted); font-family: var(--font-family-mono);
+ }
+ .phase-name {
+ font-size: 11.5px; font-weight: 600; margin-top: 4px;
+ }
+ .phase-time {
+ font-size: 10px; color: var(--text-tertiary); font-family: var(--font-family-mono); margin-top: 4px;
+ }
+
+ /* Kinetic Chain */
+ .chain-cards-wrap {
+ display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px;
+ align-items: stretch; justify-content: center;
+ }
+ .chain-card {
+ position: relative; flex: 1 1 calc(33% - 8px); min-width: 90px; max-width: 200px;
+ background: var(--bg-card); border: 2px solid; border-radius: var(--radius-md);
+ padding: 10px 8px; text-align: center;
+ }
+ .chain-num { font-size: 9px; color: var(--text-tertiary); letter-spacing: 1px; font-weight: 600; }
+ .chain-label { font-size: 12px; font-weight: 600; line-height: 1.3; margin-top: 3px; }
+ .chain-value { font-size: 16px; font-weight: 300; font-family: var(--font-family-mono); margin-top: 4px; }
+ .chain-range { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+ .chain-status { font-size: 9px; font-weight: 600; letter-spacing: 1px; margin-top: 4px; }
+ .chain-bn-badge {
+ position: absolute; top: -8px; right: -8px;
+ background: var(--color-danger); color: #fff;
+ font-size: 9px; padding: 2px 7px; border-radius: 11px; font-weight: 600;
+ box-shadow: 0 2px 6px rgba(239,68,68,0.6);
+ }
+
+ /* 改善ロードマップ */
+ .roadmap-card {
+ background: var(--bg-card); border: 1px solid var(--border-subtle);
+ border-left: 3px solid; border-radius: var(--radius-md);
+ padding: 14px 16px; margin-bottom: 10px;
+ }
+ .roadmap-phase-label {
+ display: inline-block; padding: 2px 9px; border-radius: 11px;
+ font-size: 10px; font-weight: 700; letter-spacing: 1px;
+ }
+ .roadmap-phase-name {
+ font-size: 14px; font-weight: 600; margin-left: 8px;
+ }
+ .roadmap-week {
+ float: right; font-size: 11px; color: var(--text-muted);
+ }
+ .roadmap-goal {
+ font-size: 12.5px; color: var(--color-warning); margin: 8px 0 6px;
+ }
+ .roadmap-exercises {
+ margin: 6px 0 8px 18px; padding: 0;
+ }
+ .roadmap-exercises li {
+ font-size: 12px; color: var(--text-secondary); line-height: 1.7;
+ }
+ .roadmap-criteria {
+ background: rgba(16, 185, 129, 0.08); border-left: 2px solid var(--color-success);
+ padding: 6px 10px; border-radius: 4px; color: var(--color-success);
+ font-size: 11px; line-height: 1.7;
+ }
+ </style>
+</head>
+<body>
+
+<header class="rf-header">
+ <div class="rf-brand">
+ <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
+ </div>
+ <a href="index.html" class="text-small text-muted">トップへ →</a>
+</header>
+
+<main id="result-main">
+ <!-- ローディング -->
+ <div id="loading-state" class="container" style="padding:80px 24px;text-align:center">
+ <div style="font-size:48px;margin-bottom:16px"></div>
+ <h2>解析結果を読み込み中…</h2>
+ </div>
+
+ <!-- 結果コンテンツ -->
+ <div id="result-content" class="hidden">
+
+ <!-- ヘッダー: 名前+側 -->
+ <div class="action-card" style="padding:16px;text-align:center">
+ <div class="eyebrow" id="result-greeting">バッティング解析結果</div>
+ <div class="text-small text-muted" id="result-meta">--</div>
+ </div>
+
+ <!-- 総合スコア -->
+ <div class="score-hero" id="score-hero">
+ <div class="score-ring-wrap" id="score-ring-wrap"></div>
+ <div class="score-info">
+ <div class="eyebrow" style="color:var(--text-tertiary)">RE'FORMA 総合スコア</div>
+ <div class="score-band" id="score-band">--</div>
+ <div class="score-meta" id="score-message">--</div>
+ <div class="score-bars">
+ <div class="score-bar-item">
+ <div class="bar-label"><span>検出</span><span class="text-mono" id="bar-det-val">--</span></div>
+ <div class="bar-track"><div class="bar-fill" id="bar-det-fill" style="background:var(--color-info)"></div></div>
+ </div>
+ <div class="score-bar-item">
+ <div class="bar-label"><span>安全性</span><span class="text-mono" id="bar-safe-val">--</span></div>
+ <div class="bar-track"><div class="bar-fill" id="bar-safe-fill" style="background:var(--color-success)"></div></div>
+ </div>
+ <div class="score-bar-item">
+ <div class="bar-label"><span>適合</span><span class="text-mono" id="bar-fit-val">--</span></div>
+ <div class="bar-track"><div class="bar-fill" id="bar-fit-fill" style="background:#a855f7"></div></div>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- 9フェーズ -->
+ <div class="action-card" style="padding:16px 16px 8px">
+ <div class="eyebrow">9フェーズ自動検出</div>
+ <h2 class="card-title">スイングを9つの瞬間に分解</h2>
+ </div>
+ <div class="phase-grid" id="phase-grid"></div>
+
+ <!-- Kinetic Chain -->
+ <div class="action-card" style="padding:24px 16px 8px">
+ <div class="eyebrow" style="color:var(--color-info)">KINETIC CHAIN DIAGNOSIS</div>
+ <h2 class="card-title">動作連鎖の診断 — 6リンク評価</h2>
+ <p class="text-secondary text-small mb-3">
+ バッティングは「軸足→踏み出し→前足ブロック→ひねり→上体→肘→バット」の連鎖で力が伝わります。一番弱いところがバットスピードと怪我リスクを決めます。
+ </p>
+ <div id="chain-pills" class="mb-3"></div>
+ </div>
+ <div class="chain-cards-wrap" id="chain-cards"></div>
+
+ <!-- ボトルネック詳細 -->
+ <div id="bottleneck-detail" class="hidden" style="margin:16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-radius:var(--radius-lg);padding:18px 20px">
+ <div class="eyebrow" style="color:#fca5a5">あなたの最弱リンク</div>
+ <h3 style="font-size:20px;font-weight:500;color:#fff;margin-top:4px" id="bn-name">--</h3>
+ <div style="color:#fed7aa;font-size:13.5px;line-height:1.85;margin:10px 0" id="bn-function"></div>
+ <div style="background:#0a0d11;border-left:3px solid var(--color-danger);padding:12px 14px;border-radius:6px;margin-bottom:8px">
+ <div style="color:var(--color-danger);font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">弱いとどうなるか</div>
+ <div style="color:#fecaca;font-size:13px;line-height:1.85" id="bn-cascade"></div>
+ </div>
+ <div style="background:#0a0d11;border-left:3px solid #f97316;padding:12px 14px;border-radius:6px">
+ <div style="color:#f97316;font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">PT視点: 怪我リスク予測</div>
+ <div style="color:#fed7aa;font-size:13px;line-height:1.85" id="bn-risk"></div>
+ </div>
+ </div>
+
+ <!-- 改善ロードマップ -->
+ <div id="roadmap-section" class="hidden">
+ <div class="action-card" style="padding:24px 16px 8px">
+ <div class="eyebrow" style="color:#a855f7">PERSONALIZED IMPROVEMENT ROADMAP</div>
+ <h2 class="card-title" id="roadmap-title">改善プログラム</h2>
+ <p class="text-secondary text-small mb-3" id="roadmap-goal"></p>
+ </div>
+ <div id="roadmap-phases" style="padding:0 16px"></div>
+ <div class="alert alert-info" style="margin:12px 16px">
+ <b>運用のコツ:</b> 各フェーズの「進入基準」を満たしてから次へ進んでください。痛みが出たら一段階前に戻す。2週間ごとに Re'forma で再解析して改善を確認することを推奨します。
+ </div>
+ </div>
+
+ <!-- アクション -->
+ <div class="action-card mt-3">
+ <a href="batting.html" class="btn btn-primary btn-large btn-block">もう一度撮影する</a>
+ <a href="index.html" class="btn btn-secondary btn-block mt-2">トップへ戻る</a>
+ </div>
+
+ <!-- 精度の正直な開示 -->
+ <div class="alert alert-info" style="margin:16px">
+ <b>精度について</b>
+ <div class="text-small mt-2">
+ 本解析は2Dスマートフォン動画による測定で、関節角度の誤差は撮影面内で±5-10°を含みます。
+ フェーズ位置は ±1-2 フレームの精度で検出しています。研究グレードの3Dモーションキャプチャとは異なります。
+ </div>
+ </div>
+
+ </div>
+
+ <!-- エラー -->
+ <div id="error-state" class="hidden">
+ <div class="container" style="padding:32px 24px">
+ <div class="alert alert-danger">
+ <b>結果が表示できません</b><br>
+ <span id="error-msg"></span>
+ </div>
+ <button class="btn btn-primary btn-block mt-4" onclick="location.href='batting.html'">
+ もう一度撮影する
+ </button>
+ </div>
+ </div>
+</main>
+
+<footer class="rf-footer">
+ <div class="precision-note">
+ ※ 本解析は2Dスマートフォン動画によるもので、測定誤差を含みます。
+ </div>
+</footer>
+
+<script src="js/user-profile.js"></script>
+<script src="js/batting-data.js"></script>
+<script>
+(function () {
+ 'use strict';
+ const $ = id => document.getElementById(id);
+ const userName = (window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName()) || '';
+
+ // 解析データ取得
+ let payload = null;
+ try {
+ const raw = sessionStorage.getItem('reforma_last_batting');
+ if (raw) payload = JSON.parse(raw);
+ } catch (e) {
+ showError('解析データの読込失敗: ' + e.message);
+ return;
+ }
+ if (!payload || !payload.analysis) {
+ showError('解析データがありません。もう一度撮影してください。');
+ return;
+ }
+
+ const analysis = payload.analysis;
+ setTimeout(() => renderResult(analysis), 200);
+
+ function renderResult(r) {
+ $('loading-state').classList.add('hidden');
+ $('result-content').classList.remove('hidden');
+
+ // ヘッダー
+ const greet = userName ? userName + 'さんのバッティング解析結果' : 'バッティング解析結果';
+ $('result-greeting').textContent = greet;
+ $('result-meta').textContent =
+ `${r.side_jp} ・ ${r.n_frames}フレーム ・ ${r.fps.toFixed(0)}fps`;
+
+ // 総合スコア
+ renderScore(r.total_score);
+
+ // 9フェーズ
+ renderPhases(r.phases, r.fps);
+
+ // Kinetic Chain
+ renderKineticChain(r.kinetic_chain);
+
+ // 改善ロードマップ
+ if (r.kinetic_chain && r.kinetic_chain.bottleneck) {
+ renderRoadmap(r.kinetic_chain.bottleneck);
+ }
+ }
+
+ function renderScore(score) {
+ if (!score) return;
+ const total = score.total;
+ let ringColor, band, msg;
+ if (total >= 85) { ringColor = '#10b981'; band = 'ハイレベル'; msg = '完成度が高い状態です。'; }
+ else if (total >= 70) { ringColor = '#3b82f6'; band = '安定圏'; msg = '全体的にバランスのとれた状態です。'; }
+ else if (total >= 55) { ringColor = '#f59e0b'; band = '成長期'; msg = '上達ポイントが明確に見えています。'; }
+ else { ringColor = '#ef4444'; band = '見直しが必要'; msg = '撮影条件や基本動作の確認から始めることをおすすめします。'; }
+ $('score-band').style.color = ringColor;
+ $('score-band').textContent = band;
+ $('score-message').textContent = msg;
+
+ // SVG ドーナツリング
+ const circ = 2 * 3.14159 * 50;
+ const arc = (circ * (total / 100)).toFixed(1);
+ $('score-ring-wrap').innerHTML = `
+ <svg width="130" height="130" viewBox="0 0 130 130">
+ <circle cx="65" cy="65" r="50" fill="none" stroke="#21262d" stroke-width="10"/>
+ <circle cx="65" cy="65" r="50" fill="none" stroke="${ringColor}" stroke-width="10"
+ stroke-linecap="round" stroke-dasharray="${arc} ${circ.toFixed(1)}" transform="rotate(-90 65 65)"/>
+ <text x="65" y="68" text-anchor="middle" font-family="-apple-system,SF Pro,Hiragino Sans"
+ font-size="34" font-weight="300" fill="#fff" letter-spacing="-2">${total}</text>
+ <text x="65" y="88" text-anchor="middle" font-family="-apple-system,sans-serif"
+ font-size="9" font-weight="500" fill="#7c8290" letter-spacing="2">/ 100</text>
+ </svg>
+ `;
+
+ // バー
+ $('bar-det-val').textContent = `${score.detection.score}/${score.detection.max}`;
+ $('bar-det-fill').style.width = (score.detection.score / score.detection.max * 100) + '%';
+ $('bar-safe-val').textContent = `${score.safety.score}/${score.safety.max}`;
+ $('bar-safe-fill').style.width = (score.safety.score / score.safety.max * 100) + '%';
+ $('bar-fit-val').textContent = `${score.fit.score}/${score.fit.max}`;
+ $('bar-fit-fill').style.width = (score.fit.score / score.fit.max * 100) + '%';
+ }
+
+ function renderPhases(phases, fps) {
+ const PHASE_COLORS = window.ReformaBattingData.PHASE_COLORS;
+ const PHASE_NAMES = window.ReformaBattingData.PHASE_NAMES;
+ const grid = $('phase-grid');
+ grid.innerHTML = '';
+ PHASE_NAMES.forEach((pname, i) => {
+ const fi = phases[pname];
+ const time = fi != null ? (fi / fps).toFixed(2) + 's' : '—';
+ const col = PHASE_COLORS[pname] || '#8b949e';
+ const safeName = window.ReformaUserProfile.escapeHtml(pname);
+ const div = document.createElement('div');
+ div.className = 'phase-card-mini';
+ div.style.borderLeft = `3px solid ${col}`;
+ div.innerHTML = `
+ <div class="phase-num">${i + 1}/9</div>
+ <div class="phase-name" style="color:${col}">${safeName}</div>
+ <div class="phase-time">${time}</div>
+ `;
+ grid.appendChild(div);
+ });
+ }
+
+ function renderKineticChain(chainDiag) {
+ if (!chainDiag) return;
+ const STATUS_COLOR = {
+ ok: '#10b981', off_range: '#f59e0b', caution: '#f97316',
+ bottleneck: '#ef4444', unmeasured: '#6e7681',
+ };
+ const STATUS_LABEL = {
+ ok: '範囲内', off_range: '範囲外', caution: '要注意',
+ bottleneck: 'ボトルネック', unmeasured: '計測なし',
+ };
+
+ // ピル(集計)
+ const sev = chainDiag.severity_summary || {};
+ let pills = '';
+ if (sev.n_bottleneck) pills += `<span style="background:#ef444422;color:#ef4444;padding:3px 10px;border-radius:11px;font-size:11px;font-weight:600;margin-right:6px">ボトルネック ${sev.n_bottleneck}</span>`;
+ if (sev.n_caution) pills += `<span style="background:#f9731622;color:#f97316;padding:3px 10px;border-radius:11px;font-size:11px;font-weight:600;margin-right:6px">要注意 ${sev.n_caution}</span>`;
+ if (sev.n_off_range) pills += `<span style="background:#f59e0b22;color:#f59e0b;padding:3px 10px;border-radius:11px;font-size:11px;font-weight:600;margin-right:6px">範囲外 ${sev.n_off_range}</span>`;
+ if (sev.n_ok) pills += `<span style="background:#10b98122;color:#10b981;padding:3px 10px;border-radius:11px;font-size:11px;font-weight:600;margin-right:6px">範囲内 ${sev.n_ok}</span>`;
+ $('chain-pills').innerHTML = pills;
+
+ // リンクカード
+ const wrap = $('chain-cards');
+ wrap.innerHTML = '';
+ chainDiag.links.forEach((l, i) => {
+ const col = STATUS_COLOR[l.status];
+ const isBN = chainDiag.bottleneck && l.id === chainDiag.bottleneck.id;
+ const valStr = l.measured ? (Number(l.value).toFixed(1) + (l.unit || '')) : '—';
+ const rangeStr = l.typical_range
+ ? `典型 ${l.typical_range[0]}〜${l.typical_range[1]}${l.unit || ''}` : '';
+ const safeName = window.ReformaUserProfile.escapeHtml(l.label_friendly);
+ const card = document.createElement('div');
+ card.className = 'chain-card';
+ card.style.borderColor = col;
+ card.innerHTML = `
+ ${isBN ? '<div class="chain-bn-badge">最弱</div>' : ''}
+ <div class="chain-num">LINK ${i + 1}</div>
+ <div class="chain-label">${safeName}</div>
+ <div class="chain-value" style="color:${col}">${valStr}</div>
+ <div class="chain-range">${rangeStr}</div>
+ <div class="chain-status" style="color:${col}">${STATUS_LABEL[l.status]}</div>
+ `;
+ wrap.appendChild(card);
+ });
+
+ // ボトルネック詳細
+ if (chainDiag.bottleneck) {
+ const bn = chainDiag.bottleneck;
+ $('bottleneck-detail').classList.remove('hidden');
+ $('bn-name').textContent = `${bn.label_friendly} (${Number(bn.value).toFixed(1)}${bn.unit || ''})`;
+ $('bn-function').textContent = '役割: ' + bn.function;
+ $('bn-cascade').textContent = bn.weak_cascade;
+ $('bn-risk').textContent = bn.injury_risk + ' が懸念されます。';
+ }
+ }
+
+ function renderRoadmap(bottleneck) {
+ const ROADMAPS = window.ReformaBattingData.IMPROVEMENT_ROADMAPS;
+ const rm = ROADMAPS[bottleneck.id];
+ if (!rm) return;
+
+ $('roadmap-section').classList.remove('hidden');
+ $('roadmap-title').textContent = rm.title;
+ $('roadmap-goal').textContent = `${rm.goal_friendly}を目指して、段階を追って取り組む 4 ステップのプランです。`;
+
+ const phaseColors = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981'];
+ const wrap = $('roadmap-phases');
+ wrap.innerHTML = '';
+ rm.phases.forEach((ph, i) => {
+ const col = phaseColors[i % phaseColors.length];
+ const exHtml = ph.exercises.map(e =>
+ `<li>${window.ReformaUserProfile.escapeHtml(e)}</li>`
+ ).join('');
+ const card = document.createElement('div');
+ card.className = 'roadmap-card';
+ card.style.borderLeftColor = col;
+ card.innerHTML = `
+ <div>
+ <span class="roadmap-phase-label" style="background:${col}22;color:${col}">PHASE ${i + 1}</span>
+ <span class="roadmap-phase-name">${window.ReformaUserProfile.escapeHtml(ph.label)}</span>
+ <span class="roadmap-week">${window.ReformaUserProfile.escapeHtml(ph.week)}</span>
+ </div>
+ <div class="roadmap-goal">${window.ReformaUserProfile.escapeHtml(ph.goal)}</div>
+ <ul class="roadmap-exercises">${exHtml}</ul>
+ <div class="roadmap-criteria">✓ 次へ進む基準: ${window.ReformaUserProfile.escapeHtml(ph.criteria)}</div>
+ `;
+ wrap.appendChild(card);
+ });
+ }
+
+ function showError(msg) {
+ $('loading-state').classList.add('hidden');
+ $('error-state').classList.remove('hidden');
+ $('error-msg').textContent = msg;
+ }
+})();
+</script>
+
+</body>
+</html>

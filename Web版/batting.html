@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+ <meta name="theme-color" content="#0b0e13">
+
+ <meta http-equiv="Content-Security-Policy" content="
+ default-src 'self';
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+ style-src 'self' 'unsafe-inline';
+ img-src 'self' data: blob:;
+ media-src 'self' blob:;
+ connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
+ object-src 'none';
+ base-uri 'self';
+ worker-src 'self' blob:;
+ ">
+ <meta name="referrer" content="strict-origin-when-cross-origin">
+
+ <title>バッティング動作解析 — Re'forma</title>
+ <link rel="stylesheet" href="css/common.css">
+
+ <style>
+ body { overflow-x: hidden; }
+ #step-header {
+ display: flex; justify-content: space-between; align-items: center;
+ padding: 12px 16px;
+ background: var(--bg-secondary);
+ border-bottom: 1px solid var(--border-subtle);
+ gap: 10px;
+ }
+ .step-title { font-size: 15px; color: var(--text-primary); margin-top: 2px; }
+
+ .action-card { padding: 20px 16px; }
+ .action-eyebrow {
+ font-size: 11px; letter-spacing: 2px; color: var(--reforma-red); font-weight: 700; margin-bottom: 6px;
+ }
+ .action-title {
+ font-size: 22px; font-weight: 500; letter-spacing: -0.02em; margin-bottom: 4px;
+ }
+ .action-duration {
+ font-size: 13px; color: var(--text-muted); font-family: var(--font-family-mono); margin-bottom: 16px;
+ }
+
+ .role-card {
+ background: var(--bg-card); border: 1px solid var(--border-subtle);
+ border-left: 3px solid; border-radius: var(--radius-md);
+ padding: 14px 16px; margin-bottom: 12px;
+ }
+ .role-card.role-camera { border-left-color: var(--color-info); }
+ .role-card.role-subject { border-left-color: var(--color-success); }
+ .role-label { font-size: 11px; letter-spacing: 1.5px; font-weight: 700; margin-bottom: 6px; }
+ .role-camera .role-label { color: var(--color-info); }
+ .role-subject .role-label { color: var(--color-success); }
+ .role-text { font-size: 14px; color: var(--text-secondary); line-height: 1.85; }
+ .role-icon { display: inline-block; width: 22px; text-align: center; margin-right: 4px; }
+
+ #video-wrap {
+ position: relative; width: 100%; aspect-ratio: 9/16; max-height: 60vh;
+ background: #000; overflow: hidden;
+ }
+ #video, #overlay {
+ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+ }
+ #video { z-index: 1; }
+ #overlay { z-index: 2; pointer-events: none; }
+ body.cam-front #video, body.cam-front #overlay { transform: scaleX(-1); }
+
+ #status-overlay {
+ position: absolute; top: 8px; left: 8px; right: 8px; z-index: 3;
+ display: flex; justify-content: space-between; align-items: flex-start;
+ gap: 8px; pointer-events: none;
+ }
+ .status-pill {
+ background: rgba(0, 0, 0, 0.7); color: #fff; padding: 6px 12px;
+ border-radius: var(--radius-full); font-size: 11px; font-family: var(--font-family-mono);
+ backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+ }
+ .status-pill.fps-good { color: var(--color-success); }
+ .status-pill.fps-warn { color: var(--color-warning); }
+ .status-pill.fps-bad { color: var(--color-danger); }
+
+ #countdown-overlay {
+ position: absolute; inset: 0; z-index: 5;
+ background: rgba(0, 0, 0, 0.7);
+ display: flex; align-items: center; justify-content: center;
+ flex-direction: column; gap: 12px; color: #fff;
+ pointer-events: none;
+ }
+ #countdown-number {
+ font-size: 96px; font-weight: 200; line-height: 1;
+ font-family: var(--font-family-mono);
+ }
+ #countdown-label { font-size: 16px; letter-spacing: 1px; }
+
+ #recording-badge {
+ position: absolute; top: 50px; left: 50%; transform: translateX(-50%); z-index: 4;
+ background: rgba(239, 68, 68, 0.95); color: #fff;
+ padding: 8px 16px; border-radius: var(--radius-full);
+ font-size: 14px; font-weight: 600;
+ display: flex; align-items: center; gap: 8px;
+ box-shadow: var(--shadow-md);
+ }
+ #recording-badge .rec-dot {
+ width: 10px; height: 10px; background: #fff; border-radius: 50%;
+ animation: blink 1s infinite;
+ }
+ @keyframes blink { 50% { opacity: 0.3; } }
+ #recording-timer { font-family: var(--font-family-mono); font-size: 16px; }
+
+ .controls {
+ padding: 16px; display: flex; flex-direction: column; gap: 10px;
+ background: var(--bg-tertiary);
+ }
+ #model-status-mini {
+ text-align: center; font-size: 12px; color: var(--text-tertiary); padding: 8px;
+ }
+ #model-status-mini.ready { color: var(--color-success); }
+ #model-status-mini.error { color: var(--color-danger); }
+
+ .guide-list { list-style: none; padding: 0; }
+ .guide-list li {
+ padding: 10px 14px; background: var(--bg-card); border-radius: var(--radius-md);
+ margin-bottom: 6px; font-size: 13.5px; color: var(--text-secondary);
+ display: flex; gap: 10px; align-items: flex-start;
+ }
+ .guide-list li::before {
+ content: "✓"; color: var(--color-success); font-weight: bold; flex-shrink: 0;
+ }
+ </style>
+</head>
+<body>
+
+<div id="step-header">
+ <div style="flex:1">
+ <div class="step-title" id="greeting">バッティング動作解析</div>
+ </div>
+ <a href="index.html" class="text-small text-muted">× 中止</a>
+</div>
+
+<!-- イントロ画面 -->
+<div id="screen-intro">
+ <div class="action-card">
+ <div class="action-eyebrow">BATTING ANALYSIS</div>
+ <h1 class="action-title" id="intro-greeting">バッティングを撮影します</h1>
+ <p class="text-secondary mt-2 mb-4" style="font-size:14px;line-height:1.85">
+ スイング動画を1本撮影して、9フェーズ自動検出+Kinetic Chain診断します。
+ 所要時間 約1-2分。
+ </p>
+
+ <div class="role-card role-camera">
+ <div class="role-label"><span class="role-icon"></span>撮影する方へ</div>
+ <div class="role-text">
+ 被験者の<b>真横</b>(1塁側 or 3塁側)に立って、<b>スマホを縦に持って</b>撮影してください。
+ 全身(構え〜フォロースルー)が画面に収まる距離(4-5m)で構えます。
+ </div>
+ </div>
+
+ <!-- 撮影者ルール3つ -->
+ <div class="card-emphasized card" style="padding:16px;margin-top:12px;border-left:3px solid var(--color-info)">
+ <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
+ 撮影の3つの絶対ルール
+ </div>
+ <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+ <div style="font-size:22px;flex-shrink:0"></div>
+ <div style="flex:1">
+ <div style="font-weight:600;font-size:14px">スマホは縦向き</div>
+ <div class="text-tertiary text-small">横向きで撮らないでください。</div>
+ </div>
+ </div>
+ <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+ <div style="font-size:22px;flex-shrink:0"></div>
+ <div style="flex:1">
+ <div style="font-weight:600;font-size:14px">カメラは打者の腰の高さ</div>
+ <div class="text-tertiary text-small">大人がお子さんを撮るときはしゃがんでください。</div>
+ </div>
+ </div>
+ <div style="display:flex;gap:12px;align-items:flex-start">
+ <div style="font-size:22px;flex-shrink:0"></div>
+ <div style="flex:1">
+ <div style="font-weight:600;font-size:14px">真横から、距離は4-5m</div>
+ <div class="text-tertiary text-small">構え〜フォロースルーまで全身が画面に収まること。</div>
+ </div>
+ </div>
+ </div>
+
+ <div class="role-card role-subject" style="margin-top:12px">
+ <div class="role-label"><span class="role-icon"></span>打者の方へ</div>
+ <div class="role-text">
+ いつもの構えからスイング(できれば素振りを3-5秒)。<br>
+ 撮影開始の合図(カウントダウン)後、スイングしてください。
+ </div>
+ </div>
+
+ <div class="alert alert-info mt-3">
+ <b>所要時間: 約1-2分</b><br>
+ 撮影は最大10秒、3秒経過後は「✓ スイング完了」で次へ進めます。
+ </div>
+
+ <button class="btn btn-primary btn-large btn-block mt-4" id="btn-prepare">
+ 撮影を準備する →
+ </button>
+ </div>
+</div>
+
+<!-- 撮影画面 -->
+<div id="screen-capture" class="hidden">
+ <div style="padding:8px 12px;background:var(--bg-secondary);font-size:12px;color:var(--text-secondary);text-align:center;border-bottom:1px solid var(--border-subtle)">
+ 縦向き ・ 打者の腰の高さ ・ 真横4-5m
+ </div>
+ <div id="video-wrap">
+ <video id="video" autoplay playsinline muted></video>
+ <canvas id="overlay"></canvas>
+ <div id="status-overlay">
+ <div class="status-pill" id="model-pill">モデル準備中…</div>
+ <div class="status-pill fps-good" id="fps-pill">-- fps</div>
+ </div>
+ <div id="recording-badge" class="hidden">
+ <span class="rec-dot"></span>
+ <span>撮影中</span>
+ <span id="recording-timer">--秒</span>
+ </div>
+ <div id="countdown-overlay" class="hidden">
+ <div id="countdown-number">3</div>
+ <div id="countdown-label">準備…</div>
+ </div>
+ </div>
+
+ <div class="controls">
+ <div id="model-status-mini">...Pose モデルを読み込んでいます…</div>
+
+ <button class="btn btn-primary btn-block btn-large hidden" id="btn-start-recording">
+ スイング撮影を開始する
+ </button>
+ <button class="btn btn-success btn-block btn-large hidden" id="btn-finish-capture" disabled>
+ ✓ スイング完了 ・ 解析する
+ </button>
+ <button class="btn btn-secondary btn-block hidden" id="btn-switch-cam">
+ カメラ切替
+ </button>
+ <button class="btn btn-secondary btn-block hidden" id="btn-abort-capture" style="background:transparent;color:var(--color-danger);border:1px solid var(--color-danger);font-weight:500">
+ × 撮影を中断する
+ </button>
+ </div>
+</div>
+
+<!-- 解析中画面 -->
+<div id="screen-analyzing" class="hidden">
+ <div class="container" style="padding:48px 24px;text-align:center">
+ <div style="font-size:48px;margin-bottom:16px"></div>
+ <h2 class="mb-2">解析中…</h2>
+ <p class="text-secondary text-small">
+ 9フェーズ検出と Kinetic Chain 診断を実行しています。
+ </p>
+ </div>
+</div>
+
+<!-- エラー画面 -->
+<div id="screen-error" class="hidden">
+ <div class="container" style="padding:32px 24px">
+ <div class="alert alert-danger">
+ <b>エラーが発生しました</b><br>
+ <span id="error-text"></span>
+ </div>
+ <button class="btn btn-secondary btn-block mt-4" onclick="location.reload()">
+ 最初からやり直す
+ </button>
+ </div>
+</div>
+
+<footer class="rf-footer">
+ <div class="precision-note">
+ ※ 本解析は2Dスマートフォン動画によるもので、関節角度の測定誤差は撮影面内で±5-10°を含みます。
+ </div>
+</footer>
+
+<script src="js/user-profile.js"></script>
+<script src="js/mediapipe-loader.js"></script>
+<script src="js/quality-gate.js"></script>
+<script src="js/batting-data.js"></script>
+<script src="js/batting-analyzer.js"></script>
+<script type="module">
+import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.10/vision_bundle.mjs';
+
+(function () {
+ 'use strict';
+ const $ = id => document.getElementById(id);
+ const screens = {
+ intro: $('screen-intro'),
+ capture: $('screen-capture'),
+ analyzing: $('screen-analyzing'),
+ error: $('screen-error'),
+ };
+ function showScreen(name) {
+ Object.values(screens).forEach(s => s.classList.add('hidden'));
+ screens[name].classList.remove('hidden');
+ }
+
+ // ユーザー名
+ try {
+ const name = window.ReformaUserProfile && window.ReformaUserProfile.getDisplayName();
+ if (name) $('intro-greeting').textContent = name + 'さんのバッティングを撮影します';
+ } catch (e) {}
+
+ const video = $('video');
+ const overlay = $('overlay');
+ const ctx = overlay.getContext('2d');
+
+ let stream = null;
+ let usingFront = false;
+ let poseLandmarker = null;
+ let drawing = null;
+ let detecting = false;
+ let lastVideoTime = -1;
+
+ let recording = false;
+ let recordedFrames = [];
+ let recordingStartTime = 0;
+ let recordingTimer = null;
+ let captureRequestedStop = false;
+ let captureWasAborted = false;
+ const MAX_RECORDING_MS = 10000; // 最大10秒
+ const MIN_FINISH_MS = 3000; // 3秒経過後に「完了」ボタン活性化
+ let monitor = null;
+
+ // モデル進捗
+ window.ReformaMediaPipe.onProgress((event) => {
+ $('model-status-mini').textContent = event.message;
+ $('model-pill').textContent = event.message;
+ if (event.stage === 'ready') $('model-status-mini').classList.add('ready');
+ else if (event.stage === 'error') $('model-status-mini').classList.add('error');
+ });
+
+ // 準備ボタン
+ $('btn-prepare').addEventListener('click', async () => {
+ const btn = $('btn-prepare');
+ btn.disabled = true; btn.textContent = '...準備中…';
+ try {
+ // モデル読込
+ poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
+ drawing = new DrawingUtils(ctx);
+ $('model-status-mini').textContent = '✓ 準備完了';
+ $('model-status-mini').classList.add('ready');
+ // カメラ起動
+ await startCamera();
+ // 画面切替
+ showScreen('capture');
+ monitor = new window.ReformaQualityGate.QualityMonitor({
+ windowSize: 30, minDetectionRate: 0.5, minFps: 20,
+ });
+ detecting = true;
+ requestAnimationFrame(detect);
+ $('btn-start-recording').classList.remove('hidden');
+ $('btn-switch-cam').classList.remove('hidden');
+ } catch (e) {
+ showError('準備失敗: ' + e.message);
+ }
+ btn.disabled = false; btn.textContent = '撮影を準備する →';
+ });
+
+ async function startCamera() {
+ if (stream) stream.getTracks().forEach(t => t.stop());
+ stream = await navigator.mediaDevices.getUserMedia({
+ video: {
+ facingMode: usingFront ? 'user' : { ideal: 'environment' },
+ width: { ideal: 1280 }, height: { ideal: 720 },
+ frameRate: { ideal: 30, max: 60 },
+ },
+ audio: false,
+ });
+ video.srcObject = stream;
+ await new Promise((resolve, reject) => {
+ video.onloadedmetadata = resolve;
+ video.onerror = reject;
+ setTimeout(() => reject(new Error('camera timeout')), 5000);
+ });
+ await video.play();
+ overlay.width = video.videoWidth;
+ overlay.height = video.videoHeight;
+ document.body.classList.toggle('cam-front', usingFront);
+ }
+
+ $('btn-switch-cam').addEventListener('click', async () => {
+ usingFront = !usingFront;
+ try { await startCamera(); } catch (e) { showError('カメラ切替失敗: ' + e.message); }
+ });
+
+ // 検出ループ
+ async function detect() {
+ if (!detecting) return;
+ if (video.currentTime !== lastVideoTime) {
+ lastVideoTime = video.currentTime;
+ const now = performance.now();
+ try {
+ const result = poseLandmarker.detectForVideo(video, now);
+ const landmarks = (result.landmarks && result.landmarks[0]) || null;
+ ctx.clearRect(0, 0, overlay.width, overlay.height);
+ if (landmarks) {
+ drawing.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, {
+ color: '#87ceeb', lineWidth: 3,
+ });
+ drawing.drawLandmarks(landmarks.slice(11), {
+ color: '#ffff00', radius: 4, lineWidth: 1,
+ });
+ }
+ monitor.onFrame(landmarks, now);
+ if (recording && landmarks) {
+ recordedFrames.push({
+ t: now - recordingStartTime,
+ landmarks: landmarks.map(l => ({
+ x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+ z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+ })),
+ });
+ }
+ const snap = monitor.getSnapshot();
+ $('fps-pill').textContent = snap.fps.toFixed(0) + ' fps';
+ $('fps-pill').className = 'status-pill ' + (snap.fps >= 25 ? 'fps-good' : (snap.fps >= 15 ? 'fps-warn' : 'fps-bad'));
+ } catch (e) { console.warn('detect error:', e); }
+ }
+ requestAnimationFrame(detect);
+ }
+
+ // カウントダウン
+ function startCountdown(seconds, onComplete) {
+ const ov = $('countdown-overlay');
+ ov.classList.remove('hidden');
+ let remaining = seconds;
+ $('countdown-number').textContent = remaining;
+ $('countdown-label').textContent = '構えてください…';
+ const iv = setInterval(() => {
+ remaining--;
+ if (remaining > 0) {
+ $('countdown-number').textContent = remaining;
+ $('countdown-label').textContent = '構えてください…';
+ } else if (remaining === 0) {
+ $('countdown-number').textContent = '!';
+ $('countdown-label').textContent = 'スイング!';
+ } else {
+ clearInterval(iv); ov.classList.add('hidden');
+ if (typeof onComplete === 'function') onComplete();
+ }
+ }, 800);
+ }
+
+ // 録画開始
+ $('btn-start-recording').addEventListener('click', () => {
+ $('btn-start-recording').classList.add('hidden');
+ $('btn-switch-cam').classList.add('hidden');
+ startCountdown(3, () => startRecording());
+ });
+
+ function startRecording() {
+ recording = true;
+ recordedFrames = [];
+ monitor.reset();
+ recordingStartTime = performance.now();
+ captureRequestedStop = false;
+ captureWasAborted = false;
+
+ $('recording-badge').classList.remove('hidden');
+ $('btn-finish-capture').classList.remove('hidden');
+ $('btn-finish-capture').disabled = true;
+ $('btn-finish-capture').textContent = '✓ 3秒後に押せます…';
+ $('btn-abort-capture').classList.remove('hidden');
+
+ recordingTimer = setInterval(() => {
+ const elapsed = performance.now() - recordingStartTime;
+ const remain = MAX_RECORDING_MS - elapsed;
+ $('recording-timer').textContent = `残り ${Math.max(0, remain / 1000).toFixed(1)}秒`;
+ if (elapsed >= MIN_FINISH_MS && $('btn-finish-capture').disabled) {
+ $('btn-finish-capture').disabled = false;
+ $('btn-finish-capture').textContent = '✓ スイング完了 ・ 解析する';
+ }
+ if (elapsed >= MAX_RECORDING_MS || captureRequestedStop) {
+ finishRecording();
+ }
+ }, 100);
+ }
+
+ $('btn-finish-capture').addEventListener('click', () => {
+ if (recording && !$('btn-finish-capture').disabled) captureRequestedStop = true;
+ });
+ $('btn-abort-capture').addEventListener('click', () => {
+ if (!recording) return;
+ if (!confirm('撮影を中断しますか?(撮影し直しになります)')) return;
+ captureWasAborted = true;
+ captureRequestedStop = true;
+ });
+
+ function finishRecording() {
+ if (!recording) return;
+ recording = false;
+ clearInterval(recordingTimer);
+ recordingTimer = null;
+ $('recording-badge').classList.add('hidden');
+ $('btn-finish-capture').classList.add('hidden');
+ $('btn-abort-capture').classList.add('hidden');
+
+ detecting = false;
+ if (stream) {
+ stream.getTracks().forEach(t => t.stop());
+ stream = null;
+ }
+
+ if (captureWasAborted) {
+ // 撮影し直しのため再準備に戻る
+ location.reload();
+ return;
+ }
+
+ showScreen('analyzing');
+
+ // 解析実行
+ setTimeout(() => {
+ try {
+ // RMSTプロファイルからタイプを取得(あれば)
+ let rmpType = 'フロー型';
+ try {
+ const rmstRaw = sessionStorage.getItem('reforma_last_rmst');
+ // 解析済みなら rmp_type が入っているはず(RMST完了直後)
+ if (rmstRaw) {
+ const rmstData = JSON.parse(rmstRaw);
+ if (rmstData.rmp_type) rmpType = rmstData.rmp_type;
+ }
+ } catch (e) {}
+
+ const fps = (recordedFrames.length > 1)
+ ? (recordedFrames.length - 1) * 1000 / (recordedFrames[recordedFrames.length - 1].t - recordedFrames[0].t)
+ : 30;
+
+ const analysisInput = {
+ frames: recordedFrames,
+ avg_fps: fps,
+ rmp_type: rmpType,
+ };
+ const result = window.ReformaBattingAnalyzer.analyzeBatting(analysisInput);
+
+ if (result.error) {
+ showError(result.error);
+ return;
+ }
+
+ // sessionStorage に保存して結果ページへ
+ const payload = {
+ analysis: result,
+ captured_at: new Date().toISOString(),
+ n_frames: recordedFrames.length,
+ duration_ms: recordedFrames[recordedFrames.length - 1].t,
+ };
+ const json = JSON.stringify(payload);
+ sessionStorage.setItem('reforma_last_batting', json);
+
+ window.location.href = 'batting_result.html';
+ } catch (e) {
+ console.error(e);
+ showError('解析エラー: ' + e.message);
+ }
+ }, 500);
+ }
+
+ function showError(msg) {
+ $('error-text').textContent = msg;
+ showScreen('error');
+ }
+
+ window.addEventListener('beforeunload', () => {
+ detecting = false;
+ if (stream) stream.getTracks().forEach(t => t.stop());
+ if (window.ReformaMediaPipe) window.ReformaMediaPipe.release();
+ });
+
+ showScreen('intro');
+})();
+</script>
+
+</body>
+</html>
