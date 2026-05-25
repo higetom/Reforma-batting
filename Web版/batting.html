@@ -400,9 +400,14 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  $('btn-switch-cam').addEventListener('click', async () => {
  usingFront = !usingFront;
  try {
+ // 切替中は detect ループを停止(古いストリームで MediaPipe が混乱するのを防ぐ)
+ detecting = false;
  await startCamera();
- // 切替直後もフレーム配信が安定するまで1フレーム待つ
- await new Promise(resolve => requestAnimationFrame(resolve));
+ // フロントカメラは初期フレーム配信が遅いため 300ms 待機
+ await new Promise(resolve => setTimeout(resolve, 300));
+ lastProcessTime = -1;
+ detecting = true;
+ requestAnimationFrame(detect);
  } catch (e) { showError('カメラ切替失敗: ' + e.message); }
  });
 
