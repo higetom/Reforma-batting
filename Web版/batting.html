@@ -1092,31 +1092,11 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
  }
 
- // HEVC 検出時は自動変換(ローカル・データ送信なし)
- let urlForExtraction = pickedFileUrl;
- if (pickedFileCodec === 'hevc') {
- try {
- const mp4Blob = await convertVideoToMP4(pickedFile, setUploadProgress);
- // 既存URLを置換
- try { URL.revokeObjectURL(pickedFileUrl); } catch (e) {}
- pickedFileUrl = URL.createObjectURL(mp4Blob);
- urlForExtraction = pickedFileUrl;
- // 変換後はH.264扱い(再変換不要のためフラグ更新)
- pickedFileCodec = 'h264';
- console.log('[upload] HEVC auto-converted to H.264:', mp4Blob.size, 'bytes');
- } catch (convErr) {
- console.error('[upload] HEVC変換失敗:', convErr);
- showRichError('動画変換に失敗しました', [
- convErr.message || '原因不明',
- '別の動画でお試しください',
- '「撮影を準備する」からその場で撮影できます(確実)',
- ]);
- return;
- }
- }
+ // デスクトップでは Chrome/Safari が HEVC を直接デコードできるので
+ // FFmpeg.wasm 変換はスキップ(変換後の canvas-relay より直接処理の方が高速・確実)
+ const urlForExtraction = pickedFileUrl;
 
- // 解析
- setUploadProgress(96, 'フレームを解析しています…', '');
+ setUploadProgress(20, 'フレームを解析しています…', '');
  const frames = await extractFramesFromVideo(urlForExtraction);
  setUploadProgress(99, '解析を組み立てています…', '');
 
@@ -1174,9 +1154,13 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  console.error(e);
  // エラー種別に応じて改善ヒントを変える
  const msg = e.message || '不明なエラー';
- if (/HEVC_BLACKOUT/.test(msg) || pickedFileCodec === 'hevc') {
- // iPhone HEVC ブラックアウト → 専用UI(離脱を防ぐシンプルなガイド)
- showHevcGuide();
+ if (/HEVC_BLACKOUT/.test(msg)) {
+ // HEVC ブラックアウト(Mac/PC含む) — 自動変換も失敗した状況
+ showRichError('動画から姿勢検出ができませんでした', [
+ '動画形式の互換性問題の可能性があります(HEVCのまま処理しようとして失敗)',
+ 'mp4(H.264)形式の動画でお試しください',
+ '「撮影を準備する」からその場で撮影すると確実です',
+ ]);
  } else if (/EXTRACT_FAILED/.test(msg)) {
  showRichError('動画からフレームを読み込めませんでした', [
  'mp4(H.264)形式の動画でお試しください',
@@ -1410,9 +1394,9 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  if (tsMs - lastProcessedTs < minFrameInterval) return;
  lastProcessedTs = tsMs;
  try {
- // 重要: videoを直接渡すとHEVCで失敗 → canvasに描いてから渡す
- relayCtx.drawImage(v, 0, 0, relayCanvas.width, relayCanvas.height);
- const result = poseLandmarker.detectForVideo(relayCanvas, tsMs);
+ // 撮影フローと同じく video 要素を直接 MediaPipe に渡す
+ // (canvas-relay 経由だと変換後ファイルでも空フレームになる挙動を確認したため廃止)
+ const result = poseLandmarker.detectForVideo(v, tsMs);
  const landmarks = (result.landmarks && result.landmarks[0]) || null;
  if (landmarks) {
  // 体中核の平均visibilityを集計(早期診断用)
@@ -1513,8 +1497,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  attempted++;
  const tsMs = baseTs + t * 1000;
  try {
- relayCtx.drawImage(v, 0, 0, relayCanvas.width, relayCanvas.height);
- const result = poseLandmarker.detectForVideo(relayCanvas, tsMs);
+ // seek でも同じく video 要素を直接渡す
+ const result = poseLandmarker.detectForVideo(v, tsMs);
  const landmarks = (result.landmarks && result.landmarks[0]) || null;
  if (landmarks) {
  const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
