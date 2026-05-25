@@ -151,6 +151,70 @@
  border-radius: 50%; transform: translate(-50%, -50%); border: 2px solid #0b0e13;
  }
 
+ /* ── フォームレビュー プレイヤー ── */
+ .review-player-outer {
+ position: relative; width: 100%; aspect-ratio: 9/16; max-height: 65vh;
+ background: #000; overflow: hidden;
+ }
+ .review-video {
+ position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1;
+ }
+ .review-canvas-overlay {
+ position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
+ }
+ .review-no-video-badge {
+ position: absolute; top: 8px; right: 8px; z-index: 4;
+ background: rgba(0,0,0,0.7); color: #9ca3af; font-size: 10px;
+ padding: 4px 8px; border-radius: 8px; backdrop-filter: blur(6px);
+ }
+ .review-controls-wrap {
+ padding: 12px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle);
+ }
+ .review-speed-row {
+ display: flex; gap: 6px; margin-bottom: 10px; align-items: center;
+ }
+ .review-speed-label { font-size: 11px; color: var(--text-muted); margin-right: 4px; }
+ .review-speed-btn {
+ padding: 5px 11px; border-radius: 7px; border: 1px solid var(--border-subtle);
+ background: var(--bg-tertiary); color: var(--text-secondary); font-size: 12px; cursor: pointer;
+ }
+ .review-speed-btn.active { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+ .review-step-row {
+ display: flex; gap: 8px; align-items: center; margin-bottom: 10px;
+ }
+ .review-ctrl-btn {
+ padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border-subtle);
+ background: var(--bg-tertiary); color: var(--text-primary); font-size: 14px; cursor: pointer;
+ }
+ .review-ctrl-btn.play { background: #1d4ed8; color: #fff; border-color: #1d4ed8; flex: 1; }
+ .review-scrubber-wrap {
+ position: relative; padding-bottom: 20px;
+ }
+ .review-scrubber {
+ width: 100%; -webkit-appearance: none; appearance: none;
+ height: 4px; border-radius: 2px; background: var(--border-default); outline: none;
+ }
+ .review-scrubber::-webkit-slider-thumb {
+ -webkit-appearance: none; width: 16px; height: 16px;
+ border-radius: 50%; background: #3b82f6; cursor: pointer;
+ }
+ .review-phase-markers {
+ position: absolute; bottom: 0; left: 0; right: 0; height: 14px;
+ }
+ .review-phase-dot {
+ position: absolute; bottom: 0; width: 3px; height: 10px;
+ border-radius: 2px; transform: translateX(-50%); cursor: pointer;
+ }
+ .review-ann-toggles {
+ display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px 4px;
+ border-bottom: 1px solid var(--border-subtle);
+ }
+ .review-ann-toggle {
+ display: flex; align-items: center; gap: 5px;
+ font-size: 12px; color: var(--text-secondary); cursor: pointer;
+ }
+ .review-ann-toggle input { accent-color: #3b82f6; }
+
  /* ── 注意点セクション ── */
  .attention-item {
  background: var(--bg-card); border-left: 3px solid;
@@ -224,6 +288,49 @@
  <div class="bar-label"><span>適合</span><span class="text-mono" id="bar-fit-val">--</span></div>
  <div class="bar-track"><div class="bar-fill" id="bar-fit-fill" style="background:#a855f7"></div></div>
  </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- ── フォームレビュー ── -->
+ <div id="review-section" class="hidden">
+ <div class="action-card" style="padding:16px 16px 10px">
+ <div class="eyebrow" style="color:#60a5fa">FORM REVIEW</div>
+ <h2 class="card-title">スロー再生でフォームを確認</h2>
+ <p class="text-secondary text-small">体幹の軸・腰肩の動き・頭部の安定性をコマ送りで確認できます。</p>
+ </div>
+
+ <!-- プレイヤー -->
+ <div class="review-player-outer" id="review-player-outer">
+ <video id="review-video" class="review-video" playsinline webkit-playsinline muted></video>
+ <canvas id="review-canvas" class="review-canvas-overlay"></canvas>
+ <div id="review-no-video" class="review-no-video-badge hidden">スケルトン再生モード</div>
+ </div>
+
+ <!-- アノテーション切替 -->
+ <div class="review-ann-toggles">
+ <label class="review-ann-toggle"><input type="checkbox" checked data-ann="axis"> 体幹軸</label>
+ <label class="review-ann-toggle"><input type="checkbox" checked data-ann="hip_sho"> 腰肩ライン</label>
+ <label class="review-ann-toggle"><input type="checkbox" checked data-ann="head"> 頭部軌跡</label>
+ <label class="review-ann-toggle"><input type="checkbox" checked data-ann="refline"> 参照線</label>
+ </div>
+
+ <!-- コントロール -->
+ <div class="review-controls-wrap">
+ <div class="review-speed-row">
+ <span class="review-speed-label">速度</span>
+ <button class="review-speed-btn active" data-rate="0.25">0.25x</button>
+ <button class="review-speed-btn" data-rate="0.5">0.5x</button>
+ <button class="review-speed-btn" data-rate="1">1x</button>
+ </div>
+ <div class="review-step-row">
+ <button class="review-ctrl-btn" id="review-step-back">◀ 1コマ</button>
+ <button class="review-ctrl-btn play" id="review-play-pause">▶ 再生</button>
+ <button class="review-ctrl-btn" id="review-step-fwd">1コマ ▶</button>
+ </div>
+ <div class="review-scrubber-wrap">
+ <input type="range" class="review-scrubber" id="review-scrubber" min="0" max="1000" value="0">
+ <div id="review-phase-markers" class="review-phase-markers"></div>
  </div>
  </div>
  </div>
@@ -444,6 +551,9 @@
  // 打席切替セットアップ
  setupSideToggle(r);
 
+ // フォームレビュー(非同期で開始)
+ setupReviewPlayer(r).catch(e => console.warn('[Review] setup error:', e));
+
  // 総合スコア
  renderScore(r.total_score);
 
@@ -630,6 +740,400 @@
  `;
  wrap.appendChild(card);
  });
+ }
+
+ // ─────────────────────────────────────────
+ // フォームレビュー (スロー動画 + アノテーション)
+ // ─────────────────────────────────────────
+ async function loadVideoFromIDB() {
+ return new Promise(resolve => {
+ try {
+ const req = indexedDB.open('reforma_batting_v1', 1);
+ req.onsuccess = e => {
+ const db = e.target.result;
+ if (!db.objectStoreNames.contains('videos')) { db.close(); resolve(null); return; }
+ const tx = db.transaction('videos', 'readonly');
+ const get = tx.objectStore('videos').get('last_swing');
+ get.onsuccess = ev => { db.close(); resolve(ev.target.result || null); };
+ get.onerror = () => { db.close(); resolve(null); };
+ };
+ req.onerror = () => resolve(null);
+ } catch (e) { resolve(null); }
+ });
+ }
+
+ async function setupReviewPlayer(r) {
+ const frames = payload.raw_frames;
+ if (!frames || frames.length < 5) return;
+
+ const section = $('review-section');
+ const reviewVideo = $('review-video');
+ const reviewCanvas = $('review-canvas');
+ const rCtx = reviewCanvas.getContext('2d');
+
+ const duration = frames[frames.length - 1].t / 1000;
+ const fps = r.fps || 30;
+
+ // ─ IndexedDB から動画読込 ─
+ let videoBlob = null;
+ try { videoBlob = await loadVideoFromIDB(); } catch (e) {}
+
+ let videoDuration = duration;
+
+ if (videoBlob) {
+ const url = URL.createObjectURL(videoBlob);
+ reviewVideo.src = url;
+ reviewVideo.load();
+ await new Promise(resolve => {
+ reviewVideo.onloadedmetadata = resolve;
+ setTimeout(resolve, 4000);
+ });
+ videoDuration = isFinite(reviewVideo.duration) && reviewVideo.duration > 0
+ ? reviewVideo.duration : duration;
+ reviewCanvas.width = reviewVideo.videoWidth || 720;
+ reviewCanvas.height = reviewVideo.videoHeight || 1280;
+ reviewVideo.playbackRate = 0.25; // デフォルト0.25x
+ $('review-no-video').classList.add('hidden');
+ } else {
+ reviewVideo.style.display = 'none';
+ $('review-no-video').classList.remove('hidden');
+ reviewCanvas.width = 720;
+ reviewCanvas.height = 1280;
+ }
+
+ section.classList.remove('hidden');
+
+ // ─ ランドマーク補間 ─
+ function getLandmarksAt(timeSec) {
+ const ms = timeSec * 1000;
+ let best = frames[0], bestDiff = Infinity;
+ for (const f of frames) {
+ const d = Math.abs(f.t - ms);
+ if (d < bestDiff) { bestDiff = d; best = f; }
+ }
+ return best ? best.landmarks : null;
+ }
+
+ // ─ 初期基準位置(最初の10%フレーム平均) ─
+ const initN = Math.max(1, Math.floor(frames.length * 0.1));
+ let initHipX = 0.5;
+ let initHeadX = 0.5, initHeadY = 0.2;
+ let initCount = 0;
+ for (let i = 0; i < initN; i++) {
+ const lm = frames[i].landmarks;
+ if (lm[23] && lm[24]) initHipX += (lm[23].x + lm[24].x) / 2;
+ if (lm[0]) { initHeadX += lm[0].x; initHeadY += lm[0].y; }
+ initCount++;
+ }
+ if (initCount > 0) { initHipX /= initCount; initHeadX /= initCount; initHeadY /= initCount; }
+
+ // ─ アノテーション切替 ─
+ const annToggles = { axis: true, hip_sho: true, head: true, refline: true };
+ document.querySelectorAll('[data-ann]').forEach(cb => {
+ cb.addEventListener('change', () => {
+ annToggles[cb.dataset.ann] = cb.checked;
+ const t = videoBlob ? reviewVideo.currentTime : currentSkelTime;
+ drawAnnotations(t);
+ });
+ });
+
+ // ─ フェーズ名取得 ─
+ const PHASE_NAMES_LIST = window.ReformaBattingData.PHASE_NAMES;
+ function getPhaseAt(timeSec) {
+ if (!r.phases) return '';
+ const fi = timeSec * fps;
+ let cur = PHASE_NAMES_LIST[0];
+ for (const pname of PHASE_NAMES_LIST) {
+ if (r.phases[pname] != null && fi >= r.phases[pname]) cur = pname;
+ }
+ return cur;
+ }
+
+ // ─ アノテーション描画 ─
+ function drawAnnotations(timeSec) {
+ const W = reviewCanvas.width, H = reviewCanvas.height;
+ rCtx.clearRect(0, 0, W, H);
+ const lm = getLandmarksAt(timeSec);
+ if (!lm) return;
+
+ function px(x) { return x * W; }
+ function py(y) { return y * H; }
+ function pt(i) { return lm[i] ? { x: px(lm[i].x), y: py(lm[i].y) } : null; }
+
+ // 参照線(構え時の重心軸)
+ if (annToggles.refline) {
+ rCtx.save();
+ rCtx.setLineDash([8, 5]);
+ rCtx.strokeStyle = 'rgba(255,200,50,0.45)';
+ rCtx.lineWidth = 1.5;
+ const rx = px(initHipX);
+ rCtx.beginPath(); rCtx.moveTo(rx, 0); rCtx.lineTo(rx, H); rCtx.stroke();
+ rCtx.setLineDash([]);
+ rCtx.fillStyle = 'rgba(255,200,50,0.6)';
+ rCtx.font = '10px -apple-system,sans-serif';
+ rCtx.fillText('構え重心軸', rx + 4, 16);
+ rCtx.restore();
+ }
+
+ // 腰ライン + 肩ライン
+ if (annToggles.hip_sho) {
+ const lH = pt(23), rH = pt(24), lS = pt(11), rS = pt(12);
+ if (lH && rH) {
+ rCtx.save();
+ rCtx.strokeStyle = '#fb923c';
+ rCtx.lineWidth = 2.5;
+ rCtx.lineCap = 'round';
+ rCtx.beginPath(); rCtx.moveTo(lH.x, lH.y); rCtx.lineTo(rH.x, rH.y); rCtx.stroke();
+ rCtx.fillStyle = '#fb923c'; rCtx.font = '10px monospace';
+ rCtx.fillText('腰', (lH.x + rH.x) / 2 + 4, (lH.y + rH.y) / 2 - 4);
+ rCtx.restore();
+ }
+ if (lS && rS) {
+ rCtx.save();
+ rCtx.strokeStyle = '#60a5fa';
+ rCtx.lineWidth = 2.5;
+ rCtx.lineCap = 'round';
+ rCtx.beginPath(); rCtx.moveTo(lS.x, lS.y); rCtx.lineTo(rS.x, rS.y); rCtx.stroke();
+ rCtx.fillStyle = '#60a5fa'; rCtx.font = '10px monospace';
+ rCtx.fillText('肩', (lS.x + rS.x) / 2 + 4, (lS.y + rS.y) / 2 - 4);
+ rCtx.restore();
+ }
+ // 腰肩分離角テキスト
+ if (lH && rH && lS && rS) {
+ const hipAng = Math.atan2(rH.y - lH.y, rH.x - lH.x) * 180 / Math.PI;
+ const shoAng = Math.atan2(rS.y - lS.y, rS.x - lS.x) * 180 / Math.PI;
+ let sep = Math.abs(hipAng - shoAng);
+ while (sep > 180) sep -= 180;
+ const midX = px((lm[23].x + lm[24].x + lm[11].x + lm[12].x) / 4);
+ const midY = py((lm[23].y + lm[24].y + lm[11].y + lm[12].y) / 4);
+ rCtx.save();
+ rCtx.fillStyle = 'rgba(0,0,0,0.55)';
+ rCtx.fillRect(midX - 2, midY - 13, 66, 16);
+ rCtx.fillStyle = '#d1d5db'; rCtx.font = '11px monospace';
+ rCtx.fillText('分離 ' + sep.toFixed(0) + '°', midX, midY);
+ rCtx.restore();
+ }
+ }
+
+ // 体幹軸(肩中点 → 腰中点の延長線)
+ if (annToggles.axis) {
+ const lH = pt(23), rH = pt(24), lS = pt(11), rS = pt(12);
+ if (lH && rH && lS && rS) {
+ const hx = (lH.x + rH.x) / 2, hy = (lH.y + rH.y) / 2;
+ const sx = (lS.x + rS.x) / 2, sy = (lS.y + rS.y) / 2;
+ const dx = sx - hx, dy = sy - hy;
+ const len = Math.hypot(dx, dy);
+ if (len > 0) {
+ const nx = dx / len, ny = dy / len;
+ rCtx.save();
+ // 実線(肩〜腰)
+ rCtx.strokeStyle = '#4ade80'; rCtx.lineWidth = 3; rCtx.lineCap = 'round';
+ rCtx.beginPath(); rCtx.moveTo(hx, hy); rCtx.lineTo(sx, sy); rCtx.stroke();
+ // 延長線(破線)
+ rCtx.setLineDash([6, 4]);
+ rCtx.strokeStyle = 'rgba(74,222,128,0.4)'; rCtx.lineWidth = 1.5;
+ rCtx.beginPath();
+ rCtx.moveTo(sx - nx * H * 0.4, sy - ny * H * 0.4);
+ rCtx.lineTo(hx + nx * H * 0.25, hy + ny * H * 0.25);
+ rCtx.stroke();
+ // 傾き角テキスト
+ rCtx.setLineDash([]);
+ const tiltDeg = Math.abs(Math.atan2(dx, -dy) * 180 / Math.PI);
+ rCtx.fillStyle = 'rgba(0,0,0,0.55)';
+ rCtx.fillRect(sx + 4, sy - 13, 62, 16);
+ rCtx.fillStyle = '#4ade80'; rCtx.font = '11px monospace';
+ rCtx.fillText('体幹 ' + tiltDeg.toFixed(0) + '°', sx + 6, sy);
+ rCtx.restore();
+ }
+ }
+ }
+
+ // 頭部軌跡(過去0.5秒)
+ if (annToggles.head) {
+ const ms = timeSec * 1000;
+ const trail = frames.filter(f => f.t <= ms && f.t >= ms - 600 && f.landmarks[0]);
+ trail.forEach((f, i) => {
+ const alpha = (i + 1) / trail.length * 0.7;
+ const hx = px(f.landmarks[0].x), hy = py(f.landmarks[0].y);
+ rCtx.save();
+ rCtx.beginPath(); rCtx.arc(hx, hy, 3, 0, Math.PI * 2);
+ rCtx.fillStyle = `rgba(251,191,36,${alpha})`; rCtx.fill();
+ rCtx.restore();
+ });
+ const curHead = pt(0);
+ if (curHead) {
+ rCtx.save();
+ rCtx.beginPath(); rCtx.arc(curHead.x, curHead.y, 7, 0, Math.PI * 2);
+ rCtx.fillStyle = '#fbbf24'; rCtx.fill();
+ rCtx.strokeStyle = '#0b0e13'; rCtx.lineWidth = 2; rCtx.stroke();
+ rCtx.restore();
+ // 頭部のX移動量
+ const headDx = Math.abs(lm[0].x - initHeadX) * 100;
+ rCtx.save();
+ rCtx.fillStyle = headDx > 8 ? 'rgba(239,68,68,0.75)' : 'rgba(0,0,0,0.55)';
+ rCtx.fillRect(curHead.x + 10, curHead.y - 13, 64, 16);
+ rCtx.fillStyle = headDx > 8 ? '#fca5a5' : '#d1d5db';
+ rCtx.font = '11px monospace';
+ rCtx.fillText('頭 ' + headDx.toFixed(0) + '% 移動', curHead.x + 12, curHead.y);
+ rCtx.restore();
+ }
+ }
+
+ // フェーズ名(左下)
+ const phaseName = getPhaseAt(timeSec);
+ if (phaseName) {
+ const tw = rCtx.measureText(phaseName).width;
+ rCtx.save();
+ rCtx.fillStyle = 'rgba(0,0,0,0.65)';
+ rCtx.beginPath();
+ if (rCtx.roundRect) rCtx.roundRect(8, H - 36, tw + 18, 26, 6);
+ else rCtx.rect(8, H - 36, tw + 18, 26);
+ rCtx.fill();
+ rCtx.fillStyle = '#fff'; rCtx.font = 'bold 13px -apple-system,sans-serif';
+ rCtx.fillText(phaseName, 17, H - 18);
+ rCtx.restore();
+ }
+ }
+
+ // ─ スクラバー ─
+ const scrubber = $('review-scrubber');
+ function updateScrubberUI(t) {
+ if (scrubber) scrubber.value = Math.round((t / videoDuration) * 1000);
+ }
+
+ if (scrubber) {
+ scrubber.addEventListener('input', () => {
+ const t = (parseInt(scrubber.value, 10) / 1000) * videoDuration;
+ if (videoBlob && reviewVideo.readyState >= 1) reviewVideo.currentTime = t;
+ else currentSkelTime = t;
+ drawAnnotations(t);
+ });
+ }
+
+ // ─ フェーズマーカー ─
+ function buildPhaseMarkers() {
+ const wrap = $('review-phase-markers');
+ if (!wrap || !r.phases) return;
+ const PCOLS = window.ReformaBattingData.PHASE_COLORS;
+ PHASE_NAMES_LIST.forEach(pname => {
+ const fi = r.phases[pname];
+ if (fi == null) return;
+ const t = fi / fps;
+ const pct = (t / videoDuration) * 100;
+ const dot = document.createElement('div');
+ dot.className = 'review-phase-dot';
+ dot.style.left = pct.toFixed(1) + '%';
+ dot.style.background = PCOLS[pname] || '#888';
+ dot.title = pname + ' (' + t.toFixed(2) + 's)';
+ dot.addEventListener('click', () => {
+ if (videoBlob && reviewVideo.readyState >= 1) {
+ reviewVideo.pause(); reviewVideo.currentTime = t;
+ }
+ currentSkelTime = t;
+ updateScrubberUI(t);
+ drawAnnotations(t);
+ });
+ wrap.appendChild(dot);
+ });
+ }
+ buildPhaseMarkers();
+
+ // ─ 動画モード再生ループ ─
+ let rafReview = null;
+ function startReviewLoop() {
+ cancelAnimationFrame(rafReview);
+ function loop() {
+ if (!reviewVideo.paused) {
+ drawAnnotations(reviewVideo.currentTime);
+ updateScrubberUI(reviewVideo.currentTime);
+ }
+ rafReview = requestAnimationFrame(loop);
+ }
+ rafReview = requestAnimationFrame(loop);
+ }
+
+ if (videoBlob) {
+ reviewVideo.addEventListener('play', startReviewLoop);
+ reviewVideo.addEventListener('pause', () => {
+ drawAnnotations(reviewVideo.currentTime);
+ });
+ reviewVideo.addEventListener('seeked', () => drawAnnotations(reviewVideo.currentTime));
+ reviewVideo.addEventListener('ended', () => {
+ $('review-play-pause').textContent = '▶ 再生';
+ });
+ }
+
+ // ─ スケルトン専用ループ変数 ─
+ let currentSkelTime = 0;
+ let skelPlaying = false;
+ let skelSpeed = 0.25;
+ let skelLastTs = 0;
+ let skelRaf = null;
+
+ function skelLoop(ts) {
+ if (!skelPlaying) return;
+ currentSkelTime += (ts - skelLastTs) / 1000 * skelSpeed;
+ skelLastTs = ts;
+ if (currentSkelTime >= duration) currentSkelTime = 0;
+ updateScrubberUI(currentSkelTime);
+ drawAnnotations(currentSkelTime);
+ skelRaf = requestAnimationFrame(skelLoop);
+ }
+
+ // ─ 再生/停止ボタン ─
+ $('review-play-pause').addEventListener('click', () => {
+ if (videoBlob) {
+ if (reviewVideo.paused) {
+ reviewVideo.play();
+ $('review-play-pause').textContent = '⏸ 停止';
+ } else {
+ reviewVideo.pause();
+ $('review-play-pause').textContent = '▶ 再生';
+ }
+ } else {
+ skelPlaying = !skelPlaying;
+ $('review-play-pause').textContent = skelPlaying ? '⏸ 停止' : '▶ 再生';
+ if (skelPlaying) {
+ skelLastTs = performance.now();
+ skelRaf = requestAnimationFrame(skelLoop);
+ } else {
+ cancelAnimationFrame(skelRaf);
+ }
+ }
+ });
+
+ // ─ コマ送り ─
+ const FRAME_STEP = 1 / fps;
+ $('review-step-back').addEventListener('click', () => {
+ const t0 = videoBlob ? reviewVideo.currentTime : currentSkelTime;
+ const t = Math.max(0, t0 - FRAME_STEP);
+ if (videoBlob) { reviewVideo.pause(); reviewVideo.currentTime = t; }
+ else { currentSkelTime = t; }
+ updateScrubberUI(t);
+ drawAnnotations(t);
+ });
+ $('review-step-fwd').addEventListener('click', () => {
+ const t0 = videoBlob ? reviewVideo.currentTime : currentSkelTime;
+ const t = Math.min(videoDuration, t0 + FRAME_STEP);
+ if (videoBlob) { reviewVideo.pause(); reviewVideo.currentTime = t; }
+ else { currentSkelTime = t; }
+ updateScrubberUI(t);
+ drawAnnotations(t);
+ });
+
+ // ─ 速度ボタン ─
+ document.querySelectorAll('.review-speed-btn').forEach(btn => {
+ btn.addEventListener('click', () => {
+ document.querySelectorAll('.review-speed-btn').forEach(b => b.classList.remove('active'));
+ btn.classList.add('active');
+ const rate = parseFloat(btn.dataset.rate);
+ if (videoBlob) reviewVideo.playbackRate = rate;
+ else skelSpeed = rate;
+ });
+ });
+
+ // ─ 初期描画 ─
+ drawAnnotations(0);
  }
 
  // ─────────────────────────────────────────
