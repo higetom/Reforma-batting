@@ -9,11 +9,11 @@
 
  <meta http-equiv="Content-Security-Policy" content="
  default-src 'self';
- script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net https://unpkg.com;
  style-src 'self' 'unsafe-inline';
  img-src 'self' data: blob:;
  media-src 'self' blob:;
- connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
+ connect-src 'self' blob: https://cdn.jsdelivr.net https://storage.googleapis.com https://unpkg.com;
  object-src 'none';
  base-uri 'self';
  worker-src 'self' blob:;
@@ -268,22 +268,18 @@
  </div>
  <div id="upload-info" class="text-small text-muted" style="margin-top:8px;font-family:var(--font-family-mono)"></div>
 
- <!-- HEVC 動画の事前警告(iPhone標準形式は解析不可の可能性大) -->
- <div id="upload-hevc-warning" class="hidden" style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#2d1a08 0%,#1a0f04 100%);border:1px solid #f59e0b66;border-left:3px solid var(--color-warning);border-radius:var(--radius-md)">
- <div style="color:var(--color-warning);font-size:11px;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">
- 注意: iPhone標準形式(HEVC)です
+ <!-- HEVC 動画は自動変換される旨を通知(離脱を防ぐ) -->
+ <div id="upload-hevc-warning" class="hidden" style="margin-top:12px;padding:14px;background:linear-gradient(135deg,#082d1a 0%,#04150c 100%);border:1px solid #10b98166;border-left:3px solid var(--color-success);border-radius:var(--radius-md)">
+ <div style="color:var(--color-success);font-size:11px;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">
+ iPhone標準形式 → 自動変換します
  </div>
- <div class="text-secondary" style="font-size:13px;line-height:1.75;margin-bottom:10px">
- この動画は iPhone標準の HEVC(H.265)形式です。iPhone Safari の制約で姿勢検出ができない可能性があります。
+ <div class="text-secondary" style="font-size:13px;line-height:1.75">
+ この動画は HEVC(H.265)形式のため、解析前に H.264 へ自動変換します。<br>
+ <b style="color:var(--text-primary)">初回のみ約25MB の変換ツールをダウンロード</b>(以降はキャッシュ済み)。<br>
+ 動画の長さによって変換に <b>10〜30秒</b> ほどかかります。
  </div>
- <div style="background:rgba(255,255,255,0.03);border-radius:6px;padding:10px 12px;font-size:12px;color:var(--text-secondary);line-height:1.75">
- <b style="color:var(--text-primary)">解析できなかった場合の対処</b><br>
- 1. iPhone「設定 → カメラ → フォーマット」を<b>「互換性優先」</b>に変更<br>
- 2. その設定で動画を撮り直してアップロード<br>
- または「<b>撮影を準備する</b>」から直接撮影(確実)
- </div>
- <div class="text-tertiary" style="font-size:11px;margin-top:8px">
- ※ そのまま「解析する」を試してもOKです。一部の動画は通ることがあります。
+ <div class="text-tertiary" style="font-size:11px;margin-top:8px;line-height:1.6">
+ ※ 変換は完全ローカル処理。動画は端末から外部へ一切送信されません。
  </div>
  </div>
 
@@ -847,6 +843,104 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  ev.target.value = '';
  });
 
+ // ─────────────────────────────────────────
+ // FFmpeg.wasm 統合 — HEVC → H.264 自動変換
+ // iPhone標準のHEVC動画はSafariがcanvas読出を遮断するため、
+ // FFmpeg.wasm(独自コーデック)でローカル変換してから解析する。
+ // 完全クライアントサイド、データは端末から出ない。
+ // 初回ロード: ~25MB(ブラウザにキャッシュ)、変換: 10秒動画あたり10〜30秒。
+ // ─────────────────────────────────────────
+ let ffmpegInstance = null;
+ let ffmpegLoading = null;
+ const FFMPEG_VERSION = '0.12.10';
+ const FFMPEG_UTIL_VERSION = '0.12.1';
+ const FFMPEG_CORE_VERSION = '0.12.6';
+
+ async function loadFFmpeg(onProgress) {
+ if (ffmpegInstance) return ffmpegInstance;
+ if (ffmpegLoading) return ffmpegLoading;
+
+ ffmpegLoading = (async () => {
+ try {
+ onProgress && onProgress(0, '変換ツールを準備しています…', '(初回のみ約25MBダウンロード)');
+ const cdn = 'https://cdn.jsdelivr.net/npm';
+ const [ffmpegMod, utilMod] = await Promise.all([
+ import(`${cdn}/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/esm/index.js`),
+ import(`${cdn}/@ffmpeg/util@${FFMPEG_UTIL_VERSION}/dist/esm/index.js`),
+ ]);
+ onProgress && onProgress(20, '変換コアを取得しています…', '');
+ const ffmpeg = new ffmpegMod.FFmpeg();
+ ffmpeg.on('log', ({ message }) => console.log('[ffmpeg]', message));
+ const coreBase = `${cdn}/@ffmpeg/core@${FFMPEG_CORE_VERSION}/dist/esm`;
+ await ffmpeg.load({
+ coreURL: await utilMod.toBlobURL(`${coreBase}/ffmpeg-core.js`, 'text/javascript'),
+ wasmURL: await utilMod.toBlobURL(`${coreBase}/ffmpeg-core.wasm`, 'application/wasm'),
+ });
+ onProgress && onProgress(50, '準備完了', '');
+ ffmpegInstance = ffmpeg;
+ console.log('[ffmpeg] loaded');
+ return ffmpeg;
+ } catch (e) {
+ ffmpegLoading = null;
+ console.error('[ffmpeg] load failed:', e);
+ throw new Error('変換ツールの読込に失敗しました: ' + e.message);
+ }
+ })();
+ return ffmpegLoading;
+ }
+
+ /**
+ * HEVC動画ファイルを H.264 mp4 Blob に変換。
+ * 完全ローカル(データは端末から出ない)。
+ */
+ async function convertVideoToMP4(file, onProgress) {
+ const ffmpeg = await loadFFmpeg(onProgress);
+
+ // 変換進捗を購読
+ const progressHandler = ({ progress }) => {
+ // 進捗は 50% を初期化分として残しているので、50〜95% に割り当て
+ const pct = 50 + Math.min(45, Math.max(0, progress) * 45);
+ onProgress && onProgress(pct, '動画を変換しています…',
+ (progress * 100).toFixed(0) + '%');
+ };
+ ffmpeg.on('progress', progressHandler);
+
+ try {
+ onProgress && onProgress(50, '動画ファイルを読み込んでいます…', '');
+ const inName = 'input' + (/\.mov$/i.test(file.name) ? '.mov' : '.mp4');
+ const outName = 'output.mp4';
+ const data = new Uint8Array(await file.arrayBuffer());
+ await ffmpeg.writeFile(inName, data);
+
+ onProgress && onProgress(55, '動画を変換しています…', '');
+ // -preset ultrafast: 速度優先、画質はやや劣化するが解析には十分
+ // -crf 23: 標準的な画質
+ // -movflags +faststart: ストリーミング最適化
+ await ffmpeg.exec([
+ '-i', inName,
+ '-c:v', 'libx264',
+ '-preset', 'ultrafast',
+ '-crf', '23',
+ '-an', // 音声は不要(解析には使わない)
+ '-movflags', '+faststart',
+ outName,
+ ]);
+
+ onProgress && onProgress(95, '変換完了、解析を開始します…', '');
+ const out = await ffmpeg.readFile(outName);
+
+ // クリーンアップ
+ try { await ffmpeg.deleteFile(inName); } catch (e) {}
+ try { await ffmpeg.deleteFile(outName); } catch (e) {}
+
+ const blob = new Blob([out.buffer], { type: 'video/mp4' });
+ console.log('[ffmpeg] converted:', file.size, 'bytes →', blob.size, 'bytes');
+ return blob;
+ } finally {
+ ffmpeg.off('progress', progressHandler);
+ }
+ }
+
  /**
  * 動画ファイルの先頭4KBを読み、コーデックを判別。
  * MP4/MOV コンテナ内の FourCC を検索する。
@@ -879,8 +973,32 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
  }
 
+ // HEVC 検出時は自動変換(ローカル・データ送信なし)
+ let urlForExtraction = pickedFileUrl;
+ if (pickedFileCodec === 'hevc') {
+ try {
+ const mp4Blob = await convertVideoToMP4(pickedFile, setUploadProgress);
+ // 既存URLを置換
+ try { URL.revokeObjectURL(pickedFileUrl); } catch (e) {}
+ pickedFileUrl = URL.createObjectURL(mp4Blob);
+ urlForExtraction = pickedFileUrl;
+ // 変換後はH.264扱い(再変換不要のためフラグ更新)
+ pickedFileCodec = 'h264';
+ console.log('[upload] HEVC auto-converted to H.264:', mp4Blob.size, 'bytes');
+ } catch (convErr) {
+ console.error('[upload] HEVC変換失敗:', convErr);
+ showRichError('動画変換に失敗しました', [
+ convErr.message || '原因不明',
+ '別の動画でお試しください',
+ '「撮影を準備する」からその場で撮影できます(確実)',
+ ]);
+ return;
+ }
+ }
+
  // 解析
- const frames = await extractFramesFromVideo(pickedFileUrl);
+ setUploadProgress(96, 'フレームを解析しています…', '');
+ const frames = await extractFramesFromVideo(urlForExtraction);
  setUploadProgress(99, '解析を組み立てています…', '');
 
  // RMSTタイプ取得
