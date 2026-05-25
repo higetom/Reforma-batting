@@ -203,6 +203,77 @@
  <button class="btn btn-primary btn-large btn-block mt-4" id="btn-prepare">
  撮影を準備する →
  </button>
+
+ <div style="text-align:center;margin-top:18px;padding-top:14px;border-top:1px solid var(--border-subtle)">
+ <a href="#" id="link-upload" class="text-small text-muted" style="text-decoration:underline">
+ 撮りだめた動画から解析する
+ </a>
+ </div>
+ </div>
+</div>
+
+<!-- 動画アップロード画面 -->
+<div id="screen-upload" class="hidden">
+ <div class="action-card">
+ <div class="action-eyebrow">VIDEO UPLOAD</div>
+ <h1 class="action-title">動画から解析する</h1>
+ <p class="text-secondary mt-2 mb-4" style="font-size:14px;line-height:1.85">
+ 過去に撮影したスイング動画から解析します。<br>
+ 撮影画面と同じ精度基準を適用します。
+ </p>
+
+ <div class="card-emphasized card" style="padding:16px;border-left:3px solid var(--color-info)">
+ <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
+ 解析に向いている動画
+ </div>
+ <ul class="guide-list" style="margin:0">
+ <li>真横(1塁側 or 3塁側)から撮影されている</li>
+ <li>構え〜フォロースルーまで全身が画面に映っている</li>
+ <li>長さは 3秒以上 ・ 20秒以内</li>
+ <li>明るい場所で撮影されている</li>
+ <li>形式: mp4 / mov / m4v(iPhone標準形式に対応)</li>
+ </ul>
+ </div>
+
+ <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/x-m4v,video/*" style="display:none">
+
+ <button class="btn btn-primary btn-block btn-large mt-4" id="btn-pick-file">
+ 動画ファイルを選択する
+ </button>
+
+ <div id="upload-preview-wrap" class="hidden" style="margin-top:18px">
+ <div style="background:#000;border-radius:var(--radius-md);overflow:hidden">
+ <video id="upload-preview" controls playsinline muted style="width:100%;display:block"></video>
+ </div>
+ <div id="upload-info" class="text-small text-muted" style="margin-top:8px;font-family:var(--font-family-mono)"></div>
+
+ <button class="btn btn-success btn-block btn-large mt-3" id="btn-analyze-upload">
+ ✓ この動画で解析する
+ </button>
+ <button class="btn btn-secondary btn-block mt-2" id="btn-pick-other">
+ 別の動画を選び直す
+ </button>
+ </div>
+
+ <button class="btn btn-secondary btn-block" id="btn-back-from-upload" style="margin-top:18px;background:transparent;color:var(--text-muted);border:1px solid var(--border-subtle)">
+ ← 撮影画面に戻る
+ </button>
+ </div>
+</div>
+
+<!-- 動画アップロード解析中画面(プログレス付き) -->
+<div id="screen-upload-analyzing" class="hidden">
+ <div class="container" style="padding:48px 24px;text-align:center;max-width:480px;margin:0 auto">
+ <h2 class="mb-2">動画を解析しています</h2>
+ <p class="text-secondary text-small mb-4" style="line-height:1.85">
+ フレームを1枚ずつ姿勢検出しています。<br>
+ 動画の長さによって30秒〜2分ほどかかります。
+ </p>
+ <div style="background:var(--bg-card);border-radius:var(--radius-full);height:8px;overflow:hidden;margin:32px 0 12px">
+ <div id="upload-progress-bar" style="height:100%;width:0%;background:var(--reforma-red);transition:width 0.2s"></div>
+ </div>
+ <div id="upload-progress-text" class="text-small text-muted" style="font-family:var(--font-family-mono)">準備中…</div>
+ <div id="upload-progress-detail" class="text-tertiary" style="font-size:11px;margin-top:6px"></div>
  </div>
 </div>
 
@@ -293,6 +364,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  capture: $('screen-capture'),
  analyzing: $('screen-analyzing'),
  error: $('screen-error'),
+ upload: $('screen-upload'),
+ uploadAnalyzing: $('screen-upload-analyzing'),
  };
  function showScreen(name) {
  Object.values(screens).forEach(s => s.classList.add('hidden'));
@@ -586,6 +659,296 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  if (stream) stream.getTracks().forEach(t => t.stop());
  if (window.ReformaMediaPipe) window.ReformaMediaPipe.release();
  });
+
+ // ─────────────────────────────────────────
+ // 動画アップロード機能
+ // 撮りだめた動画をMediaPipeに通して同じパイプラインで解析。
+ // 撮影画面と同じ validateInput ゲートを必ず通す。
+ // ─────────────────────────────────────────
+ const MAX_UPLOAD_DURATION_SEC = 20; // 動画の長さ上限
+ const MIN_UPLOAD_DURATION_SEC = 1; // 動画の長さ下限
+ const MAX_UPLOAD_FILE_BYTES = 200 * 1024 * 1024; // 200MB上限
+ const TARGET_PROCESS_FPS = 30; // 解析用フレームレート目標
+ let pickedFile = null;
+ let pickedFileUrl = null;
+
+ $('link-upload').addEventListener('click', (ev) => {
+ ev.preventDefault();
+ resetUploadState();
+ showScreen('upload');
+ });
+
+ $('btn-back-from-upload').addEventListener('click', () => {
+ resetUploadState();
+ showScreen('intro');
+ });
+
+ $('btn-pick-file').addEventListener('click', () => {
+ $('file-input').click();
+ });
+ $('btn-pick-other').addEventListener('click', () => {
+ $('file-input').click();
+ });
+
+ $('file-input').addEventListener('change', async (ev) => {
+ const file = ev.target.files && ev.target.files[0];
+ if (!file) return;
+
+ // 入力検証(クライアントゲート)
+ if (!file.type.startsWith('video/') && !/\.(mp4|mov|m4v)$/i.test(file.name)) {
+ showRichError(
+ '選択されたファイルは動画形式ではないようです(検出MIME: ' +
+ (file.type || '不明') + ')。',
+ ['mp4 / mov / m4v 形式の動画を選択してください']
+ );
+ return;
+ }
+ if (file.size > MAX_UPLOAD_FILE_BYTES) {
+ showRichError(
+ 'ファイルサイズが大きすぎます(' +
+ (file.size / 1024 / 1024).toFixed(1) + 'MB / 上限200MB)。',
+ ['もう少し短い動画を選んでください', '動画を圧縮してからアップロードしてください']
+ );
+ return;
+ }
+
+ // 既存のプレビューを破棄
+ if (pickedFileUrl) { URL.revokeObjectURL(pickedFileUrl); pickedFileUrl = null; }
+
+ pickedFile = file;
+ pickedFileUrl = URL.createObjectURL(file);
+ const previewVideo = $('upload-preview');
+ previewVideo.src = pickedFileUrl;
+
+ // メタデータ確認
+ try {
+ await new Promise((resolve, reject) => {
+ const onMeta = () => { previewVideo.removeEventListener('loadedmetadata', onMeta); resolve(); };
+ const onErr = () => { previewVideo.removeEventListener('error', onErr); reject(new Error('動画ファイルを読み込めませんでした')); };
+ previewVideo.addEventListener('loadedmetadata', onMeta);
+ previewVideo.addEventListener('error', onErr);
+ setTimeout(() => reject(new Error('動画読込タイムアウト(15秒)')), 15000);
+ });
+ } catch (e) {
+ showRichError(
+ 'この動画は再生できません(' + e.message + ')。',
+ ['mp4 / mov 形式の動画を選んでください', '別の動画で再度お試しください']
+ );
+ return;
+ }
+
+ const dur = previewVideo.duration;
+ const w = previewVideo.videoWidth, h = previewVideo.videoHeight;
+ if (!isFinite(dur) || dur <= 0) {
+ showRichError(
+ 'この動画の長さを取得できませんでした。',
+ ['別の動画を選んでください']
+ );
+ return;
+ }
+ if (dur > MAX_UPLOAD_DURATION_SEC) {
+ showRichError(
+ '動画が長すぎます(' + dur.toFixed(1) + '秒 / 上限' + MAX_UPLOAD_DURATION_SEC + '秒)。',
+ ['スイング部分だけを切り出してから再度アップロードしてください']
+ );
+ return;
+ }
+ if (dur < MIN_UPLOAD_DURATION_SEC) {
+ showRichError(
+ '動画が短すぎます(' + dur.toFixed(1) + '秒)。',
+ ['3秒以上の動画を選んでください']
+ );
+ return;
+ }
+
+ // 情報表示
+ $('upload-info').textContent =
+ '時間 ' + dur.toFixed(1) + '秒 / 解像度 ' + w + '×' + h +
+ ' / サイズ ' + (file.size / 1024 / 1024).toFixed(1) + 'MB';
+ $('upload-preview-wrap').classList.remove('hidden');
+ // 入力をリセットしておく(同じファイルを再選択できるように)
+ ev.target.value = '';
+ });
+
+ $('btn-analyze-upload').addEventListener('click', async () => {
+ if (!pickedFile || !pickedFileUrl) return;
+ try {
+ showScreen('uploadAnalyzing');
+ setUploadProgress(0, 'モデルを準備しています…', '');
+
+ // MediaPipe 準備(撮影と同じローダー)
+ if (!poseLandmarker) {
+ poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
+ }
+
+ // 解析
+ const frames = await extractFramesFromVideo(pickedFileUrl);
+ setUploadProgress(99, '解析を組み立てています…', '');
+
+ // RMSTタイプ取得
+ let rmpType = 'フロー型';
+ try {
+ const rmstRaw = sessionStorage.getItem('reforma_last_rmst');
+ if (rmstRaw) {
+ const rmstData = JSON.parse(rmstRaw);
+ if (rmstData.rmp_type) rmpType = rmstData.rmp_type;
+ }
+ } catch (e) {}
+
+ const fps = (frames.length > 1)
+ ? (frames.length - 1) * 1000 / (frames[frames.length - 1].t - frames[0].t)
+ : TARGET_PROCESS_FPS;
+
+ const analysisInput = {
+ frames: frames,
+ avg_fps: fps,
+ rmp_type: rmpType,
+ source: 'upload', // 出所を記録
+ };
+ const result = window.ReformaBattingAnalyzer.analyzeBatting(analysisInput);
+
+ if (result.error) {
+ showRichError(result.error, result.suggestions || []);
+ return;
+ }
+
+ const payload = {
+ analysis: result,
+ captured_at: new Date().toISOString(),
+ n_frames: frames.length,
+ duration_ms: frames[frames.length - 1].t,
+ source: 'upload',
+ file_name: pickedFile.name,
+ };
+ sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
+ window.location.href = 'batting_result.html';
+ } catch (e) {
+ console.error(e);
+ showRichError('解析中にエラーが発生しました: ' + e.message, [
+ '別の動画で再度お試しください',
+ 'ページを再読み込みしてから再試行してください',
+ ]);
+ }
+ });
+
+ function setUploadProgress(pct, text, detail) {
+ $('upload-progress-bar').style.width = Math.max(0, Math.min(100, pct)) + '%';
+ $('upload-progress-text').textContent = (text || '') + ' ' + Math.round(pct) + '%';
+ $('upload-progress-detail').textContent = detail || '';
+ }
+
+ function resetUploadState() {
+ if (pickedFileUrl) { try { URL.revokeObjectURL(pickedFileUrl); } catch (e) {} pickedFileUrl = null; }
+ pickedFile = null;
+ $('upload-preview-wrap').classList.add('hidden');
+ $('upload-preview').removeAttribute('src');
+ $('upload-info').textContent = '';
+ $('file-input').value = '';
+ }
+
+ /**
+ * アップロード動画からフレームを抽出。
+ * 戦略: 動画を再生し、requestVideoFrameCallback で各フレームを処理。
+ * 対応していない環境では requestAnimationFrame + currentTime 変化検出にフォールバック。
+ * MediaPipe の detectForVideo は単調増加するタイムスタンプを要求するので、
+ * フレーム時刻(currentTime)を ms 換算して使用する。
+ */
+ async function extractFramesFromVideo(url) {
+ const v = document.createElement('video');
+ v.src = url;
+ v.muted = true;
+ v.playsInline = true;
+ v.preload = 'auto';
+ v.crossOrigin = 'anonymous';
+
+ // メタデータ待ち
+ await new Promise((resolve, reject) => {
+ v.addEventListener('loadedmetadata', resolve, { once: true });
+ v.addEventListener('error', () => reject(new Error('再生不可')), { once: true });
+ setTimeout(() => reject(new Error('動画読込タイムアウト')), 20000);
+ });
+
+ const duration = v.duration;
+ const collected = [];
+ const minFrameInterval = 1000 / (TARGET_PROCESS_FPS + 5); // 35fps相当でスキップ判定
+ let lastProcessedTs = -Infinity;
+ // 単調増加タイムスタンプの起点(MediaPipe用)
+ const baseTs = performance.now();
+
+ // フレーム1枚を処理
+ function processFrame(currentTimeSec) {
+ const tsMs = baseTs + currentTimeSec * 1000;
+ if (tsMs - lastProcessedTs < minFrameInterval) return; // 高フレームレート動画でも30fps相当に間引き
+ lastProcessedTs = tsMs;
+ try {
+ const result = poseLandmarker.detectForVideo(v, tsMs);
+ const landmarks = (result.landmarks && result.landmarks[0]) || null;
+ if (landmarks) {
+ collected.push({
+ t: currentTimeSec * 1000,
+ landmarks: landmarks.map(l => ({
+ x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+ z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+ })),
+ });
+ }
+ } catch (e) {
+ console.warn('frame detect error:', e);
+ }
+ }
+
+ // requestVideoFrameCallback サポート判定
+ const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
+
+ await new Promise((resolve, reject) => {
+ v.addEventListener('ended', () => {
+ setUploadProgress(98, 'フレーム抽出完了', collected.length + 'フレーム取得');
+ resolve();
+ }, { once: true });
+ v.addEventListener('error', () => reject(new Error('動画再生エラー')), { once: true });
+
+ // 万一の保険(動画長+5秒で打ち切り)
+ const safetyTimeout = setTimeout(() => {
+ try { v.pause(); } catch (e) {}
+ resolve();
+ }, (duration + 5) * 1000);
+
+ if (hasRVFC) {
+ const onFrame = (now, metadata) => {
+ if (v.ended || v.paused) return;
+ processFrame(metadata.mediaTime);
+ const pct = Math.min(95, (metadata.mediaTime / duration) * 95);
+ setUploadProgress(pct, '解析中…', '読込フレーム: ' + collected.length);
+ v.requestVideoFrameCallback(onFrame);
+ };
+ v.requestVideoFrameCallback(onFrame);
+ } else {
+ // フォールバック: rAF + currentTime変化検出
+ let lastTime = -1;
+ const tick = () => {
+ if (v.ended || v.paused) return;
+ if (v.currentTime !== lastTime) {
+ lastTime = v.currentTime;
+ processFrame(v.currentTime);
+ const pct = Math.min(95, (v.currentTime / duration) * 95);
+ setUploadProgress(pct, '解析中…', '読込フレーム: ' + collected.length);
+ }
+ requestAnimationFrame(tick);
+ };
+ requestAnimationFrame(tick);
+ }
+
+ v.play().catch(err => {
+ clearTimeout(safetyTimeout);
+ reject(new Error('動画を再生できませんでした: ' + err.message));
+ });
+
+ // ended ハンドラ起動時に safetyTimeout もクリア
+ v.addEventListener('ended', () => clearTimeout(safetyTimeout), { once: true });
+ });
+
+ return collected;
+ }
 
  showScreen('intro');
 })();
