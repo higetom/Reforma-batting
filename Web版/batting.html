@@ -325,7 +325,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  let poseLandmarker = null;
  let drawing = null;
  let detecting = false;
- let lastVideoTime = -1;
+ let lastProcessTime = -1; // currentTime チェックの代わりに時間ベースで制御
 
  let recording = false;
  let recordedFrames = [];
@@ -376,8 +376,6 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  });
 
  async function startCamera() {
- // 新ストリーム開始前にリセット(切替後の detect ループを確実に動かす)
- lastVideoTime = -1;
  if (stream) stream.getTracks().forEach(t => t.stop());
  stream = await navigator.mediaDevices.getUserMedia({
  video: {
@@ -409,11 +407,14 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  });
 
  // 検出ループ
+ // video.currentTime チェックは iPhone Safari のライブストリームで
+ // 値が進まずループが止まるため、時間ベースの制御に変更(最大 60fps)
+ const DETECT_INTERVAL_MS = 1000 / 60;
  async function detect() {
  if (!detecting) return;
- if (video.currentTime !== lastVideoTime) {
- lastVideoTime = video.currentTime;
  const now = performance.now();
+ if (now - lastProcessTime >= DETECT_INTERVAL_MS) {
+ lastProcessTime = now;
  try {
  const result = poseLandmarker.detectForVideo(video, now);
  const landmarks = (result.landmarks && result.landmarks[0]) || null;
