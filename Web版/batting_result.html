@@ -8,9 +8,11 @@
 
  <meta http-equiv="Content-Security-Policy" content="
  default-src 'self';
- script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval';
+ script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
  style-src 'self' 'unsafe-inline';
  img-src 'self' data: blob:;
+ connect-src 'self' https://storage.googleapis.com https://cdn.jsdelivr.net;
+ worker-src 'self' blob:;
  object-src 'none';
  base-uri 'self';
  ">
@@ -343,23 +345,23 @@
  <label class="review-ann-toggle"><input type="checkbox" checked data-ann="hip_sho"> 腰肩ライン</label>
  <label class="review-ann-toggle"><input type="checkbox" checked data-ann="head"> 頭部軌跡</label>
  <label class="review-ann-toggle"><input type="checkbox" checked data-ann="refline"> 参照線</label>
- <label class="review-ann-toggle"><input type="checkbox" checked data-ann="bat"> バット軌道</label>
+ <label class="review-ann-toggle"><input type="checkbox" data-ann="bat"> 手のパス</label>
  </div>
 
  <!-- バット軌道メトリクス -->
  <div id="bat-metrics-bar" class="bat-metrics-bar hidden">
- <div class="bat-metric-item">
+ <div class="bat-metric-item" style="flex:1">
+ <span class="bat-metric-label">推定スイングスピード <span style="font-size:8px;color:#6b7280">(参考値)</span></span>
+ <span class="bat-metric-value" id="swing-speed-kmh">--</span>
+ </div>
+ <div class="bat-metric-item" id="in-plane-cell" style="display:none">
  <span class="bat-metric-label">オンプレーン率</span>
  <span class="bat-metric-value" id="in-plane-pct">--</span>
  </div>
- <div class="bat-metric-item">
- <span class="bat-metric-label">スイングスピード</span>
- <span class="bat-metric-value" id="swing-speed-kmh">--</span>
- </div>
- <div class="bat-metric-item">
- <span class="bat-metric-label">ゾーン通過 <span style="font-size:8px;color:#6b7280">(目安60ms〜)</span></span>
+ <div class="bat-metric-item" id="zone-cell" style="display:none">
+ <span class="bat-metric-label">ゾーン通過</span>
  <span class="bat-metric-value" id="bat-zone-frames">--</span>
- </div>
+ </div></div>
  </div>
 
  <!-- コントロール -->
@@ -482,6 +484,7 @@
 <script src="js/user-profile.js"></script>
 <script src="js/batting-data.js"></script>
 <script src="js/batting-analyzer.js"></script>
+<script src="js/bat-detector.js"></script>
 <script>
 (function () {
  'use strict';
@@ -825,6 +828,45 @@
  const fps = (payload.actual_video_fps && payload.actual_video_fps > 0)
  ? payload.actual_video_fps : (r.fps || 30);
 
+ // ─ ランドマーク時系列スムージング(5フレーム加重平均) ─────────────────────────
+ // 目的: MediaPipe の per-frame ノイズを除去し、関節角度・比率計算を安定させる。
+ // 手法: 重みベクトル [1,2,3,2,1] の対称加重移動平均。
+ // 対象: x, y, z, v(visibility) 座標。元データは in-place 更新。
+ // 注意: スムージング前の生データが必要な計算はこのブロックより前に置くこと。
+ {
+   const SMOOTH_W = [1, 2, 3, 2, 1]; // 5フレーム対称カーネル
+   const SMOOTH_SUM = SMOOTH_W.reduce((a, b) => a + b, 0); // 9
+   const HALF = Math.floor(SMOOTH_W.length / 2); // 2
+   const nLM = 33; // MediaPipe Pose ランドマーク数
+   const nFrames = frames.length;
+
+   // 平滑化前のスナップショットを確保（書き込み先と読み取り先を分離）
+   const rawLM = frames.map(f => f.landmarks.map(l =>
+     l ? { x: l.x, y: l.y, z: l.z || 0, v: l.v || 0 } : null
+   ));
+
+   for (let fi = 0; fi < nFrames; fi++) {
+     for (let li = 0; li < nLM; li++) {
+       let sx = 0, sy = 0, sz = 0, sv = 0, sw = 0;
+       for (let k = 0; k < SMOOTH_W.length; k++) {
+         const idx = fi - HALF + k;
+         if (idx < 0 || idx >= nFrames) continue;
+         const lm = rawLM[idx][li];
+         if (!lm) continue;
+         const w = SMOOTH_W[k];
+         sx += lm.x * w; sy += lm.y * w; sz += lm.z * w; sv += lm.v * w;
+         sw += w;
+       }
+       if (sw > 0 && frames[fi].landmarks[li]) {
+         frames[fi].landmarks[li].x = sx / sw;
+         frames[fi].landmarks[li].y = sy / sw;
+         frames[fi].landmarks[li].z = sz / sw;
+         frames[fi].landmarks[li].v = sv / sw;
+       }
+     }
+   }
+ }
+
  // ─ IndexedDB からJPEGフレーム読込 ─
  let capturedImgFrames = null;
  try { capturedImgFrames = await loadFramesFromIDB(); } catch (e) {
@@ -931,7 +973,7 @@
  };
 
  // ─ アノテーション切替 ─
- const annToggles = { axis: true, hip_sho: true, head: true, refline: true, bat: true };
+ const annToggles = { axis: true, hip_sho: true, head: true, refline: true, bat: false };
  document.querySelectorAll('[data-ann]').forEach(cb => {
  cb.checked = true;
  cb.addEventListener('change', () => {
@@ -1079,26 +1121,9 @@
 
  const stanceEndI = Math.max(1, Math.floor(frames.length * 0.30));
 
- // ── スケール計算: 前腕長(肘→手首)を優先、フォールバックはトルソー ──
- // 前腕は成人で約25.5cm(身長の14.6%)。MediaPipeで直接測定できるため身長入力不要。
- const FOREARM_REAL_M = 0.255; // 成人前腕の平均値(m)
- let forearmNormSum = 0, forearmNormCount = 0;
- for (let i = 0; i < frames.length; i++) {
-   const lm = frames[i].landmarks;
-   if (!lm[13] || !lm[15] || !lm[14] || !lm[16]) continue;
-   // 両前腕を計測し、長い方(遠近法で縮んでいない方)を採用
-   const ldx = (lm[15].x - lm[13].x) * imgAspect;
-   const ldy = (lm[15].y - lm[13].y);
-   const lLen = Math.hypot(ldx, ldy);
-   const rdx = (lm[16].x - lm[14].x) * imgAspect;
-   const rdy = (lm[16].y - lm[14].y);
-   const rLen = Math.hypot(rdx, rdy);
-   const maxLen = Math.max(lLen, rLen);
-   if (maxLen > 0.03) { forearmNormSum += maxLen; forearmNormCount++; }
- }
- const forearmNorm = forearmNormCount > 0 ? forearmNormSum / forearmNormCount : 0;
-
- // フォールバック用: トルソーY距離
+ // ── スケール計算: トルソー縦距離ベース(側面動画で安定) ──
+ // 縦方向(Y)はカメラの向きに関わらず透視歪みが小さい。前腕は側面スイング時に
+ // カメラ方向に回転して遠近法で短く見えるためスケール基準として不適。
  let normTorsoSum = 0, normTorsoCount = 0;
  for (let i = 0; i < stanceEndI; i++) {
    const lm = frames[i].landmarks;
@@ -1111,14 +1136,7 @@
  const normTorsoY = normTorsoCount > 0 ? normTorsoSum / normTorsoCount : 0.25;
  const heightCm = parseFloat(sessionStorage.getItem('reforma_height_cm') || '0') || 0;
  const realTorsoM = heightCm >= 120 && heightCm <= 220 ? (heightCm * 0.30 / 100) : 0.52;
-
- // 前腕スケールが有効なら優先(身長入力不要・カメラ距離自動補正)
- let scaleY;
- if (forearmNorm > 0.03) {
-   scaleY = FOREARM_REAL_M / forearmNorm; // 前腕ベース: 身長入力不要
- } else {
-   scaleY = realTorsoM / normTorsoY;      // トルソーベース: フォールバック
- }
+ const scaleY = realTorsoM / normTorsoY;
  const scaleX = scaleY * imgAspect;
 
  // RAW バットヘッド速度（km/h）を連続フレーム間で計算
@@ -1199,6 +1217,110 @@
      zfEl.style.color = zoneMs >= 60 ? '#4ade80' : zoneMs >= 40 ? '#fbbf24' : '#f87171';
    }
 
+ }
+
+ // ─────────────────────────────────────────────────────────────────────────
+ // YOLOv8 バット検出（非同期バックグラウンド処理）
+ // IDB 画像フレームが存在し ReformaBatDetector が読込済みの場合のみ実行。
+ // 完了後: バットの実長(84cm)ベースのスケールでスイングスピードを再計算し表示更新。
+ // ─────────────────────────────────────────────────────────────────────────
+ if (hasImages && capturedImgFrames.length > 4 && window.ReformaBatDetector) {
+   const YOLO_W = reviewCanvas.width;
+   const YOLO_H = reviewCanvas.height;
+
+   // ステータス表示を「YOLO検出中」に変更
+   const ssEl2 = $('swing-speed-kmh');
+   let yoloStatusSpan = null;
+   if (ssEl2 && ssEl2.parentNode) {
+     yoloStatusSpan = document.createElement('span');
+     yoloStatusSpan.style.cssText = 'font-size:9px;color:#94a3b8;display:block;margin-top:2px';
+     yoloStatusSpan.textContent = 'バット検出中...';
+     ssEl2.parentNode.appendChild(yoloStatusSpan);
+   }
+
+   window.ReformaBatDetector.runOnFrames(
+     capturedImgFrames, YOLO_W, YOLO_H,
+     null // 進捗コールバック省略
+   ).then(function (result) {
+     const { batTrack, maxBatWidthNorm, detectedFrames } = result;
+
+     // 最低10フレームかつ最大バット幅0.05以上で有効と判断
+     if (detectedFrames < 10 || maxBatWidthNorm < 0.05) {
+       if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
+       return;
+     }
+
+     // ── スケール計算 ──
+     // maxBatWidthNorm は正規化 x 幅(0-1)。
+     // origW ピクセルに対して BAT_REAL_LEN_M m に相当 → mPerPx = BAT_REAL_LEN_M / (maxBatWidthNorm * YOLO_W)
+     const mPerPx = window.ReformaBatDetector.BAT_REAL_LEN_M / (maxBatWidthNorm * YOLO_W);
+
+     // ── バット中心座標を px に変換 ──
+     // batTrack: [{t(ms), cx(0-1), cy(0-1), ...}]
+     const batPx = batTrack.map(function (b) {
+       return { t: b.t, px: b.cx * YOLO_W, py: b.cy * YOLO_H };
+     });
+
+     // ── 逐次フレーム間速度(km/h) ──
+     const yoloRawSpeeds = [null];
+     for (let i = 1; i < batPx.length; i++) {
+       const a = batPx[i - 1], b = batPx[i];
+       const dt = (b.t - a.t) / 1000;
+       if (dt <= 0 || dt > 0.15) { yoloRawSpeeds.push(null); continue; }
+       const dxm = (b.px - a.px) * mPerPx;
+       const dym = (b.py - a.py) * mPerPx;
+       yoloRawSpeeds.push(Math.hypot(dxm, dym) / dt * 3.6);
+     }
+
+     // ── 3フレーム平滑化 ──
+     const yoloSmooth = yoloRawSpeeds.map(function (s, i) {
+       if (s === null) return null;
+       let sum = 0, n = 0;
+       for (let j = Math.max(0, i - 1); j <= Math.min(yoloRawSpeeds.length - 1, i + 1); j++) {
+         if (yoloRawSpeeds[j] !== null) { sum += yoloRawSpeeds[j]; n++; }
+       }
+       return n > 0 ? sum / n : null;
+     });
+
+     // ── スウィング範囲のピークスピード ──
+     // batTrack の t(ms) を swingStartFI/contactFI の時刻に変換して絞り込む
+     const swingStartMs = frames[Math.min(swingStartFI, frames.length - 1)].t;
+     const contactMs    = frames[Math.min(contactFI, frames.length - 1)].t;
+
+     let yoloPeak = null;
+     for (let i = 0; i < batPx.length; i++) {
+       const t = batPx[i].t;
+       if (t < swingStartMs || t > contactMs + 5 * (1000 / fps)) continue;
+       const sp = yoloSmooth[i];
+       if (sp !== null && sp <= 200 && (yoloPeak === null || sp > yoloPeak)) yoloPeak = sp;
+     }
+
+     // フォールバック: フェーズ範囲外なら全体ピーク
+     if (yoloPeak === null) {
+       yoloSmooth.forEach(function (sp) {
+         if (sp !== null && sp <= 200 && (yoloPeak === null || sp > yoloPeak)) yoloPeak = sp;
+       });
+     }
+
+     if (yoloPeak === null) {
+       if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
+       return;
+     }
+
+     // ── UI 更新 ──
+     const ssEl3 = $('swing-speed-kmh');
+     if (ssEl3) {
+       ssEl3.textContent = Math.round(yoloPeak) + ' km/h';
+       ssEl3.style.color = yoloPeak >= 140 ? '#4ade80' : yoloPeak >= 120 ? '#fbbf24' : '#60a5fa';
+     }
+     if (yoloStatusSpan) {
+       yoloStatusSpan.textContent = 'バット直接検出 (' + detectedFrames + 'f)';
+       yoloStatusSpan.style.color = '#22d3ee';
+     }
+   }).catch(function (e) {
+     console.warn('[YOLO] バット検出失敗（手首推定値を維持）:', e.message || e);
+     if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
+   });
  }
 
  // ─ スケルトン接続定義 ─
@@ -1358,9 +1480,9 @@
  const curHead = pt(0);
  if (curHead) {
  rCtx.save();
- rCtx.shadowColor = '#fbbf24'; rCtx.shadowBlur = 6 * sc;
- rCtx.beginPath(); rCtx.arc(curHead.x, curHead.y, 5 * sc, 0, Math.PI * 2);
- rCtx.fillStyle = '#fbbf24'; rCtx.fill();
+ rCtx.shadowColor = '#22d3ee'; rCtx.shadowBlur = 5 * sc;
+ rCtx.beginPath(); rCtx.arc(curHead.x, curHead.y, 2.5 * sc, 0, Math.PI * 2);
+ rCtx.fillStyle = '#22d3ee'; rCtx.fill();
  rCtx.shadowBlur = 0;
  rCtx.restore();
  const headDx = Math.abs(lm[0].x - initHeadX) * 100;
