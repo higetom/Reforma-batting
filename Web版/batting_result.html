@@ -892,6 +892,38 @@
  });
  });
 
+ // ─ スケルトン接続定義 ─
+ const SKEL_CONN = [
+ [11,12],                         // 肩
+ [11,13],[13,15],                 // 左腕
+ [12,14],[14,16],                 // 右腕
+ [15,17],[15,19],[17,19],         // 左手
+ [16,18],[16,20],[18,20],         // 右手
+ [11,23],[12,24],[23,24],         // 胴体
+ [23,25],[25,27],[27,29],[27,31], // 左脚
+ [24,26],[26,28],[28,30],[28,32], // 右脚
+ ];
+ const SKEL_JOINTS = [11,12,13,14,15,16,23,24,25,26,27,28]; // 主要関節ドット
+
+ // ─ ラベル描画ヘルパー(pill badge) ─
+ function drawLabel(x, y, text, color, side) {
+ rCtx.save();
+ rCtx.font = 'bold 9px -apple-system,sans-serif';
+ const tw = rCtx.measureText(text).width;
+ const pad = 5, h = 14, r = 4;
+ const bx = side === 'left' ? x - tw - pad * 2 - 2 : x + 4;
+ const by = y - h / 2 - 1;
+ rCtx.globalAlpha = 0.82;
+ rCtx.fillStyle = '#000';
+ if (rCtx.roundRect) rCtx.roundRect(bx, by, tw + pad * 2, h, r);
+ else rCtx.rect(bx, by, tw + pad * 2, h);
+ rCtx.fill();
+ rCtx.globalAlpha = 1;
+ rCtx.fillStyle = color;
+ rCtx.fillText(text, bx + pad, by + h - 4);
+ rCtx.restore();
+ }
+
  // ─ アノテーション描画 ─
  function drawAnnotations(timeSec) {
  const W = reviewCanvas.width, H = reviewCanvas.height;
@@ -899,42 +931,63 @@
  const lm = getLandmarksAt(timeSec);
  if (!lm) return;
 
+ const sc = Math.min(W, H) / 180; // スケール係数(180pxベース)
  function px(x) { return x * W; }
  function py(y) { return y * H; }
  function pt(i) { return lm[i] ? { x: px(lm[i].x), y: py(lm[i].y) } : null; }
 
- // 参照線(構え時の重心軸)
+ // ── 1. 参照線 ──
  if (annToggles.refline) {
- rCtx.save();
- rCtx.setLineDash([8, 5]);
- rCtx.strokeStyle = 'rgba(255,200,50,0.45)';
- rCtx.lineWidth = 1.5;
  const rx = px(initHipX);
+ rCtx.save();
+ rCtx.setLineDash([6 * sc, 4 * sc]);
+ rCtx.strokeStyle = 'rgba(251,191,36,0.5)';
+ rCtx.lineWidth = sc;
  rCtx.beginPath(); rCtx.moveTo(rx, 0); rCtx.lineTo(rx, H); rCtx.stroke();
  rCtx.setLineDash([]);
- rCtx.fillStyle = 'rgba(255,200,50,0.6)';
- rCtx.font = '10px -apple-system,sans-serif';
- rCtx.fillText('構え重心軸', rx + 4, 16);
+ drawLabel(rx, 14, '重心軸', '#fbbf24', 'right');
  rCtx.restore();
  }
 
- // 腰ライン + 肩ライン
+ // ── 2. スケルトン接続線(モーションライン) ──
+ rCtx.save();
+ rCtx.lineWidth = sc * 0.9;
+ rCtx.lineCap = 'round';
+ SKEL_CONN.forEach(([a, b]) => {
+ const pa = pt(a), pb = pt(b);
+ if (!pa || !pb) return;
+ // 腕=シアン、脚=ライトブルー、胴体=白
+ const isArm = (a >= 11 && a <= 20) || (b >= 11 && b <= 20);
+ const isLeg = (a >= 23 && a <= 32) || (b >= 23 && b <= 32);
+ const isTorso = ([11,12,23,24].includes(a) && [11,12,23,24].includes(b));
+ rCtx.strokeStyle = isTorso
+ ? 'rgba(255,255,255,0.55)'
+ : isArm ? 'rgba(99,202,255,0.65)'
+ : 'rgba(150,210,255,0.55)';
+ rCtx.beginPath(); rCtx.moveTo(pa.x, pa.y); rCtx.lineTo(pb.x, pb.y); rCtx.stroke();
+ });
+ // 関節ドット
+ SKEL_JOINTS.forEach(i => {
+ const p = pt(i);
+ if (!p) return;
+ rCtx.beginPath(); rCtx.arc(p.x, p.y, sc * 1.6, 0, Math.PI * 2);
+ rCtx.fillStyle = 'rgba(255,255,255,0.7)'; rCtx.fill();
+ });
+ rCtx.restore();
+
+ // ── 3. 腰ライン + 肩ライン ──
  if (annToggles.hip_sho) {
  const lH = pt(23), rH = pt(24), lS = pt(11), rS = pt(12);
  if (lH && rH) {
  rCtx.save();
- rCtx.strokeStyle = '#fb923c'; rCtx.lineWidth = 2.5; rCtx.lineCap = 'round';
+ rCtx.strokeStyle = '#fb923c'; rCtx.lineWidth = 1.5 * sc; rCtx.lineCap = 'round';
  rCtx.beginPath(); rCtx.moveTo(lH.x, lH.y); rCtx.lineTo(rH.x, rH.y); rCtx.stroke();
- rCtx.fillStyle = '#fb923c'; rCtx.font = '10px monospace';
- rCtx.fillText('腰', (lH.x + rH.x) / 2 + 4, (lH.y + rH.y) / 2 - 4);
  rCtx.restore();
  }
  if (lS && rS) {
  rCtx.save();
- rCtx.strokeStyle = '#60a5fa'; rCtx.lineWidth = 2.5; rCtx.lineCap = 'round';
+ rCtx.strokeStyle = '#60a5fa'; rCtx.lineWidth = 1.5 * sc; rCtx.lineCap = 'round';
  rCtx.beginPath(); rCtx.moveTo(lS.x, lS.y); rCtx.lineTo(rS.x, rS.y); rCtx.stroke();
- rCtx.fillStyle = '#60a5fa'; rCtx.font = '10px monospace';
- rCtx.fillText('肩', (lS.x + rS.x) / 2 + 4, (lS.y + rS.y) / 2 - 4);
  rCtx.restore();
  }
  if (lH && rH && lS && rS) {
@@ -944,16 +997,12 @@
  while (sep > 180) sep -= 180;
  const midX = px((lm[23].x + lm[24].x + lm[11].x + lm[12].x) / 4);
  const midY = py((lm[23].y + lm[24].y + lm[11].y + lm[12].y) / 4);
- rCtx.save();
- rCtx.fillStyle = 'rgba(0,0,0,0.55)';
- rCtx.fillRect(midX - 2, midY - 13, 66, 16);
- rCtx.fillStyle = '#d1d5db'; rCtx.font = '11px monospace';
- rCtx.fillText('分離 ' + sep.toFixed(0) + '°', midX, midY);
- rCtx.restore();
+ const sepColor = sep < 15 ? '#fbbf24' : (sep < 35 ? '#4ade80' : '#60a5fa');
+ drawLabel(midX, midY, '分離 ' + sep.toFixed(0) + '°', sepColor, 'right');
  }
  }
 
- // 体幹軸
+ // ── 4. 体幹軸 ──
  if (annToggles.axis) {
  const lH = pt(23), rH = pt(24), lS = pt(11), rS = pt(12);
  if (lH && rH && lS && rS) {
@@ -964,66 +1013,72 @@
  if (len > 0) {
  const nx = dx / len, ny = dy / len;
  rCtx.save();
- rCtx.strokeStyle = '#4ade80'; rCtx.lineWidth = 3; rCtx.lineCap = 'round';
+ // 発光感のある実線
+ rCtx.shadowColor = '#4ade80'; rCtx.shadowBlur = 4 * sc;
+ rCtx.strokeStyle = '#4ade80'; rCtx.lineWidth = 1.5 * sc; rCtx.lineCap = 'round';
  rCtx.beginPath(); rCtx.moveTo(hx, hy); rCtx.lineTo(sx, sy); rCtx.stroke();
- rCtx.setLineDash([6, 4]);
- rCtx.strokeStyle = 'rgba(74,222,128,0.4)'; rCtx.lineWidth = 1.5;
+ rCtx.shadowBlur = 0;
+ // 延長破線
+ rCtx.setLineDash([5 * sc, 3 * sc]);
+ rCtx.strokeStyle = 'rgba(74,222,128,0.35)'; rCtx.lineWidth = sc;
  rCtx.beginPath();
- rCtx.moveTo(sx - nx * H * 0.4, sy - ny * H * 0.4);
- rCtx.lineTo(hx + nx * H * 0.25, hy + ny * H * 0.25);
+ rCtx.moveTo(sx - nx * H * 0.45, sy - ny * H * 0.45);
+ rCtx.lineTo(hx + nx * H * 0.2, hy + ny * H * 0.2);
  rCtx.stroke();
  rCtx.setLineDash([]);
- const tiltDeg = Math.abs(Math.atan2(dx, -dy) * 180 / Math.PI);
- rCtx.fillStyle = 'rgba(0,0,0,0.55)';
- rCtx.fillRect(sx + 4, sy - 13, 62, 16);
- rCtx.fillStyle = '#4ade80'; rCtx.font = '11px monospace';
- rCtx.fillText('体幹 ' + tiltDeg.toFixed(0) + '°', sx + 6, sy);
  rCtx.restore();
+ // ラベル
+ const tiltDeg = Math.abs(Math.atan2(dx, -dy) * 180 / Math.PI);
+ const tiltColor = tiltDeg < 5 ? '#4ade80' : (tiltDeg < 12 ? '#fbbf24' : '#f87171');
+ drawLabel(sx, sy - 8 * sc, '体幹 ' + tiltDeg.toFixed(0) + '°', tiltColor, 'right');
  }
  }
  }
 
- // 頭部軌跡(過去0.6秒)
+ // ── 5. 頭部軌跡 ──
  if (annToggles.head) {
  const ms = timeSec * 1000;
  const trail = frames.filter(f => f.t <= ms && f.t >= ms - 600 && f.landmarks[0]);
  trail.forEach((f, i) => {
- const alpha = (i + 1) / trail.length * 0.7;
+ const alpha = (i + 1) / trail.length * 0.55;
  rCtx.save();
- rCtx.beginPath(); rCtx.arc(px(f.landmarks[0].x), py(f.landmarks[0].y), 3, 0, Math.PI * 2);
+ rCtx.beginPath(); rCtx.arc(px(f.landmarks[0].x), py(f.landmarks[0].y), 1.5 * sc, 0, Math.PI * 2);
  rCtx.fillStyle = `rgba(251,191,36,${alpha})`; rCtx.fill();
  rCtx.restore();
  });
  const curHead = pt(0);
  if (curHead) {
  rCtx.save();
- rCtx.beginPath(); rCtx.arc(curHead.x, curHead.y, 7, 0, Math.PI * 2);
+ rCtx.shadowColor = '#fbbf24'; rCtx.shadowBlur = 6 * sc;
+ rCtx.beginPath(); rCtx.arc(curHead.x, curHead.y, 5 * sc, 0, Math.PI * 2);
  rCtx.fillStyle = '#fbbf24'; rCtx.fill();
- rCtx.strokeStyle = '#0b0e13'; rCtx.lineWidth = 2; rCtx.stroke();
+ rCtx.shadowBlur = 0;
  rCtx.restore();
  const headDx = Math.abs(lm[0].x - initHeadX) * 100;
- rCtx.save();
- rCtx.fillStyle = headDx > 8 ? 'rgba(239,68,68,0.75)' : 'rgba(0,0,0,0.55)';
- rCtx.fillRect(curHead.x + 10, curHead.y - 13, 64, 16);
- rCtx.fillStyle = headDx > 8 ? '#fca5a5' : '#d1d5db';
- rCtx.font = '11px monospace';
- rCtx.fillText('頭 ' + headDx.toFixed(0) + '% 移動', curHead.x + 12, curHead.y);
- rCtx.restore();
+ const headColor = headDx > 8 ? '#f87171' : '#d1d5db';
+ drawLabel(curHead.x, curHead.y - 8 * sc, '頭 ' + headDx.toFixed(0) + '%', headColor, 'right');
  }
  }
 
- // フェーズ名(左下)
+ // ── 6. フェーズバッジ(左下) ──
  const phaseName = getPhaseAt(timeSec);
  if (phaseName) {
- const tw = rCtx.measureText(phaseName).width;
  rCtx.save();
- rCtx.fillStyle = 'rgba(0,0,0,0.65)';
- rCtx.beginPath();
- if (rCtx.roundRect) rCtx.roundRect(8, H - 36, tw + 18, 26, 6);
- else rCtx.rect(8, H - 36, tw + 18, 26);
+ rCtx.font = `bold ${11 * sc}px -apple-system,sans-serif`;
+ const tw = rCtx.measureText(phaseName).width;
+ const bh = 18 * sc, bpad = 8 * sc, br = 5 * sc;
+ const bx = 8, by = H - bh - 8;
+ rCtx.globalAlpha = 0.75;
+ rCtx.fillStyle = '#1e3a5f';
+ if (rCtx.roundRect) rCtx.roundRect(bx, by, tw + bpad * 2, bh, br);
+ else rCtx.rect(bx, by, tw + bpad * 2, bh);
  rCtx.fill();
- rCtx.fillStyle = '#fff'; rCtx.font = 'bold 13px -apple-system,sans-serif';
- rCtx.fillText(phaseName, 17, H - 18);
+ rCtx.globalAlpha = 1;
+ rCtx.strokeStyle = '#60a5fa'; rCtx.lineWidth = sc * 0.8;
+ if (rCtx.roundRect) rCtx.roundRect(bx, by, tw + bpad * 2, bh, br);
+ else rCtx.rect(bx, by, tw + bpad * 2, bh);
+ rCtx.stroke();
+ rCtx.fillStyle = '#e0f0ff'; rCtx.fillText(phaseName, bx + bpad, by + bh - 4 * sc);
  rCtx.restore();
  }
  }
