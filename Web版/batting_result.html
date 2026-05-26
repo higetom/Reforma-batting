@@ -983,29 +983,33 @@
  const BAT_TRAIL = [];
  frames.forEach((f, fi) => {
  const lm = f.landmarks;
+ // 4点すべて存在し座標が有効範囲内かチェック(visibilityは不問)
  if (!lm[15] || !lm[16] || !lm[13] || !lm[14]) return;
+ if (lm[15].x == null || lm[16].x == null || lm[13].x == null || lm[14].x == null) return;
+ // 両手首を使って前腕ベクトルを計算（バット方向の推定）
+ // 両手首の平均を使うと横向きでも安定する
  const v15 = (lm[15].v || 0);
  const v16 = (lm[16].v || 0);
- const vMax = Math.max(v15, v16);
- // 両手首とも全く検出されない場合のみスキップ（閾値を最小限に）
- if (vMax < 0.10) return;
  let gx, gy, fax, fay;
- if (Math.min(v15, v16) >= 0.3) {
-   // 両手首可視: 両腕の平均でバット方向を推定
+ // visibilityに関わらず両手首平均を優先。片方が座標0,0の場合は単腕フォールバック
+ const lm15valid = Math.abs(lm[15].x) > 0.001 || Math.abs(lm[15].y) > 0.001;
+ const lm16valid = Math.abs(lm[16].x) > 0.001 || Math.abs(lm[16].y) > 0.001;
+ if (lm15valid && lm16valid) {
    gx = (lm[15].x + lm[16].x) / 2;
    gy = (lm[15].y + lm[16].y) / 2;
    fax = ((lm[15].x - lm[13].x) + (lm[16].x - lm[14].x)) / 2;
    fay = ((lm[15].y - lm[13].y) + (lm[16].y - lm[14].y)) / 2;
+ } else if (lm15valid) {
+   gx = lm[15].x; gy = lm[15].y;
+   fax = lm[15].x - lm[13].x; fay = lm[15].y - lm[13].y;
+ } else if (lm16valid) {
+   gx = lm[16].x; gy = lm[16].y;
+   fax = lm[16].x - lm[14].x; fay = lm[16].y - lm[14].y;
  } else {
-   // 片手首が低可視度: より鮮明な方の腕だけ使う（横向き動画対応）
-   const wr = v15 >= v16 ? 15 : 16;
-   const el = wr === 15 ? 13 : 14;
-   gx = lm[wr].x; gy = lm[wr].y;
-   fax = lm[wr].x - lm[el].x;
-   fay = lm[wr].y - lm[el].y;
+   return; // 両手首が原点付近 = 検出失敗
  }
  const falen = Math.hypot(fax, fay);
- if (falen < 0.002) return; // 前腕ベクトル長の最小閾値を緩和
+ if (falen < 0.002) return;
  BAT_TRAIL.push({
  t: f.t, fi,
  gx, gy,
