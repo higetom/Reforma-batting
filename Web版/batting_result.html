@@ -943,18 +943,35 @@
  // ─────────────────────────────────────────
  // バット軌道 事前計算
  // ─────────────────────────────────────────
- const swingStartFI = r.phases && r.phases['スウィング開始'] != null
- ? Math.round(r.phases['スウィング開始']) : Math.floor(frames.length * 0.38);
- const contactFI = r.phases && r.phases['コンタクト'] != null
- ? Math.round(r.phases['コンタクト']) : Math.floor(frames.length * 0.68);
+ // アナライザーのフェーズ名は ⑥フットプラント / ⑧コンタクト（丸数字付き）
+ // ⑥フットプラント = 前足接地 = スイング開始の実質的な起点
+ const _phs = r.phases || {};
+ const swingStartFI = _phs['⑥フットプラント'] != null
+   ? Math.round(_phs['⑥フットプラント'])
+   : _phs['⑤ストライド'] != null
+     ? Math.round(_phs['⑤ストライド'])
+     : Math.floor(frames.length * 0.38);
+ const contactFI = _phs['⑧コンタクト'] != null
+   ? Math.round(_phs['⑧コンタクト'])
+   : Math.floor(frames.length * 0.68);
 
  // コンタクト時の手首高さ = ヒッティングプレーン基準
+ // 横向き動画でも片方の手首が見えれば使用する
  let planeRefY = 0.62;
  {
- const cf = frames[Math.min(contactFI, frames.length - 1)];
- if (cf && cf.landmarks[15] && cf.landmarks[16]) {
- planeRefY = (cf.landmarks[15].y + cf.landmarks[16].y) / 2;
- }
+   const cf = frames[Math.min(contactFI, frames.length - 1)];
+   if (cf) {
+     const lm = cf.landmarks;
+     const v15c = lm[15] ? (lm[15].v || 0) : 0;
+     const v16c = lm[16] ? (lm[16].v || 0) : 0;
+     if (v15c > 0.2 && v16c > 0.2) {
+       planeRefY = (lm[15].y + lm[16].y) / 2;
+     } else if (v15c >= v16c && v15c > 0.1) {
+       planeRefY = lm[15].y;
+     } else if (v16c > 0.1) {
+       planeRefY = lm[16].y;
+     }
+   }
  }
 
  // 前腕ベクトルからバットヘッドを推定（正規化座標）
