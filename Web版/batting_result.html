@@ -387,6 +387,12 @@
  </div></div>
  </div>
 
+ <!-- FPS警告バナー -->
+ <div id="fps-warning-banner" style="display:none;align-items:flex-start;gap:10px;padding:10px 14px;margin:8px 0 0;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:8px">
+   <span style="font-size:15px;flex-shrink:0;margin-top:1px">&#9888;</span>
+   <span class="fps-warn-text" style="font-size:12px;color:#fbbf24;line-height:1.6"></span>
+ </div>
+
  <!-- コントロール -->
  <div class="review-controls-wrap">
  <div class="review-speed-row">
@@ -1303,11 +1309,22 @@
      });
    }
 
-   // MediaPipe 30fps 補正係数
-   // MediaPipe は内部ラグにより30fpsでは真の角速度の約33%しか計測できない。
-   // 理論値: 真の角速度×バット長 = 測定値/0.33 ≈ 測定値×3.0
-   // YOLO直接検出時はこの補正を行わない（バット実画素を追跡するため）
-   if (peak !== null) peak = Math.min(peak * 3.0, 175);
+   // fps依存のMediaPipe補正係数
+   // MediaPipe の内部ラグは fps が高いほど小さくなる。
+   //   30fps  → 真の角速度の約33%しか計測できない → ×3.0
+   //   60fps  → 約59% → ×1.7
+   //  120fps+ → ほぼラグなし → ×1.0
+   // YOLO直接検出時もこの係数を適用（MediaPipe ランドマーク由来のため）
+   var mediapipeCorrection;
+   if (fps >= 90) {
+     mediapipeCorrection = 1.0;
+   } else if (fps >= 50) {
+     // 60fps 帯: 線形補間 1.0〜3.0 の中間
+     mediapipeCorrection = 1.7;
+   } else {
+     mediapipeCorrection = 3.0;
+   }
+   if (peak !== null) peak = Math.min(peak * mediapipeCorrection, 175);
 
    // UI更新
    var ssEl = $('swing-speed-kmh');
@@ -1322,6 +1339,22 @@
          : 'トルソー推定 (' + selBatLenCm + 'cm)';
        sp.style.color = autoBatDiagPx > 0 ? '#4ade80' : '#94a3b8';
      });
+   }
+
+   // fps警告バナー
+   var fpsWarnEl = $('fps-warning-banner');
+   if (fpsWarnEl) {
+     if (fps < 50) {
+       fpsWarnEl.style.display = 'flex';
+       fpsWarnEl.querySelector('.fps-warn-text').textContent =
+         '動画のFPSが ' + Math.round(fps) + ' fps です。スローモーション（120fps以上）で撮影すると精度が大幅に向上します。';
+     } else if (fps < 90) {
+       fpsWarnEl.style.display = 'flex';
+       fpsWarnEl.querySelector('.fps-warn-text').textContent =
+         '動画のFPSが ' + Math.round(fps) + ' fps です。120fps撮影に変更するとさらに精度が向上します。';
+     } else {
+       fpsWarnEl.style.display = 'none';
+     }
    }
  }
 
