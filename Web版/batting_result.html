@@ -190,59 +190,22 @@
  display: block; font-size: 22px; font-weight: 600;
  font-family: var(--font-family-mono); color: var(--text-primary);
  }
- /* キャリブレーション */
- .calib-btn {
-   display: inline-block; margin-top: 5px; padding: 3px 10px;
-   font-size: 10px; color: #22d3ee; background: transparent;
-   border: 1px solid #22d3ee55; border-radius: 20px; cursor: pointer;
-   letter-spacing: 0.3px;
+ /* バット長セレクター */
+ .bat-len-row {
+   display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+   padding: 6px 12px; background: #0d1117; border-bottom: 1px solid #1e2330;
+   font-size: 11px; color: #64748b;
  }
- .calib-btn:active { opacity: 0.7; }
- #calib-modal {
-   display: none; position: fixed; inset: 0; z-index: 9999;
-   background: rgba(0,0,0,0.88); flex-direction: column;
-   align-items: center; justify-content: center; padding: 16px;
+ .bat-len-row span { flex-shrink: 0; margin-right: 2px; }
+ .bat-len-btn {
+   padding: 3px 9px; font-size: 11px; border-radius: 14px; cursor: pointer;
+   border: 1px solid #334155; background: #0f172a; color: #94a3b8;
+   touch-action: manipulation;
  }
- .calib-inner {
-   width: 100%; max-width: 480px; background: #1a1f2e;
-   border: 1px solid #334155; border-radius: 12px; padding: 20px;
+ .bat-len-btn.active {
+   background: #1e3a5f; color: #60a5fa; border-color: #3b82f6;
  }
- .calib-title {
-   font-size: 15px; font-weight: 600; color: #f1f5f9; margin-bottom: 12px;
- }
- .calib-desc {
-   font-size: 12px; color: #94a3b8; margin-bottom: 10px; line-height: 1.5;
- }
- #calib-canvas-wrap { position: relative; width: 100%; margin-bottom: 12px; cursor: crosshair; }
- #calib-canvas { width: 100%; display: block; border-radius: 6px; }
- .calib-dist-row {
-   display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
- }
- .calib-dist-btn {
-   padding: 6px 12px; font-size: 12px; border-radius: 20px; cursor: pointer;
-   border: 1px solid #334155; background: #0f172a; color: #cbd5e1;
- }
- .calib-dist-btn:active { background: #1e293b; }
- .calib-custom-row {
-   display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
- }
- .calib-custom-row input {
-   width: 72px; padding: 6px 8px; border-radius: 6px;
-   border: 1px solid #334155; background: #0f172a; color: #f1f5f9;
-   font-size: 13px; text-align: center;
- }
- .calib-custom-row label { font-size: 12px; color: #94a3b8; }
- .calib-custom-ok {
-   padding: 6px 14px; background: #22d3ee; color: #000; border: none;
-   border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer;
- }
- .calib-cancel {
-   width: 100%; padding: 9px; border: 1px solid #334155; background: transparent;
-   color: #64748b; border-radius: 8px; font-size: 13px; cursor: pointer; margin-top: 4px;
- }
- .calib-status {
-   font-size: 11px; color: #22d3ee; margin-top: 6px; text-align: center;
- }
+ .bat-len-btn:active { opacity: 0.7; }
  .review-no-video-badge {
  position: absolute; top: 8px; right: 8px; z-index: 4;
  background: rgba(0,0,0,0.7); color: #9ca3af; font-size: 10px;
@@ -401,48 +364,18 @@
  <label class="review-ann-toggle"><input type="checkbox" data-ann="bat"> 手のパス</label>
  </div>
 
- <!-- キャリブレーションモーダル -->
- <div id="calib-modal">
-   <div class="calib-inner">
-     <div class="calib-title">スイングスピード 精度設定</div>
-     <div id="calib-step1">
-       <div class="calib-desc">バットのグリップ端と先端をタップしてください。<br>斜めでも正確に計測できます。</div>
-       <div id="calib-canvas-wrap">
-         <canvas id="calib-canvas"></canvas>
-       </div>
-       <div class="calib-status" id="calib-step1-status">1点目をタップ（グリップ端）</div>
-     </div>
-     <div id="calib-step2" style="display:none">
-       <div class="calib-desc" id="calib-step2-desc">バットの実際の長さを選択してください</div>
-       <div class="calib-dist-row">
-         <button class="calib-dist-btn" id="calib-d84">84cm</button>
-         <button class="calib-dist-btn" id="calib-d85">85cm</button>
-         <button class="calib-dist-btn" id="calib-d86">86cm</button>
-         <button class="calib-dist-btn" id="calib-d87">87cm</button>
-         <button class="calib-dist-btn" id="calib-d88">88cm</button>
-         <button class="calib-dist-btn" id="calib-d90">90cm</button>
-         <button class="calib-dist-btn" id="calib-d43">ホームベース幅 43cm</button>
-       </div>
-       <div class="calib-custom-row">
-         <label>自分で入力:</label>
-         <input type="number" id="calib-custom-cm" value="43" min="10" max="500">
-         <label>cm</label>
-         <button class="calib-custom-ok" id="calib-custom-ok-btn">確定</button>
-       </div>
-     </div>
-     <div id="calib-done" style="display:none">
-       <div class="calib-status">キャリブレーション完了。スイングスピードを再計算しました。</div>
-     </div>
-     <button class="calib-cancel" id="calib-cancel-btn">閉じる</button>
-   </div>
- </div>
-
  <!-- バット軌道メトリクス -->
  <div id="bat-metrics-bar" class="bat-metrics-bar hidden">
+ <div class="bat-len-row">
+ <span>バット長:</span>
+ <button class="bat-len-btn" data-len="84">84cm</button>
+ <button class="bat-len-btn active" data-len="86">86cm</button>
+ <button class="bat-len-btn" data-len="88">88cm</button>
+ <button class="bat-len-btn" data-len="90">90cm</button>
+ </div>
  <div class="bat-metric-item" style="flex:1">
- <span class="bat-metric-label">推定スイングスピード <span style="font-size:8px;color:#6b7280">(参考値)</span></span>
+ <span class="bat-metric-label">スイングスピード</span>
  <span class="bat-metric-value" id="swing-speed-kmh">--</span>
- <button class="calib-btn" id="calib-open-btn" style="display:none">基準距離を設定</button>
  </div>
  <div class="bat-metric-item" id="in-plane-cell" style="display:none">
  <span class="bat-metric-label">オンプレーン率</span>
@@ -926,12 +859,12 @@
  {
    const SMOOTH_W = [1, 2, 3, 2, 1]; // 5フレーム対称カーネル
    const SMOOTH_SUM = SMOOTH_W.reduce((a, b) => a + b, 0); // 9
-   const HALF = Math.floor(SMOOTH_W.length / 2); // 2
    const nLM = 33; // MediaPipe Pose ランドマーク数
    const nFrames = frames.length;
-   // 手首・肘 (13:左肘, 14:右肘, 15:左手首, 16:右手首) は速度計算精度のため平滑化しない
-   // 平滑化するとスウィング時の急激な角速度がぼかされ、スピードが3〜5倍過小評価される
-   const NO_SMOOTH_LM = new Set([13, 14, 15, 16]);
+   // 手首・肘 (13:左肘, 14:右肘, 15:左手首, 16:右手首) は軽い3フレームカーネル使用
+   // 5フレームだとスウィング角速度が抑制されて過小評価になる
+   const ARM_LM = new Set([13, 14, 15, 16]);
+   const ARM_W = [1, 2, 1]; // 3フレーム軽量カーネル (sum=4)
 
    // 平滑化前のスナップショットを確保（書き込み先と読み取り先を分離）
    const rawLM = frames.map(f => f.landmarks.map(l =>
@@ -940,14 +873,15 @@
 
    for (let fi = 0; fi < nFrames; fi++) {
      for (let li = 0; li < nLM; li++) {
-       if (NO_SMOOTH_LM.has(li)) continue; // 手首・肘は生データのまま保持
+       const kernel = ARM_LM.has(li) ? ARM_W : SMOOTH_W;
+       const kHalf = Math.floor(kernel.length / 2);
        let sx = 0, sy = 0, sz = 0, sv = 0, sw = 0;
-       for (let k = 0; k < SMOOTH_W.length; k++) {
-         const idx = fi - HALF + k;
+       for (let k = 0; k < kernel.length; k++) {
+         const idx = fi - kHalf + k;
          if (idx < 0 || idx >= nFrames) continue;
          const lm = rawLM[idx][li];
          if (!lm) continue;
-         const w = SMOOTH_W[k];
+         const w = kernel[k];
          sx += lm.x * w; sy += lm.y * w; sz += lm.z * w; sv += lm.v * w;
          sw += w;
        }
@@ -1233,55 +1167,6 @@
  const scaleY = realTorsoM / normTorsoY;
  const scaleX = scaleY * imgAspect;
 
- // RAW バットヘッド速度（km/h）を連続フレーム間で計算
- const batSpeedsRaw = [null]; // 0番目はnull（前フレームなし）
- for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
-   const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
-   const dt = (b.t - a.t) / 1000;
-   if (dt <= 0 || dt > 0.15) { batSpeedsRaw.push(null); continue; } // フレーム欠損スキップ
-   const dx = (b.hx - a.hx) * scaleX;
-   const dy = (b.hy - a.hy) * scaleY;
-   batSpeedsRaw.push(Math.hypot(dx, dy) / dt * 3.6); // m/s → km/h
- }
-
- // 3フレーム平滑化
- const batSpeedsSmooth = batSpeedsRaw.map((s, i) => {
-   if (s === null) return null;
-   let sum = 0, n = 0;
-   for (let j = Math.max(0, i - 1); j <= Math.min(batSpeedsRaw.length - 1, i + 1); j++) {
-     if (batSpeedsRaw[j] !== null) { sum += batSpeedsRaw[j]; n++; }
-   }
-   return n > 0 ? sum / n : null;
- });
-
- // スウィング開始〜コンタクト+5フレームのピークスピード
- let peakSpeedKmh = null;
- for (let i = 0; i < BAT_TRAIL.length; i++) {
-   const fi = BAT_TRAIL[i].fi;
-   if (fi < swingStartFI || fi > contactFI + 5) continue;
-   const sp = batSpeedsSmooth[i];
-   if (sp !== null && (peakSpeedKmh === null || sp > peakSpeedKmh)) peakSpeedKmh = sp;
- }
- // 異常値除去（>200km/h は計算エラー）
- if (peakSpeedKmh !== null && peakSpeedKmh > 200) peakSpeedKmh = null;
-
- // フォールバック: フェーズ範囲内にエントリがなければ全BAT_TRAILのピークを使用
- if (peakSpeedKmh === null && BAT_TRAIL.length > 0) {
-   for (let i = 0; i < BAT_TRAIL.length; i++) {
-     const sp = batSpeedsSmooth[i];
-     if (sp !== null && sp <= 200 && (peakSpeedKmh === null || sp > peakSpeedKmh)) peakSpeedKmh = sp;
-   }
- }
-
- // BAT_TRAIL 空のときは診断メッセージを UI に表示
- if (BAT_TRAIL.length === 0) {
-   // 手首ランドマークのvis値をコンソールに出力
-   if (frames.length > 0) {
-     const mid = frames[Math.floor(frames.length / 2)];
-     const lm = mid.landmarks;
-   }
- }
-
  // ─── バットメトリクスを表示 ───────────────────────────────────────────
  const batBar = $('bat-metrics-bar');
  if (batBar) {
@@ -1293,28 +1178,103 @@
        : inPlaneRate >= 70 ? '#4ade80'
        : inPlaneRate >= 50 ? '#fbbf24' : '#f87171';
    }
-   const ssEl = $('swing-speed-kmh');
-   if (ssEl) {
-     if (peakSpeedKmh !== null) {
-       ssEl.textContent = Math.round(peakSpeedKmh) + ' km/h';
-       // 目安: 高校生110〜130、社会人130〜150、プロ140〜160km/h
-       ssEl.style.color = peakSpeedKmh >= 140 ? '#4ade80'
-         : peakSpeedKmh >= 120 ? '#fbbf24' : '#60a5fa';
-     } else {
-       ssEl.textContent = '--';
-       ssEl.style.color = '#6b7280';
-     }
-   }
    const zfEl = $('bat-zone-frames');
    if (zfEl && zoneMs != null) {
      zfEl.textContent = zoneMs + 'ms';
      zfEl.style.color = zoneMs >= 60 ? '#4ade80' : zoneMs >= 40 ? '#fbbf24' : '#f87171';
    }
-
  }
 
- // ユーザーがキャリブレーション済みかどうか（YOLOの上書きを防ぐ）
+ // スイングスピード計算はrecalcSpeedFromBatLen()で行う（バット長ボタンと統一）
+ // ※ recalcSpeedFromBatLen は下で定義されているため、後で呼び出す
+
+ // ユーザーがキャリブレーション済みかどうか（後方互換用、現在は未使用）
  let userCalibrated = false;
+ let autoBatDiagPx = 0;   // YOLO が自動検出したバット対角線ピクセル数
+ let selBatLenCm = 86;    // ユーザー選択バット長 (cm) デフォルト86
+
+ function recalcSpeedFromBatLen() {
+   let effScaleX, effScaleY;
+   const batLenM = selBatLenCm / 100;
+   if (autoBatDiagPx > 0) {
+     // YOLOが検出したバット対角線(px)を基準スケールに使用
+     const mPerPx = batLenM / autoBatDiagPx;
+     effScaleX = mPerPx * reviewCanvas.width;
+     effScaleY = mPerPx * reviewCanvas.height;
+   } else {
+     // フォールバック: トルソーベーススケール
+     effScaleX = scaleX;
+     effScaleY = scaleY;
+   }
+   // フレーム間速度計算
+   const rawSpeeds = [null];
+   for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
+     const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
+     const dt = (b.t - a.t) / 1000;
+     if (dt <= 0 || dt > 0.5) { rawSpeeds.push(null); continue; }
+     const dx = (b.hx - a.hx) * effScaleX;
+     const dy = (b.hy - a.hy) * effScaleY;
+     rawSpeeds.push(Math.hypot(dx, dy) / dt * 3.6);
+   }
+   // 外れ値除去: 有効値の中央値 × 2.5 を超えるものはnull
+   const validSpeeds = rawSpeeds.filter(s => s !== null);
+   validSpeeds.sort((a, b) => a - b);
+   const medianSpeed = validSpeeds.length > 0
+     ? validSpeeds[Math.floor(validSpeeds.length / 2)] : 0;
+   const maxAllowed = Math.max(medianSpeed * 2.5, 60); // 最低60km/h上限は許容
+   const cleanedSpeeds = rawSpeeds.map(s =>
+     s !== null && s <= maxAllowed && s <= 175 ? s : null
+   );
+   // 5フレーム平滑化
+   const smoothSpeeds = cleanedSpeeds.map(function (s, i) {
+     if (s === null) return null;
+     let sum = 0, n = 0;
+     for (let j = Math.max(0, i - 2); j <= Math.min(cleanedSpeeds.length - 1, i + 2); j++) {
+       if (cleanedSpeeds[j] !== null) { sum += cleanedSpeeds[j]; n++; }
+     }
+     return n > 0 ? sum / n : null;
+   });
+   // スウィング範囲ピーク
+   let peak = null;
+   for (let i = 0; i < BAT_TRAIL.length; i++) {
+     const fi = BAT_TRAIL[i].fi;
+     if (fi < swingStartFI || fi > contactFI + 5) continue;
+     const sp = smoothSpeeds[i];
+     if (sp !== null && (peak === null || sp > peak)) peak = sp;
+   }
+   if (peak === null && BAT_TRAIL.length > 0) {
+     smoothSpeeds.forEach(function (sp) {
+       if (sp !== null && (peak === null || sp > peak)) peak = sp;
+     });
+   }
+   const ssEl = $('swing-speed-kmh');
+   if (ssEl && peak !== null) {
+     ssEl.textContent = Math.round(peak) + ' km/h';
+     ssEl.style.color = peak >= 140 ? '#4ade80' : peak >= 120 ? '#fbbf24' : '#60a5fa';
+     // ステータスラベル更新
+     const statusSpans = ssEl.parentNode
+       ? ssEl.parentNode.querySelectorAll('span[style*="font-size:9px"]') : [];
+     statusSpans.forEach(function (sp) {
+       sp.textContent = autoBatDiagPx > 0
+         ? 'YOLO+バット長校正済 (' + selBatLenCm + 'cm)'
+         : 'トルソー推定 (' + selBatLenCm + 'cm)';
+       sp.style.color = autoBatDiagPx > 0 ? '#4ade80' : '#94a3b8';
+     });
+   }
+ }
+
+ // バット長ボタンのイベント
+ document.querySelectorAll('.bat-len-btn').forEach(function (btn) {
+   btn.addEventListener('click', function () {
+     document.querySelectorAll('.bat-len-btn').forEach(b => b.classList.remove('active'));
+     btn.classList.add('active');
+     selBatLenCm = parseInt(btn.dataset.len, 10);
+     recalcSpeedFromBatLen();
+   });
+ });
+
+ // 初期スイングスピード表示（トルソーベーススケール使用）
+ recalcSpeedFromBatLen();
 
  // ─────────────────────────────────────────────────────────────────────────
  // YOLOv8 バット検出（非同期バックグラウンド処理）
@@ -1378,6 +1338,16 @@
        // フィルター後に残ったフレームが少なすぎる = 全て誤検出の可能性
        if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
        return;
+     }
+
+     // フィルター済みバット検出の最大対角線 → 自動スケール校正に使用
+     // 最小サイズ条件: フレームの8%以上でないと誤検出の可能性が高い
+     const minDiag = 0.08 * Math.max(YOLO_W, YOLO_H);
+     let filtMaxDiag = 0;
+     filteredBat.forEach(function (b) { if (b.diagPx > filtMaxDiag) filtMaxDiag = b.diagPx; });
+     if (filtMaxDiag >= minDiag) {
+       autoBatDiagPx = filtMaxDiag;
+       recalcSpeedFromBatLen(); // バット長×自動スケールで再計算
      }
 
      // ── バット中心を px に変換 ──
@@ -1454,199 +1424,6 @@
    });
  }
 
- // ─────────────────────────────────────────────────────────────────────────
- // タップキャリブレーション機能
- // 動画フレーム内の2点間の画面上距離と既知実距離からスケールを計算し、
- // 手首軌跡ベースのスイングスピードを再計算して表示を更新する
- // ─────────────────────────────────────────────────────────────────────────
- {
-   let calibP1 = null, calibP2 = null;
-   let calibCvNatW = 1, calibCvNatH = 1;
-
-   const calibModal   = $('calib-modal');
-   const calibCv      = $('calib-canvas');
-   const calibWrap    = $('calib-canvas-wrap');
-   const calibStep1   = $('calib-step1');
-   const calibStep2   = $('calib-step2');
-   const calibDone    = $('calib-done');
-   const calibStatus  = $('calib-step1-status');
-   const calibOpenBtn = $('calib-open-btn');
-
-   // キャリブレーションボタン表示制御（フレーム画像がある場合のみ）
-   if (hasImages && calibOpenBtn) calibOpenBtn.style.display = '';
-
-   // ── モーダルを開く（現在表示中のコマを使用）──
-   function openCalibModal() {
-     if (!hasImages || !capturedImgFrames[0]) return;
-     calibP1 = null; calibP2 = null;
-     calibStep1.style.display = '';
-     calibStep2.style.display = 'none';
-     calibDone.style.display  = 'none';
-     calibStatus.textContent  = '1点目をタップ';
-     calibModal.style.display = 'flex';
-
-     // 現在の再生位置に最も近い IDB フレームを選択
-     const currentT = frames[Math.min(currentFrameIdx, frames.length - 1)].t;
-     let bestIdx = 0, bestDiff = Infinity;
-     capturedImgFrames.forEach(function (f, i) {
-       const d = Math.abs((f.t || 0) - currentT);
-       if (d < bestDiff) { bestDiff = d; bestIdx = i; }
-     });
-
-     const img = new Image();
-     img.onload = function () {
-       calibCvNatW = img.naturalWidth  || reviewCanvas.width;
-       calibCvNatH = img.naturalHeight || reviewCanvas.height;
-       calibCv.width  = calibCvNatW;
-       calibCv.height = calibCvNatH;
-       const ctx = calibCv.getContext('2d');
-       ctx.drawImage(img, 0, 0);
-     };
-     img.src = capturedImgFrames[bestIdx].img;
-   }
-
-   // ── キャンバスタップ ──
-   function onCalibTap(e) {
-     e.preventDefault();
-     const rect  = calibCv.getBoundingClientRect();
-     const touch = e.touches ? e.touches[0] : e;
-     // CSS px → native px
-     const scaleX = calibCvNatW / rect.width;
-     const scaleY = calibCvNatH / rect.height;
-     const nx = (touch.clientX - rect.left)  * scaleX;
-     const ny = (touch.clientY - rect.top)   * scaleY;
-     const ctx = calibCv.getContext('2d');
-
-     if (!calibP1) {
-       calibP1 = { x: nx, y: ny };
-       ctx.beginPath();
-       ctx.arc(nx, ny, Math.max(8, calibCvNatW * 0.02), 0, Math.PI * 2);
-       ctx.fillStyle = '#22d3ee';
-       ctx.fill();
-       calibStatus.textContent = '2点目をタップ（バット先端）';
-     } else if (!calibP2) {
-       calibP2 = { x: nx, y: ny };
-       ctx.beginPath();
-       ctx.arc(nx, ny, Math.max(8, calibCvNatW * 0.02), 0, Math.PI * 2);
-       ctx.fillStyle = '#4ade80';
-       ctx.fill();
-       ctx.beginPath();
-       ctx.moveTo(calibP1.x, calibP1.y);
-       ctx.lineTo(nx, ny);
-       ctx.strokeStyle = '#fbbf24';
-       ctx.lineWidth   = Math.max(2, calibCvNatW * 0.005);
-       ctx.stroke();
-       calibStep1.style.display = 'none';
-       calibStep2.style.display = '';
-     }
-   }
-
-   calibCv.addEventListener('click',     onCalibTap);
-   calibCv.addEventListener('touchstart', onCalibTap, { passive: false });
-
-   // ── 距離確定 → スピード再計算 ──
-   function applyCalib(distCm) {
-     if (!calibP1 || !calibP2) return;
-     const distM = distCm / 100;
-     const pixDist = Math.hypot(calibP2.x - calibP1.x, calibP2.y - calibP1.y);
-     if (pixDist < 10) {
-       calibStatus.textContent = '2点が近すぎます。もう一度開いてやり直してください。';
-       calibStep2.style.display = 'none';
-       calibStep1.style.display = '';
-       calibP1 = null; calibP2 = null;
-       return;
-     }
-     // m/px (元画像ネイティブ座標系)
-     const mPerPxNative = distM / pixDist;
-     // 正規化座標 → m に変換するスケール
-     const effScaleX = mPerPxNative * calibCvNatW;
-     const effScaleY = mPerPxNative * calibCvNatH;
-
-     // BAT_TRAIL_RAW を使ってスイングスピードを再計算（校正済みスケール使用）
-     // 注: ランドマーク平滑化を手首・肘に対して無効化したため、
-     //     BAT_TRAIL_RAW の位置変化は実際の角速度を正確に反映している。
-     //     ここではスケールのみ差し替え（BAT_NORM_LEN は変更しない）。
-     const calibRaw = [null];
-     for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
-       const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
-       const dt = (b.t - a.t) / 1000;
-       if (dt <= 0 || dt > 0.5) { calibRaw.push(null); continue; }
-       const dx = (b.hx - a.hx) * effScaleX;
-       const dy = (b.hy - a.hy) * effScaleY;
-       calibRaw.push(Math.hypot(dx, dy) / dt * 3.6);
-     }
-     // 3フレーム平滑化
-     const calibSmooth = calibRaw.map(function (s, i) {
-       if (s === null) return null;
-       let sum = 0, n = 0;
-       for (let j = Math.max(0, i-1); j <= Math.min(calibRaw.length-1, i+1); j++) {
-         if (calibRaw[j] !== null) { sum += calibRaw[j]; n++; }
-       }
-       return n > 0 ? sum / n : null;
-     });
-     // スウィング範囲のピーク（200km/h 上限）
-     let peak = null;
-     for (let i = 0; i < BAT_TRAIL.length; i++) {
-       const fi = BAT_TRAIL[i].fi;
-       if (fi < swingStartFI || fi > contactFI + 5) continue;
-       const sp = calibSmooth[i];
-       if (sp !== null && sp <= 200 && (peak === null || sp > peak)) peak = sp;
-     }
-     if (peak === null && BAT_TRAIL.length > 0) {
-       calibSmooth.forEach(function (sp) {
-         if (sp !== null && sp <= 200 && (peak === null || sp > peak)) peak = sp;
-       });
-     }
-     calibStep2.style.display = 'none';
-     if (peak !== null) {
-       userCalibrated = true;
-       const ssEl = $('swing-speed-kmh');
-       if (ssEl) {
-         ssEl.textContent = Math.round(peak) + ' km/h';
-         ssEl.style.color = peak >= 140 ? '#4ade80' : peak >= 120 ? '#fbbf24' : '#60a5fa';
-       }
-       // ステータスラベルを更新
-       const statusSpanList = ssEl && ssEl.parentNode
-         ? ssEl.parentNode.querySelectorAll('span[style*="font-size:9px"]') : [];
-       statusSpanList.forEach(function (sp) {
-         sp.textContent = '基準距離キャリブ済 (' + distCm + 'cm)';
-         sp.style.color = '#4ade80';
-       });
-       calibDone.style.display = '';
-     } else {
-       // スピード計算不可（フレームデータ不足）
-       calibDone.style.display = '';
-       const doneMsg = calibDone.querySelector('.calib-status');
-       if (doneMsg) doneMsg.textContent = 'フレームデータ不足。別のコマに移動してもう一度お試しください。';
-     }
-   }
-
-   // ── ボタンイベント ──
-   if (calibOpenBtn) calibOpenBtn.addEventListener('click', openCalibModal);
-   const cancelBtn = $('calib-cancel-btn');
-   if (cancelBtn) cancelBtn.addEventListener('click', function () {
-     calibModal.style.display = 'none';
-   });
-   const d43Btn = $('calib-d43');
-   if (d43Btn) d43Btn.addEventListener('click', function () { applyCalib(43); });
-   const d84Btn = $('calib-d84');
-   if (d84Btn) d84Btn.addEventListener('click', function () { applyCalib(84); });
-   const d85Btn = $('calib-d85');
-   if (d85Btn) d85Btn.addEventListener('click', function () { applyCalib(85); });
-   const d86Btn = $('calib-d86');
-   if (d86Btn) d86Btn.addEventListener('click', function () { applyCalib(86); });
-   const d87Btn = $('calib-d87');
-   if (d87Btn) d87Btn.addEventListener('click', function () { applyCalib(87); });
-   const d88Btn = $('calib-d88');
-   if (d88Btn) d88Btn.addEventListener('click', function () { applyCalib(88); });
-   const d90Btn = $('calib-d90');
-   if (d90Btn) d90Btn.addEventListener('click', function () { applyCalib(90); });
-   const customOkBtn = $('calib-custom-ok-btn');
-   if (customOkBtn) customOkBtn.addEventListener('click', function () {
-     const v = parseFloat($('calib-custom-cm').value);
-     if (v > 0) applyCalib(v);
-   });
- }
 
  // ─ スケルトン接続定義 ─
  const SKEL_CONN = [
