@@ -1418,11 +1418,10 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    collected.sort(function(a, b) { return a.t - b.t; });
    uploadJpegFrames.sort(function(a, b) { return a.t - b.t; });
 
-   // IDB に JPEG 保存
+   // IDB に JPEG 保存（ページ遷移前に必ず完了させる）
    if (uploadJpegFrames.length > 0) {
-     saveFramesToIDB(uploadJpegFrames).catch(function(e) {
-       console.warn('[webcodecs] IDB error:', e);
-     });
+     try { await saveFramesToIDB(uploadJpegFrames); }
+     catch (e) { console.warn('[webcodecs] IDB error:', e); }
    }
 
    const avgVis = visCnt > 0 ? visSum / visCnt : 0;
@@ -1740,9 +1739,10 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  const avgVis = visCnt > 0 ? visSum / visCnt : 0;
  console.log('[upload] extracted ' + collected.length + ' frames, avgVis=' + avgVis.toFixed(3) + ', jpegFrames=' + uploadJpegFrames.length);
 
- // JPEGフレームをIDBに保存（フォームレビュー用）
+ // JPEGフレームをIDBに保存（ページ遷移前に必ず完了させる）
  if (uploadJpegFrames.length > 0) {
-   saveFramesToIDB(uploadJpegFrames).catch(e => console.warn('[upload] IDB save error:', e));
+   try { await saveFramesToIDB(uploadJpegFrames); }
+   catch (e) { console.warn('[upload] IDB save error:', e); }
  }
 
  // 早期診断: visibility 全て0 = フレーム読出に何らかの問題
