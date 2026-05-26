@@ -353,8 +353,8 @@
  <span class="bat-metric-value" id="in-plane-pct">--</span>
  </div>
  <div class="bat-metric-item">
- <span class="bat-metric-label">バット軌道角</span>
- <span class="bat-metric-value" id="swing-plane-ang">--</span>
+ <span class="bat-metric-label">スイングスピード</span>
+ <span class="bat-metric-value" id="swing-speed-kmh">--</span>
  </div>
  <div class="bat-metric-item">
  <span class="bat-metric-label">ゾーン通過 <span style="font-size:8px;color:#6b7280">(目安60ms〜)</span></span>
@@ -821,7 +821,9 @@
  const rCtx = reviewCanvas.getContext('2d');
 
  const duration = frames[frames.length - 1].t / 1000;
- const fps = r.fps || 30;
+ // actual_video_fps: カメラの実FPS（高fps撮影対応）。バットスピード精度に影響
+ const fps = (payload.actual_video_fps && payload.actual_video_fps > 0)
+ ? payload.actual_video_fps : (r.fps || 30);
 
  // ─ IndexedDB からJPEGフレーム読込 ─
  let capturedImgFrames = null;
@@ -972,6 +974,9 @@
  });
  });
 
+ // ── スイングスピード計算用にスムージング前の生位置を保存 ──
+ const BAT_TRAIL_RAW = BAT_TRAIL.map(b => ({ t: b.t, fi: b.fi, hx: b.hx, hy: b.hy }));
+
  // ── 7フレーム移動平均でバット軌道を平滑化 ──
  if (BAT_TRAIL.length > 4) {
  const half = 3;
@@ -1018,29 +1023,92 @@
  // ゾーン通過 = オンプレーンだったフレーム数をms換算（全スウィングではなくオンプレーン時間）
  const zoneMs = inPlaneN > 0 ? Math.round(inPlaneN * (1000 / (fps || 30))) : null;
 
- // バットメトリクスを表示
+ // ─── スイングスピード計算（スムージング前のRAWデータ使用）───────────────
+ // 画像アスペクト比 (幅/高さ)
+ const imgAspect = (reviewCanvas.width > 0 && reviewCanvas.height > 0)
+   ? reviewCanvas.width / reviewCanvas.height : 0.5625; // デフォルト 9:16
+
+ // トルソー高さ（肩中点→腰中点）の正規化Y距離を平均（スタンスフレームの最初30%）
+ const stanceEndI = Math.max(1, Math.floor(frames.length * 0.30));
+ let normTorsoSum = 0, normTorsoCount = 0;
+ for (let i = 0; i < stanceEndI; i++) {
+   const lm = frames[i].landmarks;
+   if (!lm[11] || !lm[12] || !lm[23] || !lm[24]) continue;
+   const smy = (lm[11].y + lm[12].y) / 2;
+   const hmy = (lm[23].y + lm[24].y) / 2;
+   const torsoY = Math.abs(hmy - smy);
+   if (torsoY > 0.05) { normTorsoSum += torsoY; normTorsoCount++; }
+ }
+ const normTorsoY = normTorsoCount > 0 ? normTorsoSum / normTorsoCount : 0.25;
+
+ // 実トルソー長さ（肩→腰 ≈ 身長×30%、デフォルト52cm）
+ const heightCm = parseFloat(sessionStorage.getItem('reforma_height_cm') || '0') || 0;
+ const realTorsoM = heightCm >= 120 && heightCm <= 220 ? (heightCm * 0.30 / 100) : 0.52;
+
+ // 正規化単位→メートル変換スケール
+ const scaleY = realTorsoM / normTorsoY;    // m per normalized-y unit
+ const scaleX = scaleY * imgAspect;          // m per normalized-x unit（縦撮影補正）
+
+ // RAW バットヘッド速度（km/h）を連続フレーム間で計算
+ const batSpeedsRaw = [null]; // 0番目はnull（前フレームなし）
+ for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
+   const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
+   const dt = (b.t - a.t) / 1000;
+   if (dt <= 0 || dt > 0.15) { batSpeedsRaw.push(null); continue; } // フレーム欠損スキップ
+   const dx = (b.hx - a.hx) * scaleX;
+   const dy = (b.hy - a.hy) * scaleY;
+   batSpeedsRaw.push(Math.hypot(dx, dy) / dt * 3.6); // m/s → km/h
+ }
+
+ // 3フレーム平滑化
+ const batSpeedsSmooth = batSpeedsRaw.map((s, i) => {
+   if (s === null) return null;
+   let sum = 0, n = 0;
+   for (let j = Math.max(0, i - 1); j <= Math.min(batSpeedsRaw.length - 1, i + 1); j++) {
+     if (batSpeedsRaw[j] !== null) { sum += batSpeedsRaw[j]; n++; }
+   }
+   return n > 0 ? sum / n : null;
+ });
+
+ // スウィング開始〜コンタクト+5フレームのピークスピード
+ let peakSpeedKmh = null;
+ for (let i = 0; i < BAT_TRAIL.length; i++) {
+   const fi = BAT_TRAIL[i].fi;
+   if (fi < swingStartFI || fi > contactFI + 5) continue;
+   const sp = batSpeedsSmooth[i];
+   if (sp !== null && (peakSpeedKmh === null || sp > peakSpeedKmh)) peakSpeedKmh = sp;
+ }
+ // 異常値除去（>200km/h は計算エラー）
+ if (peakSpeedKmh !== null && peakSpeedKmh > 200) peakSpeedKmh = null;
+
+ // ─── バットメトリクスを表示 ───────────────────────────────────────────
  const batBar = $('bat-metrics-bar');
  if (batBar && BAT_TRAIL.length > 0) {
- batBar.classList.remove('hidden');
- const ipEl = $('in-plane-pct');
- if (ipEl) {
- ipEl.textContent = inPlaneRate != null ? inPlaneRate + '%' : '--';
- ipEl.style.color = inPlaneRate == null ? '#6b7280'
- : inPlaneRate >= 70 ? '#4ade80'
- : inPlaneRate >= 50 ? '#fbbf24' : '#f87171';
- }
- const aaEl = $('swing-plane-ang');
- if (aaEl && attackAngle != null) {
- aaEl.textContent = (attackAngle >= 0 ? '+' : '') + attackAngle + '°';
- // 理想攻撃角: +5°〜+15°
- aaEl.style.color = (attackAngle >= 5 && attackAngle <= 20) ? '#4ade80'
- : (attackAngle >= 0 && attackAngle <= 25) ? '#fbbf24' : '#f87171';
- }
- const zfEl = $('bat-zone-frames');
- if (zfEl && zoneMs != null) {
- zfEl.textContent = zoneMs + 'ms';
- zfEl.style.color = zoneMs >= 60 ? '#4ade80' : zoneMs >= 40 ? '#fbbf24' : '#f87171';
- }
+   batBar.classList.remove('hidden');
+   const ipEl = $('in-plane-pct');
+   if (ipEl) {
+     ipEl.textContent = inPlaneRate != null ? inPlaneRate + '%' : '--';
+     ipEl.style.color = inPlaneRate == null ? '#6b7280'
+       : inPlaneRate >= 70 ? '#4ade80'
+       : inPlaneRate >= 50 ? '#fbbf24' : '#f87171';
+   }
+   const ssEl = $('swing-speed-kmh');
+   if (ssEl) {
+     if (peakSpeedKmh !== null) {
+       ssEl.textContent = Math.round(peakSpeedKmh) + ' km/h';
+       // 目安: 高校生110〜130、社会人130〜150、プロ140〜160km/h
+       ssEl.style.color = peakSpeedKmh >= 140 ? '#4ade80'
+         : peakSpeedKmh >= 120 ? '#fbbf24' : '#60a5fa';
+     } else {
+       ssEl.textContent = '--';
+       ssEl.style.color = '#6b7280';
+     }
+   }
+   const zfEl = $('bat-zone-frames');
+   if (zfEl && zoneMs != null) {
+     zfEl.textContent = zoneMs + 'ms';
+     zfEl.style.color = zoneMs >= 60 ? '#4ade80' : zoneMs >= 40 ? '#fbbf24' : '#f87171';
+   }
  }
 
  // ─ スケルトン接続定義 ─
