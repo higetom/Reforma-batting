@@ -1512,6 +1512,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  analysis: result,
  raw_frames: cleanFrames,
  raw_fps: fps,
+ actual_video_fps: fps, // アップロード動画のFPS（フレームタイムスタンプから計算）
  raw_rmp_type: rmpType,
  captured_at: new Date().toISOString(),
  n_frames: frames.length,

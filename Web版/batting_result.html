@@ -966,13 +966,26 @@
  frames.forEach((f, fi) => {
  const lm = f.landmarks;
  if (!lm[15] || !lm[16] || !lm[13] || !lm[14]) return;
- // 手首の視認性が低いフレームは除外
- if ((lm[15].v || 0) < 0.4 || (lm[16].v || 0) < 0.4) return;
- const gx = (lm[15].x + lm[16].x) / 2;
- const gy = (lm[15].y + lm[16].y) / 2;
- // 左右前腕ベクトルの平均 = バット方向
- const fax = ((lm[15].x - lm[13].x) + (lm[16].x - lm[14].x)) / 2;
- const fay = ((lm[15].y - lm[13].y) + (lm[16].y - lm[14].y)) / 2;
+ const v15 = (lm[15].v || 0);
+ const v16 = (lm[16].v || 0);
+ const vMax = Math.max(v15, v16);
+ // 両手首とも見えない場合のみスキップ（横向き動画では片方が隠れることがある）
+ if (vMax < 0.25) return;
+ let gx, gy, fax, fay;
+ if (Math.min(v15, v16) >= 0.3) {
+   // 両手首可視: 両腕の平均でバット方向を推定
+   gx = (lm[15].x + lm[16].x) / 2;
+   gy = (lm[15].y + lm[16].y) / 2;
+   fax = ((lm[15].x - lm[13].x) + (lm[16].x - lm[14].x)) / 2;
+   fay = ((lm[15].y - lm[13].y) + (lm[16].y - lm[14].y)) / 2;
+ } else {
+   // 片手首が低可視度: より鮮明な方の腕だけ使う（横向き動画対応）
+   const wr = v15 >= v16 ? 15 : 16;
+   const el = wr === 15 ? 13 : 14;
+   gx = lm[wr].x; gy = lm[wr].y;
+   fax = lm[wr].x - lm[el].x;
+   fay = lm[wr].y - lm[el].y;
+ }
  const falen = Math.hypot(fax, fay);
  if (falen < 0.008) return;
  BAT_TRAIL.push({
