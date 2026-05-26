@@ -28,7 +28,7 @@
    * ────────────────────────────────────────────────── */
   var ONNX_CDN_URL  = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.js';
   var WASM_CDN_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/';
-  var MODEL_RELPATH = 'models/yolov8n.onnx';
+  var MODEL_RELPATH = 'yolov8n.onnx';
 
   var INPUT_W    = 640;
   var INPUT_H    = 640;
