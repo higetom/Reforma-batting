@@ -349,15 +349,15 @@
  <!-- バット軌道メトリクス -->
  <div id="bat-metrics-bar" class="bat-metrics-bar hidden">
  <div class="bat-metric-item">
- <span class="bat-metric-label">インプレーン率</span>
+ <span class="bat-metric-label">オンプレーン率</span>
  <span class="bat-metric-value" id="in-plane-pct">--</span>
  </div>
  <div class="bat-metric-item">
- <span class="bat-metric-label">攻撃角</span>
+ <span class="bat-metric-label">バット軌道角</span>
  <span class="bat-metric-value" id="swing-plane-ang">--</span>
  </div>
  <div class="bat-metric-item">
- <span class="bat-metric-label">ゾーン通過</span>
+ <span class="bat-metric-label">ゾーン通過 <span style="font-size:8px;color:#6b7280">(目安60ms〜)</span></span>
  <span class="bat-metric-value" id="bat-zone-frames">--</span>
  </div>
  </div>
@@ -366,9 +366,10 @@
  <div class="review-controls-wrap">
  <div class="review-speed-row">
  <span class="review-speed-label">速度</span>
+ <button class="review-speed-btn" data-rate="0.1">0.1x</button>
  <button class="review-speed-btn active" data-rate="0.25">0.25x</button>
  <button class="review-speed-btn" data-rate="0.5">0.5x</button>
- <button class="review-speed-btn" data-rate="1">1x</button>
+ <button class="review-speed-btn" data-rate="1.0">1x</button>
  </div>
  <div class="review-step-row">
  <button class="review-ctrl-btn" id="review-step-back">◀ 1コマ</button>
@@ -946,21 +947,23 @@
  }
 
  // 前腕ベクトルからバットヘッドを推定（正規化座標）
- // バット長さ ≈ 0.34 × フレーム高さ（身長比から逆算）
- const BAT_NORM_LEN = 0.34;
+ // バット長さ ≈ 0.30 × フレーム高さ（保守的に短め）
+ const BAT_NORM_LEN = 0.30;
  const PLANE_TOL = 0.09; // ±9%（約16cm相当）
 
  const BAT_TRAIL = [];
  frames.forEach((f, fi) => {
  const lm = f.landmarks;
  if (!lm[15] || !lm[16] || !lm[13] || !lm[14]) return;
+ // 手首の視認性が低いフレームは除外
+ if ((lm[15].v || 0) < 0.4 || (lm[16].v || 0) < 0.4) return;
  const gx = (lm[15].x + lm[16].x) / 2;
  const gy = (lm[15].y + lm[16].y) / 2;
  // 左右前腕ベクトルの平均 = バット方向
  const fax = ((lm[15].x - lm[13].x) + (lm[16].x - lm[14].x)) / 2;
  const fay = ((lm[15].y - lm[13].y) + (lm[16].y - lm[14].y)) / 2;
  const falen = Math.hypot(fax, fay);
- if (falen < 0.005) return;
+ if (falen < 0.008) return;
  BAT_TRAIL.push({
  t: f.t, fi,
  gx, gy,
@@ -969,7 +972,20 @@
  });
  });
 
- // インプレーン率（スウィング開始→コンタクト+数フレーム）
+ // ── 7フレーム移動平均でバット軌道を平滑化 ──
+ if (BAT_TRAIL.length > 4) {
+ const half = 3;
+ const raw = BAT_TRAIL.map(b => ({ hx: b.hx, hy: b.hy, gx: b.gx, gy: b.gy }));
+ for (let i = 0; i < BAT_TRAIL.length; i++) {
+ const s = Math.max(0, i - half), e = Math.min(BAT_TRAIL.length - 1, i + half);
+ let sx = 0, sy = 0, sgx = 0, sgy = 0, n = 0;
+ for (let j = s; j <= e; j++) { sx += raw[j].hx; sy += raw[j].hy; sgx += raw[j].gx; sgy += raw[j].gy; n++; }
+ BAT_TRAIL[i].hx = sx / n; BAT_TRAIL[i].hy = sy / n;
+ BAT_TRAIL[i].gx = sgx / n; BAT_TRAIL[i].gy = sgy / n;
+ }
+ }
+
+ // オンプレーン率（スウィング開始→コンタクト+数フレーム）
  let inPlaneN = 0, swingN = 0;
  BAT_TRAIL.forEach(b => {
  if (b.fi < swingStartFI || b.fi > contactFI + 8) return;
@@ -999,7 +1015,8 @@
  }
 
  // ゾーン通過フレーム数（ミリ秒換算）
- const zoneMs = swingN > 0 ? Math.round(swingN * (1000 / (fps || 30))) : null;
+ // ゾーン通過 = オンプレーンだったフレーム数をms換算（全スウィングではなくオンプレーン時間）
+ const zoneMs = inPlaneN > 0 ? Math.round(inPlaneN * (1000 / (fps || 30))) : null;
 
  // バットメトリクスを表示
  const batBar = $('bat-metrics-bar');
@@ -1371,9 +1388,10 @@
  const targetT = currentT + elapsed;
 
  let nextIdx = currentFrameIdx;
- for (let i = currentFrameIdx; i <= maxIdx; i++) {
- if (srcArr[i].t / 1000 >= targetT) { nextIdx = i; break; }
- nextIdx = i;
+ // targetT以下で最も大きい t を持つフレームへ進む（正しい速度制御）
+ for (let i = currentFrameIdx + 1; i <= maxIdx; i++) {
+ if (srcArr[i].t / 1000 <= targetT) nextIdx = i;
+ else break;
  }
  if (nextIdx >= maxIdx) nextIdx = 0; // ループ
 
