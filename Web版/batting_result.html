@@ -361,6 +361,8 @@
  <span class="bat-metric-value" id="bat-zone-frames">--</span>
  </div>
  </div>
+ <!-- デバッグ表示（原因特定後に削除）-->
+ <div id="bat-debug-info" style="margin:0 16px 8px;font-size:10px;color:#9ca3af;font-family:monospace;line-height:1.5;"></div>
 
  <!-- コントロール -->
  <div class="review-controls-wrap">
@@ -1178,6 +1180,22 @@
    if (zfEl && zoneMs != null) {
      zfEl.textContent = zoneMs + 'ms';
      zfEl.style.color = zoneMs >= 60 ? '#4ade80' : zoneMs >= 40 ? '#fbbf24' : '#f87171';
+   }
+
+   // ── デバッグ情報を UI に直接表示（原因特定用、後で削除）──
+   const dbgEl = document.getElementById('bat-debug-info');
+   if (dbgEl) {
+     const midLm = frames.length > 0 ? frames[Math.floor(frames.length/2)].landmarks : null;
+     const midV15 = midLm && midLm[15] ? midLm[15].v : '?';
+     const midV16 = midLm && midLm[16] ? midLm[16].v : '?';
+     const midX15 = midLm && midLm[15] ? midLm[15].x.toFixed(3) : '?';
+     const midX16 = midLm && midLm[16] ? midLm[16].x.toFixed(3) : '?';
+     dbgEl.innerHTML =
+       'BAT_TRAIL:' + BAT_TRAIL.length + ' frms:' + frames.length +
+       ' swFI:' + swingStartFI + ' ctFI:' + contactFI +
+       '<br>ip:' + inPlaneRate + ' spd:' + (peakSpeedKmh !== null ? Math.round(peakSpeedKmh) : 'null') +
+       '<br>lm15 v=' + midV15 + ' x=' + midX15 +
+       ' lm16 v=' + midV16 + ' x=' + midX16;
    }
  }
 
