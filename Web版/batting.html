@@ -1174,6 +1174,251 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  return 'unknown';
  }
 
+  // ─────────────────────────────────────────
+  // MP4Box.js + WebCodecs API — HEVC動画対応
+  // iPhone標準 HEVC 動画を <video> 要素を一切使わず
+  // ファイルバイト列から直接 VideoFrame に変換して MediaPipe へ渡す。
+  // canvas.drawImage(video) のブラックアウト問題を根本回避。
+  // ─────────────────────────────────────────
+
+ let mp4boxLoadPromise = null;
+ function loadMP4Box() {
+   if (mp4boxLoadPromise) return mp4boxLoadPromise;
+   mp4boxLoadPromise = loadScriptOnce(
+     'https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js',
+     30000
+   ).catch(function(e) { mp4boxLoadPromise = null; throw e; });
+   return mp4boxLoadPromise;
+ }
+
+ async function extractWithWebCodecs(file) {
+   if (typeof VideoDecoder === 'undefined') {
+     throw new Error('WEBCODECS_UNAVAILABLE: このブラウザはWebCodecsをサポートしていません');
+   }
+   await loadMP4Box();
+   if (typeof MP4Box === 'undefined') {
+     throw new Error('WEBCODECS_UNAVAILABLE: MP4Box.jsのロードに失敗しました');
+   }
+
+   setOverlayProgress(5, 'WebCodecsで解析しています…', 'ファイルを読み込み中');
+
+   const arrayBuffer = await file.arrayBuffer();
+
+   // ── MP4Box で demux ──
+   const demuxResult = await new Promise(function(resolve, reject) {
+     const mp4 = MP4Box.createFile();
+     let videoTrack = null;
+     const allSamples = [];
+     let codecDescription = null;
+
+     mp4.onReady = function(info) {
+       videoTrack = info.tracks.find(function(t) { return t.type === 'video'; });
+       if (!videoTrack) {
+         reject(new Error('WEBCODECS_FAILED: ビデオトラックが見つかりません'));
+         return;
+       }
+       // hvcC / avcC ボックスを取得して VideoDecoder の description を作る
+       try {
+         if (typeof DataStream !== 'undefined' && mp4.moov) {
+           const trak = mp4.moov.traks.find(function(t) {
+             return t.tkhd.track_id === videoTrack.id;
+           });
+           if (trak) {
+             const stsd = trak.mdia.minf.stbl.stsd;
+             const entry = stsd && stsd.entries && stsd.entries[0];
+             const codecBox = entry && (entry.hvcC || entry.avcC || entry.vpcC || entry.av1C);
+             if (codecBox) {
+               const ds = new DataStream(undefined, 0, DataStream.BIG_ENDIAN);
+               codecBox.write(ds);
+               codecDescription = new Uint8Array(ds.buffer, 8); // skip 4B size + 4B type
+             }
+           }
+         }
+       } catch (descErr) {
+         console.warn('[webcodecs] description取得失敗(descなしで継続):', descErr.message);
+       }
+       console.log('[webcodecs] track:', videoTrack.id, 'codec:', videoTrack.codec,
+         videoTrack.video.width + 'x' + videoTrack.video.height,
+         videoTrack.nb_samples + 'samples',
+         'desc:', codecDescription ? codecDescription.byteLength + 'B' : 'none');
+       mp4.setExtractionOptions(videoTrack.id, null, { nbSamples: videoTrack.nb_samples });
+       mp4.start();
+     };
+
+     mp4.onSamples = function(id, user, sArr) {
+       for (let i = 0; i < sArr.length; i++) allSamples.push(sArr[i]);
+       const nbTotal = videoTrack ? videoTrack.nb_samples : 1;
+       const pct = 5 + Math.min(25, (allSamples.length / nbTotal) * 25);
+       setOverlayProgress(pct, 'WebCodecsで解析しています…',
+         'サンプル読込: ' + allSamples.length + '/' + nbTotal);
+     };
+
+     mp4.onFlush = function() {
+       resolve({ videoTrack: videoTrack, samples: allSamples, codecDescription: codecDescription });
+     };
+     mp4.onError = function(e) {
+       reject(new Error('WEBCODECS_FAILED: MP4Boxエラー: ' + String(e)));
+     };
+
+     const buf = arrayBuffer.slice(0);
+     buf.fileStart = 0;
+     mp4.appendBuffer(buf);
+     mp4.flush();
+   });
+
+   const videoTrackInfo = demuxResult.videoTrack;
+   const allSamples     = demuxResult.samples;
+   const descBytes      = demuxResult.codecDescription;
+
+   if (allSamples.length === 0) {
+     throw new Error('WEBCODECS_FAILED: サンプルが0件です');
+   }
+
+   const timescale  = videoTrackInfo.timescale;
+   const codecStr   = videoTrackInfo.codec;
+   const vidW       = videoTrackInfo.video.width;
+   const vidH       = videoTrackInfo.video.height;
+   const lastSample = allSamples[allSamples.length - 1];
+   const durSec     = (lastSample.cts + lastSample.duration) / timescale;
+
+   console.log('[webcodecs] demux done:', allSamples.length, 'samples',
+     durSec.toFixed(2) + 's', codecStr);
+
+   // ── VideoDecoder サポート確認 ──
+   try {
+     const cfg = { codec: codecStr, codedWidth: vidW, codedHeight: vidH };
+     if (descBytes) cfg.description = descBytes;
+     const check = await VideoDecoder.isConfigSupported(cfg);
+     if (!check.supported) {
+       throw new Error('WEBCODECS_UNAVAILABLE: ' + codecStr + ' はこのデバイスでWebCodecsデコードできません');
+     }
+   } catch (e) {
+     if (/WEBCODECS_UNAVAILABLE/.test(e.message)) throw e;
+     console.warn('[webcodecs] isConfigSupported エラー(継続):', e.message);
+   }
+
+   // ── canvas セットアップ ──
+   const scale = Math.min(1, 640 / Math.max(vidW, vidH));
+   const relayCanvas = document.createElement('canvas');
+   relayCanvas.width  = Math.max(1, Math.round(vidW * scale));
+   relayCanvas.height = Math.max(1, Math.round(vidH * scale));
+   const relayCtx = relayCanvas.getContext('2d', { willReadFrequently: true });
+
+   const jpegCanvas = document.createElement('canvas');
+   jpegCanvas.width  = CAPTURE_W;
+   jpegCanvas.height = Math.max(1, Math.round(CAPTURE_W * vidH / vidW));
+   const jpegCtx = jpegCanvas.getContext('2d');
+
+   const collected        = [];
+   const uploadJpegFrames = [];
+   let visSum = 0, visCnt = 0;
+   const frameIntervalSec = 1 / TARGET_PROCESS_FPS;
+   let lastCollectedSec   = -Infinity;
+   let lastMediaPipeTs    = 0;
+
+   // ── VideoDecoder でデコード ──
+   await new Promise(function(resolveAll, rejectAll) {
+     const decoder = new VideoDecoder({
+       output: function(frame) {
+         try {
+           const timeSec = frame.timestamp / 1000000; // μs → s
+           const tMs     = timeSec * 1000;
+           if (timeSec - lastCollectedSec >= frameIntervalSec - 0.001) {
+             lastCollectedSec = timeSec;
+             try {
+               relayCtx.drawImage(frame, 0, 0, relayCanvas.width, relayCanvas.height);
+               const mpTs = Math.max(lastMediaPipeTs + 1, tMs + 1);
+               lastMediaPipeTs = mpTs;
+               const result    = poseLandmarker.detectForVideo(relayCanvas, mpTs);
+               const landmarks = (result.landmarks && result.landmarks[0]) || null;
+               if (landmarks) {
+                 const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
+                 let s = 0, c = 0;
+                 CORE.forEach(function(i) {
+                   if (landmarks[i] && typeof landmarks[i].visibility === 'number') {
+                     s += landmarks[i].visibility; c++;
+                   }
+                 });
+                 if (c > 0) { visSum += s / c; visCnt++; }
+                 collected.push({
+                   t: tMs,
+                   landmarks: landmarks.map(function(l) {
+                     return {
+                       x: +l.x.toFixed(4), y: +l.y.toFixed(4),
+                       z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
+                     };
+                   }),
+                 });
+                 // JPEG キャプチャ（フォームレビュー用）
+                 try {
+                   jpegCtx.drawImage(frame, 0, 0, jpegCanvas.width, jpegCanvas.height);
+                   uploadJpegFrames.push({ t: tMs, img: jpegCanvas.toDataURL('image/jpeg', 0.85) });
+                 } catch (_je) {}
+               }
+               const pct = 30 + Math.min(65, (timeSec / Math.max(0.1, durSec)) * 65);
+               setOverlayProgress(pct, 'WebCodecsで解析しています…',
+                 collected.length + '枚検出 / ' + timeSec.toFixed(1) + 's');
+             } catch (detectErr) {
+               console.warn('[webcodecs] detect error:', detectErr.message);
+             }
+           }
+         } finally {
+           frame.close();
+         }
+       },
+       error: function(e) {
+         console.error('[webcodecs] decoder error:', e);
+         rejectAll(new Error('WEBCODECS_FAILED: デコードエラー: ' + e.message));
+       },
+     });
+
+     const cfg = { codec: codecStr, codedWidth: vidW, codedHeight: vidH };
+     if (descBytes) cfg.description = descBytes;
+     decoder.configure(cfg);
+
+     // 全サンプルをエンキュー (GOP依存のため全フレーム必要)
+     for (let i = 0; i < allSamples.length; i++) {
+       const s = allSamples[i];
+       try {
+         decoder.decode(new EncodedVideoChunk({
+           type:      s.is_sync ? 'key' : 'delta',
+           timestamp: Math.round((s.cts / timescale) * 1000000),  // μs
+           duration:  Math.round((s.duration / timescale) * 1000000),
+           data:      s.data,
+         }));
+       } catch (enqErr) {
+         console.warn('[webcodecs] enqueue skip:', enqErr.message);
+       }
+     }
+
+     decoder.flush()
+       .then(function() { try { decoder.close(); } catch (_) {} resolveAll(); })
+       .catch(function(e) {
+         rejectAll(new Error('WEBCODECS_FAILED: flush失敗: ' + e.message));
+       });
+   });
+
+   // 時系列順にソート（B-frame reorder 対策）
+   collected.sort(function(a, b) { return a.t - b.t; });
+   uploadJpegFrames.sort(function(a, b) { return a.t - b.t; });
+
+   // IDB に JPEG 保存
+   if (uploadJpegFrames.length > 0) {
+     saveFramesToIDB(uploadJpegFrames).catch(function(e) {
+       console.warn('[webcodecs] IDB error:', e);
+     });
+   }
+
+   const avgVis = visCnt > 0 ? visSum / visCnt : 0;
+   console.log('[webcodecs] done:', collected.length, 'frames, avgVis:', avgVis.toFixed(3),
+     'jpeg:', uploadJpegFrames.length);
+
+   if (collected.length < 5) {
+     throw new Error('WEBCODECS_FAILED: フレーム取得数が少なすぎます(' + collected.length + '枚)');
+   }
+   return collected;
+ }
+
  $('btn-analyze-upload').addEventListener('click', async () => {
  if (!pickedFile || !pickedFileUrl) return;
 
@@ -1193,9 +1438,27 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  poseLandmarker = await window.ReformaMediaPipe.getPoseLandmarker();
  }
 
- setOverlayProgress(5, 'フレームを解析しています…', '動画を最初から再生して解析');
- // プレビューvideoをそのまま解析(新規video作成・FFmpeg変換を完全に廃止)
- const frames = await extractFromPreviewVideo(previewVideo);
+ // HEVC + WebCodecs 対応: HEVCのときはWebCodecsを優先試行 → 失敗時フォールバック
+ let frames;
+ if (pickedFileCodec === 'hevc' && typeof VideoDecoder !== 'undefined') {
+   setOverlayProgress(3, 'HEVC動画をWebCodecsで解析します…', '変換不要・完全ローカル処理');
+   try {
+     frames = await extractWithWebCodecs(pickedFile);
+     console.log('[upload] WebCodecs成功:', frames.length, 'frames');
+   } catch (wcErr) {
+     console.warn('[upload] WebCodecs失敗:', wcErr.message);
+     if (/WEBCODECS_UNAVAILABLE/.test(wcErr.message)) {
+       // 非対応デバイス → 従来フローにフォールバック
+       setOverlayProgress(5, 'フレームを解析しています…', '動画を再生して解析');
+       frames = await extractFromPreviewVideo(previewVideo);
+     } else {
+       throw wcErr; // 他のエラーはそのまま上に投げる
+     }
+   }
+ } else {
+   setOverlayProgress(5, 'フレームを解析しています…', '動画を最初から再生して解析');
+   frames = await extractFromPreviewVideo(previewVideo);
+ }
  setOverlayProgress(98, '解析を組み立てています…', frames.length + 'フレーム取得');
 
  // RMSTタイプ取得
@@ -1252,12 +1515,18 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  console.error(e);
  // エラー種別に応じて改善ヒントを変える
  const msg = e.message || '不明なエラー';
- if (/HEVC_BLACKOUT/.test(msg)) {
- // HEVC ブラックアウト(Mac/PC含む) — 自動変換も失敗した状況
+ if (/WEBCODECS_FAILED/.test(msg)) {
+ // WebCodecs でデコードできなかった場合
+ showRichError('WebCodecsでの解析に失敗しました', [
+ '「設定」→「カメラ」→「フォーマット」→「互換性優先」に変更して撮影した動画をお試しください',
+ '「撮影を準備する」からその場で撮影すると確実に解析できます',
+ 'ページを再読み込みしてから再試行してください',
+ ]);
+ } else if (/HEVC_BLACKOUT/.test(msg)) {
+ // HEVC ブラックアウト — WebCodecs非対応環境でfallbackも失敗
  showRichError('動画から姿勢検出ができませんでした', [
- '動画形式の互換性問題の可能性があります(HEVCのまま処理しようとして失敗)',
- 'mp4(H.264)形式の動画でお試しください',
- '「撮影を準備する」からその場で撮影すると確実です',
+ 'iPhoneの「設定」→「カメラ」→「フォーマット」→「互換性優先」に変更してから撮影した動画を使用してください',
+ '「撮影を準備する」からその場で撮影すると確実に解析できます',
  ]);
  } else if (/EXTRACT_FAILED/.test(msg)) {
  showRichError('動画からフレームを読み込めませんでした', [
