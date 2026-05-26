@@ -841,10 +841,17 @@
  const tmpImg = new Image();
  tmpImg.src = capturedImgFrames[0].img;
  await new Promise(res => { tmpImg.onload = res; setTimeout(res, 800); });
- reviewCanvas.width = tmpImg.naturalWidth || 180;
- reviewCanvas.height = tmpImg.naturalHeight || 320;
+ const natW = tmpImg.naturalWidth || 360;
+ const natH = tmpImg.naturalHeight || 640;
+ reviewCanvas.width = natW;
+ reviewCanvas.height = natH;
+ // コンテナのアスペクト比をJPEGに合わせてズレを防ぐ
+ // （object-fit:containのレターボックスとcanvasのズレが原因）
+ const playerOuter = $('review-player-outer');
+ if (playerOuter) {
+   playerOuter.style.aspectRatio = natW + ' / ' + natH;
+ }
  $('review-no-video').classList.add('hidden');
- // フレーム枚数を表示
  const noVideoEl = $('review-no-video');
  if (noVideoEl) noVideoEl.textContent = `📸 ${capturedImgFrames.length}フレーム読み込み済み`;
  } else {
