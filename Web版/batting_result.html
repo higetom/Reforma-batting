@@ -851,6 +851,32 @@
  const fps = (payload.actual_video_fps && payload.actual_video_fps > 0)
  ? payload.actual_video_fps : (r.fps || 30);
 
+ // ─ スピード計算用: スムージング前の生前腕データを保存 ──────────────────────────
+ // 5フレーム平滑化は前腕の角速度ピークを40%以上抑制するためバットスピード計算には生データを使用
+ const RAW_ARM_TRAIL = [];
+ (function() {
+   frames.forEach(function(f, fi) {
+     const lm = f.landmarks;
+     if (!lm[15] || !lm[16] || !lm[13] || !lm[14]) return;
+     if (lm[15].x == null || lm[16].x == null || lm[13].x == null || lm[14].x == null) return;
+     const lm15v = Math.abs(lm[15].x) > 0.001 || Math.abs(lm[15].y) > 0.001;
+     const lm16v = Math.abs(lm[16].x) > 0.001 || Math.abs(lm[16].y) > 0.001;
+     let gx, gy, fax, fay;
+     if (lm15v && lm16v) {
+       gx = (lm[15].x + lm[16].x) / 2; gy = (lm[15].y + lm[16].y) / 2;
+       fax = ((lm[15].x - lm[13].x) + (lm[16].x - lm[14].x)) / 2;
+       fay = ((lm[15].y - lm[13].y) + (lm[16].y - lm[14].y)) / 2;
+     } else if (lm15v) {
+       gx = lm[15].x; gy = lm[15].y; fax = lm[15].x - lm[13].x; fay = lm[15].y - lm[13].y;
+     } else if (lm16v) {
+       gx = lm[16].x; gy = lm[16].y; fax = lm[16].x - lm[14].x; fay = lm[16].y - lm[14].y;
+     } else return;
+     const falen = Math.hypot(fax, fay);
+     if (falen < 0.002) return;
+     RAW_ARM_TRAIL.push({ t: f.t, fi: fi, gx: gx, gy: gy, fux: fax/falen, fuy: fay/falen });
+   });
+ })();
+
  // ─ ランドマーク時系列スムージング(5フレーム加重平均) ─────────────────────────
  // 目的: MediaPipe の per-frame ノイズを除去し、関節角度・比率計算を安定させる。
  // 手法: 重みベクトル [1,2,3,2,1] の対称加重移動平均。
@@ -1197,84 +1223,94 @@
    let effScaleX, effScaleY;
    const batLenM = selBatLenCm / 100;
    if (autoBatDiagPx > 0) {
-     // YOLOが検出したバット対角線(px)を基準スケールに使用
      const mPerPx = batLenM / autoBatDiagPx;
      effScaleX = mPerPx * reviewCanvas.width;
      effScaleY = mPerPx * reviewCanvas.height;
    } else {
-     // フォールバック: トルソーベーススケール
      effScaleX = scaleX;
      effScaleY = scaleY;
    }
-   // バット実長で前腕方向を物理空間に変換してバットヘッド位置を再計算
-   // 理由: BAT_NORM_LEN=0.30は正規化座標系での固定値だが、
-   //       ポートレート水平スイングでは実際の36cmにしかならず(86cmの42%)
-   //       速度が系統的に過小評価される。物理方向に変換することで正確なレバー長を使用。
-   function correctedBatHead(entry) {
-     const dx_n = entry.hx - entry.gx; // 正規化空間のバット方向ベクトル
-     const dy_n = entry.hy - entry.gy;
-     const dx_p = dx_n * effScaleX;    // 物理空間に変換 (アスペクト比補正)
-     const dy_p = dy_n * effScaleY;
-     const physLen = Math.hypot(dx_p, dy_p);
-     if (physLen < 1e-9) return { hx: entry.hx, hy: entry.hy };
-     // 正確なバット長で正規化座標のバットヘッド位置を再計算
-     return {
-       hx: entry.gx + (dx_p / physLen) * (batLenM / effScaleX),
-       hy: entry.gy + (dy_p / physLen) * (batLenM / effScaleY)
-     };
+
+   // ── 角速度ベースのバットヘッド速度計算 ────────────────────────────────────
+   // 原理: v_bat = v_wrist + ω_phys × batLenM
+   //   ω_phys = ω_norm × (effScaleX × effScaleY) / D²
+   //   D² = cos²θ×effScaleX² + sin²θ×effScaleY²  (θ=正規化空間での前腕角度)
+   // 生データ(RAW_ARM_TRAIL)使用: スムージングによる角速度抑制(~40%)を回避
+   const rawSpeeds = [];
+   for (var ri = 0; ri < RAW_ARM_TRAIL.length; ri++) {
+     if (ri === 0) { rawSpeeds.push(null); continue; }
+     var a = RAW_ARM_TRAIL[ri - 1], b = RAW_ARM_TRAIL[ri];
+     var dt = (b.t - a.t) / 1000;
+     if (dt <= 0 || dt > 0.5) { rawSpeeds.push(null); continue; }
+
+     // 前腕の回転角 (正規化空間での外積 → sinΔθ)
+     var cross = a.fux * b.fuy - a.fuy * b.fux;
+     var dtheta_n = Math.asin(Math.max(-1, Math.min(1, cross)));
+
+     // 正規化角速度 → 物理角速度変換
+     // 正規化角θと物理角αの関係: dα/dθ = (effScaleX × effScaleY) / D²
+     var theta = Math.atan2(a.fuy, a.fux);
+     var cosT = Math.cos(theta), sinT = Math.sin(theta);
+     var D2 = cosT * cosT * effScaleX * effScaleX + sinT * sinT * effScaleY * effScaleY;
+     var omega_phys = (dtheta_n / dt) * (effScaleX * effScaleY) / D2;
+
+     // バット接線速度 = 前腕の物理空間垂直方向 × ω × バット長
+     var pfx = a.fux * effScaleX, pfy = a.fuy * effScaleY;
+     var pfLen = Math.hypot(pfx, pfy);
+     if (pfLen < 1e-9) { rawSpeeds.push(null); continue; }
+     var tang_vx = (-pfy / pfLen) * omega_phys * batLenM;
+     var tang_vy = ( pfx / pfLen) * omega_phys * batLenM;
+
+     // グリップ(手首)速度
+     var vwx = (b.gx - a.gx) * effScaleX / dt;
+     var vwy = (b.gy - a.gy) * effScaleY / dt;
+
+     rawSpeeds.push(Math.hypot(vwx + tang_vx, vwy + tang_vy) * 3.6);
    }
 
-   // フレーム間速度計算 (物理バットヘッド位置使用)
-   const rawSpeeds = [null];
-   for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
-     const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
-     const dt = (b.t - a.t) / 1000;
-     if (dt <= 0 || dt > 0.5) { rawSpeeds.push(null); continue; }
-     const ca = correctedBatHead(a);
-     const cb = correctedBatHead(b);
-     const dx = (cb.hx - ca.hx) * effScaleX;
-     const dy = (cb.hy - ca.hy) * effScaleY;
-     rawSpeeds.push(Math.hypot(dx, dy) / dt * 3.6);
-   }
-   // 外れ値除去: 有効値の中央値 × 2.5 を超えるものはnull
-   const validSpeeds = rawSpeeds.filter(s => s !== null);
-   validSpeeds.sort((a, b) => a - b);
-   const medianSpeed = validSpeeds.length > 0
+   // 外れ値除去: 中央値 × 2.5 + 175km/h 上限
+   var validSpeeds = rawSpeeds.filter(function(s) { return s !== null; });
+   validSpeeds.sort(function(a, b) { return a - b; });
+   var medianSpeed = validSpeeds.length > 0
      ? validSpeeds[Math.floor(validSpeeds.length / 2)] : 0;
-   const maxAllowed = Math.max(medianSpeed * 2.5, 60); // 最低60km/h上限は許容
-   const cleanedSpeeds = rawSpeeds.map(s =>
-     s !== null && s <= maxAllowed && s <= 175 ? s : null
-   );
-   // 5フレーム平滑化
-   const smoothSpeeds = cleanedSpeeds.map(function (s, i) {
+   var maxAllowed = Math.max(medianSpeed * 2.5, 60);
+   var cleanedSpeeds = rawSpeeds.map(function(s) {
+     return s !== null && s <= maxAllowed && s <= 175 ? s : null;
+   });
+
+   // 3フレーム平滑化
+   var smoothSpeeds = cleanedSpeeds.map(function(s, i) {
      if (s === null) return null;
-     let sum = 0, n = 0;
-     for (let j = Math.max(0, i - 2); j <= Math.min(cleanedSpeeds.length - 1, i + 2); j++) {
+     var sum = 0, n = 0;
+     for (var j = Math.max(0, i - 1); j <= Math.min(cleanedSpeeds.length - 1, i + 1); j++) {
        if (cleanedSpeeds[j] !== null) { sum += cleanedSpeeds[j]; n++; }
      }
      return n > 0 ? sum / n : null;
    });
-   // スウィング範囲ピーク
-   let peak = null;
-   for (let i = 0; i < BAT_TRAIL.length; i++) {
-     const fi = BAT_TRAIL[i].fi;
+
+   // スウィング範囲 [swingStartFI, contactFI+5] でのピーク速度
+   var peak = null;
+   for (var pi = 0; pi < RAW_ARM_TRAIL.length; pi++) {
+     var fi = RAW_ARM_TRAIL[pi].fi;
      if (fi < swingStartFI || fi > contactFI + 5) continue;
-     const sp = smoothSpeeds[i];
+     var sp = smoothSpeeds[pi];
      if (sp !== null && (peak === null || sp > peak)) peak = sp;
    }
-   if (peak === null && BAT_TRAIL.length > 0) {
-     smoothSpeeds.forEach(function (sp) {
+   // フォールバック: スウィング範囲外なら全フレームで最大
+   if (peak === null && RAW_ARM_TRAIL.length > 0) {
+     smoothSpeeds.forEach(function(sp) {
        if (sp !== null && (peak === null || sp > peak)) peak = sp;
      });
    }
-   const ssEl = $('swing-speed-kmh');
+
+   // UI更新
+   var ssEl = $('swing-speed-kmh');
    if (ssEl && peak !== null) {
      ssEl.textContent = Math.round(peak) + ' km/h';
      ssEl.style.color = peak >= 140 ? '#4ade80' : peak >= 120 ? '#fbbf24' : '#60a5fa';
-     // ステータスラベル更新
-     const statusSpans = ssEl.parentNode
+     var statusSpans = ssEl.parentNode
        ? ssEl.parentNode.querySelectorAll('span[style*="font-size:9px"]') : [];
-     statusSpans.forEach(function (sp) {
+     statusSpans.forEach(function(sp) {
        sp.textContent = autoBatDiagPx > 0
          ? 'YOLO+バット長校正済 (' + selBatLenCm + 'cm)'
          : 'トルソー推定 (' + selBatLenCm + 'cm)';
