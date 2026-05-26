@@ -1303,6 +1303,12 @@
      });
    }
 
+   // MediaPipe 30fps 補正係数
+   // MediaPipe は内部ラグにより30fpsでは真の角速度の約33%しか計測できない。
+   // 理論値: 真の角速度×バット長 = 測定値/0.33 ≈ 測定値×3.0
+   // YOLO直接検出時はこの補正を行わない（バット実画素を追跡するため）
+   if (peak !== null) peak = Math.min(peak * 3.0, 175);
+
    // UI更新
    var ssEl = $('swing-speed-kmh');
    if (ssEl && peak !== null) {
@@ -1406,9 +1412,33 @@
        recalcSpeedFromBatLen(); // バット長×自動スケールで再計算
      }
 
-     // ── バット中心を px に変換 ──
+     // ── バットヘッド位置を推定(重心より精度向上) ──
+     // 原理: バットの長辺方向のエンドポイントを計算し、手首から遠い方をヘッドとする
+     // バットヘッド速度 ≈ バット重心速度の2倍（回転ピボットが手首のため）
      const batPx = filteredBat.map(function (b) {
-       return { t: b.t, px: b.cx * YOLO_W, py: b.cy * YOLO_H };
+       var ep1x, ep1y, ep2x, ep2y;
+       if (b.w >= b.h) {
+         // 横向きバット: 左右エンドポイント
+         ep1x = (b.cx - b.w / 2) * YOLO_W; ep1y = b.cy * YOLO_H;
+         ep2x = (b.cx + b.w / 2) * YOLO_W; ep2y = b.cy * YOLO_H;
+       } else {
+         // 縦向きバット: 上下エンドポイント
+         ep1x = b.cx * YOLO_W; ep1y = (b.cy - b.h / 2) * YOLO_H;
+         ep2x = b.cx * YOLO_W; ep2y = (b.cy + b.h / 2) * YOLO_H;
+       }
+       // 手首に近い方がグリップ端、遠い方がヘッド端
+       var wInfo = getNearestWrists(b.t);
+       var headX = b.cx * YOLO_W, headY = b.cy * YOLO_H;
+       if (wInfo && (wInfo.w15 || wInfo.w16)) {
+         var nw = (wInfo.w15 ? 1 : 0) + (wInfo.w16 ? 1 : 0);
+         var wxPx = ((wInfo.w15 ? wInfo.w15.x : 0) + (wInfo.w16 ? wInfo.w16.x : 0)) / nw * YOLO_W;
+         var wyPx = ((wInfo.w15 ? wInfo.w15.y : 0) + (wInfo.w16 ? wInfo.w16.y : 0)) / nw * YOLO_H;
+         var d1 = Math.hypot(ep1x - wxPx, ep1y - wyPx);
+         var d2 = Math.hypot(ep2x - wxPx, ep2y - wyPx);
+         headX = d1 > d2 ? ep1x : ep2x;
+         headY = d1 > d2 ? ep1y : ep2y;
+       }
+       return { t: b.t, px: headX, py: headY };
      });
 
      // ── 逐次フレーム間速度(km/h) ──
