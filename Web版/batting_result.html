@@ -169,6 +169,25 @@
  border-radius: 6px; padding: 7px 10px;
  font-size: 12px; color: #cbd5e1; line-height: 1.5; pointer-events: none;
  }
+ /* バット軌道メトリクスバー */
+ .bat-metrics-bar {
+ display: flex; gap: 0; margin: 0 16px 4px;
+ background: var(--bg-card); border: 1px solid var(--border-subtle);
+ border-radius: var(--radius-md); overflow: hidden;
+ }
+ .bat-metric-item {
+ flex: 1; padding: 10px 14px; text-align: center;
+ border-right: 1px solid var(--border-subtle);
+ }
+ .bat-metric-item:last-child { border-right: none; }
+ .bat-metric-label {
+ display: block; font-size: 10px; color: var(--text-muted);
+ letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 4px;
+ }
+ .bat-metric-value {
+ display: block; font-size: 22px; font-weight: 600;
+ font-family: var(--font-family-mono); color: var(--text-primary);
+ }
  .review-no-video-badge {
  position: absolute; top: 8px; right: 8px; z-index: 4;
  background: rgba(0,0,0,0.7); color: #9ca3af; font-size: 10px;
@@ -324,6 +343,23 @@
  <label class="review-ann-toggle"><input type="checkbox" checked data-ann="hip_sho"> 腰肩ライン</label>
  <label class="review-ann-toggle"><input type="checkbox" checked data-ann="head"> 頭部軌跡</label>
  <label class="review-ann-toggle"><input type="checkbox" checked data-ann="refline"> 参照線</label>
+ <label class="review-ann-toggle"><input type="checkbox" checked data-ann="bat"> バット軌道</label>
+ </div>
+
+ <!-- バット軌道メトリクス -->
+ <div id="bat-metrics-bar" class="bat-metrics-bar hidden">
+ <div class="bat-metric-item">
+ <span class="bat-metric-label">インプレーン率</span>
+ <span class="bat-metric-value" id="in-plane-pct">--</span>
+ </div>
+ <div class="bat-metric-item">
+ <span class="bat-metric-label">攻撃角</span>
+ <span class="bat-metric-value" id="swing-plane-ang">--</span>
+ </div>
+ <div class="bat-metric-item">
+ <span class="bat-metric-label">ゾーン通過</span>
+ <span class="bat-metric-value" id="bat-zone-frames">--</span>
+ </div>
  </div>
 
  <!-- コントロール -->
@@ -883,7 +919,7 @@
  };
 
  // ─ アノテーション切替 ─
- const annToggles = { axis: true, hip_sho: true, head: true, refline: true };
+ const annToggles = { axis: true, hip_sho: true, head: true, refline: true, bat: true };
  document.querySelectorAll('[data-ann]').forEach(cb => {
  cb.checked = true;
  cb.addEventListener('change', () => {
@@ -891,6 +927,104 @@
  showFrame(currentFrameIdx);
  });
  });
+
+ // ─────────────────────────────────────────
+ // バット軌道 事前計算
+ // ─────────────────────────────────────────
+ const swingStartFI = r.phases && r.phases['スウィング開始'] != null
+ ? Math.round(r.phases['スウィング開始']) : Math.floor(frames.length * 0.38);
+ const contactFI = r.phases && r.phases['コンタクト'] != null
+ ? Math.round(r.phases['コンタクト']) : Math.floor(frames.length * 0.68);
+
+ // コンタクト時の手首高さ = ヒッティングプレーン基準
+ let planeRefY = 0.62;
+ {
+ const cf = frames[Math.min(contactFI, frames.length - 1)];
+ if (cf && cf.landmarks[15] && cf.landmarks[16]) {
+ planeRefY = (cf.landmarks[15].y + cf.landmarks[16].y) / 2;
+ }
+ }
+
+ // 前腕ベクトルからバットヘッドを推定（正規化座標）
+ // バット長さ ≈ 0.34 × フレーム高さ（身長比から逆算）
+ const BAT_NORM_LEN = 0.34;
+ const PLANE_TOL = 0.09; // ±9%（約16cm相当）
+
+ const BAT_TRAIL = [];
+ frames.forEach((f, fi) => {
+ const lm = f.landmarks;
+ if (!lm[15] || !lm[16] || !lm[13] || !lm[14]) return;
+ const gx = (lm[15].x + lm[16].x) / 2;
+ const gy = (lm[15].y + lm[16].y) / 2;
+ // 左右前腕ベクトルの平均 = バット方向
+ const fax = ((lm[15].x - lm[13].x) + (lm[16].x - lm[14].x)) / 2;
+ const fay = ((lm[15].y - lm[13].y) + (lm[16].y - lm[14].y)) / 2;
+ const falen = Math.hypot(fax, fay);
+ if (falen < 0.005) return;
+ BAT_TRAIL.push({
+ t: f.t, fi,
+ gx, gy,
+ hx: gx + (fax / falen) * BAT_NORM_LEN,
+ hy: gy + (fay / falen) * BAT_NORM_LEN,
+ });
+ });
+
+ // インプレーン率（スウィング開始→コンタクト+数フレーム）
+ let inPlaneN = 0, swingN = 0;
+ BAT_TRAIL.forEach(b => {
+ if (b.fi < swingStartFI || b.fi > contactFI + 8) return;
+ swingN++;
+ if (Math.abs(b.hy - planeRefY) < PLANE_TOL) inPlaneN++;
+ });
+ const inPlaneRate = swingN > 0 ? Math.round(inPlaneN / swingN * 100) : null;
+
+ // 攻撃角（バットヘッド軌跡の傾き、上向き正）
+ let attackAngle = null;
+ {
+ const swingBats = BAT_TRAIL.filter(b => b.fi >= swingStartFI && b.fi <= contactFI);
+ if (swingBats.length >= 4) {
+ const n = swingBats.length;
+ // 最初25% と最後25% の平均位置から傾き計算
+ const q1 = swingBats.slice(0, Math.max(1, Math.floor(n * 0.25)));
+ const q4 = swingBats.slice(Math.floor(n * 0.75));
+ const x1 = q1.reduce((s, b) => s + b.hx, 0) / q1.length;
+ const y1 = q1.reduce((s, b) => s + b.hy, 0) / q1.length;
+ const x4 = q4.reduce((s, b) => s + b.hx, 0) / q4.length;
+ const y4 = q4.reduce((s, b) => s + b.hy, 0) / q4.length;
+ const dx = x4 - x1, dy = y4 - y1;
+ if (Math.abs(dx) > 0.01) {
+ attackAngle = Math.round(Math.atan2(-dy, Math.abs(dx)) * 180 / Math.PI * 10) / 10;
+ }
+ }
+ }
+
+ // ゾーン通過フレーム数（ミリ秒換算）
+ const zoneMs = swingN > 0 ? Math.round(swingN * (1000 / (fps || 30))) : null;
+
+ // バットメトリクスを表示
+ const batBar = $('bat-metrics-bar');
+ if (batBar && BAT_TRAIL.length > 0) {
+ batBar.classList.remove('hidden');
+ const ipEl = $('in-plane-pct');
+ if (ipEl) {
+ ipEl.textContent = inPlaneRate != null ? inPlaneRate + '%' : '--';
+ ipEl.style.color = inPlaneRate == null ? '#6b7280'
+ : inPlaneRate >= 70 ? '#4ade80'
+ : inPlaneRate >= 50 ? '#fbbf24' : '#f87171';
+ }
+ const aaEl = $('swing-plane-ang');
+ if (aaEl && attackAngle != null) {
+ aaEl.textContent = (attackAngle >= 0 ? '+' : '') + attackAngle + '°';
+ // 理想攻撃角: +5°〜+15°
+ aaEl.style.color = (attackAngle >= 5 && attackAngle <= 20) ? '#4ade80'
+ : (attackAngle >= 0 && attackAngle <= 25) ? '#fbbf24' : '#f87171';
+ }
+ const zfEl = $('bat-zone-frames');
+ if (zfEl && zoneMs != null) {
+ zfEl.textContent = zoneMs + 'ms';
+ zfEl.style.color = zoneMs >= 60 ? '#4ade80' : zoneMs >= 40 ? '#fbbf24' : '#f87171';
+ }
+ }
 
  // ─ スケルトン接続定義 ─
  const SKEL_CONN = [
@@ -1060,7 +1194,68 @@
  }
  }
 
- // ── 6. フェーズバッジ(左下) ──
+ // ── 6. バット軌道 ──
+ if (annToggles.bat && BAT_TRAIL.length > 0) {
+ const ms = timeSec * 1000;
+
+ // ヒッティングプレーン基準線（薄い水平破線）
+ const pyRef = py(planeRefY);
+ rCtx.save();
+ rCtx.setLineDash([5 * sc, 3 * sc]);
+ rCtx.strokeStyle = 'rgba(74,222,128,0.22)';
+ rCtx.lineWidth = sc * 0.7;
+ rCtx.beginPath(); rCtx.moveTo(0, pyRef); rCtx.lineTo(W, pyRef); rCtx.stroke();
+ rCtx.setLineDash([]);
+ rCtx.restore();
+
+ // バットヘッド軌跡（過去700ms）
+ const trail = BAT_TRAIL.filter(b => b.t <= ms && b.t >= ms - 700);
+ if (trail.length > 1) {
+ rCtx.save();
+ for (let i = 1; i < trail.length; i++) {
+ const a = trail[i - 1], b2 = trail[i];
+ const alpha = (i / trail.length) * 0.85;
+ const onPlane = Math.abs(b2.hy - planeRefY) < PLANE_TOL;
+ rCtx.strokeStyle = onPlane
+ ? `rgba(74,222,128,${alpha})`
+ : `rgba(248,113,113,${alpha * 0.9})`;
+ rCtx.lineWidth = sc * 2; rCtx.lineCap = 'round';
+ rCtx.beginPath();
+ rCtx.moveTo(px(a.hx), py(a.hy));
+ rCtx.lineTo(px(b2.hx), py(b2.hy));
+ rCtx.stroke();
+ }
+ rCtx.restore();
+ }
+
+ // 現在フレームのバット（グリップ→ヘッド）
+ let curBat = null;
+ for (let i = 0; i < BAT_TRAIL.length; i++) {
+ if (BAT_TRAIL[i].t > ms + 50) break;
+ curBat = BAT_TRAIL[i];
+ }
+ if (curBat) {
+ const cgx = px(curBat.gx), cgy = py(curBat.gy);
+ const chx = px(curBat.hx), chy = py(curBat.hy);
+ const onPlane = Math.abs(curBat.hy - planeRefY) < PLANE_TOL;
+ const batCol = onPlane ? '#4ade80' : '#f87171';
+ rCtx.save();
+ rCtx.shadowColor = batCol; rCtx.shadowBlur = 6 * sc;
+ rCtx.strokeStyle = batCol; rCtx.lineWidth = 2.5 * sc; rCtx.lineCap = 'round';
+ rCtx.beginPath(); rCtx.moveTo(cgx, cgy); rCtx.lineTo(chx, chy); rCtx.stroke();
+ rCtx.shadowBlur = 0;
+ // バットヘッドドット
+ rCtx.beginPath(); rCtx.arc(chx, chy, 3.5 * sc, 0, Math.PI * 2);
+ rCtx.fillStyle = '#fff'; rCtx.fill();
+ // グリップドット
+ rCtx.beginPath(); rCtx.arc(cgx, cgy, 2 * sc, 0, Math.PI * 2);
+ rCtx.fillStyle = 'rgba(255,255,255,0.6)'; rCtx.fill();
+ rCtx.restore();
+ drawLabel(chx, chy - 9 * sc, onPlane ? 'ON PLANE' : 'OFF PLANE', batCol, 'right');
+ }
+ }
+
+ // ── 7. フェーズバッジ(左下) ──
  const phaseName = getPhaseAt(timeSec);
  if (phaseName) {
  rCtx.save();
