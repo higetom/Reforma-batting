@@ -987,8 +987,8 @@
  const v15 = (lm[15].v || 0);
  const v16 = (lm[16].v || 0);
  const vMax = Math.max(v15, v16);
- // 両手首とも見えない場合のみスキップ（横向き動画では片方が隠れることがある）
- if (vMax < 0.25) return;
+ // 両手首とも全く検出されない場合のみスキップ（閾値を最小限に）
+ if (vMax < 0.10) return;
  let gx, gy, fax, fay;
  if (Math.min(v15, v16) >= 0.3) {
    // 両手首可視: 両腕の平均でバット方向を推定
@@ -1005,7 +1005,7 @@
    fay = lm[wr].y - lm[el].y;
  }
  const falen = Math.hypot(fax, fay);
- if (falen < 0.008) return;
+ if (falen < 0.002) return; // 前腕ベクトル長の最小閾値を緩和
  BAT_TRAIL.push({
  t: f.t, fi,
  gx, gy,
@@ -1135,6 +1135,17 @@
    }
  }
  console.log('[DEBUG] BAT_TRAIL.length=' + BAT_TRAIL.length + ' peakSpeedKmh=' + peakSpeedKmh + ' inPlaneRate=' + inPlaneRate);
+
+ // BAT_TRAIL 空のときは診断メッセージを UI に表示
+ if (BAT_TRAIL.length === 0) {
+   console.warn('[DEBUG] BAT_TRAIL is EMPTY — landmark visibility all below 0.10');
+   // 手首ランドマークのvis値をコンソールに出力
+   if (frames.length > 0) {
+     const mid = frames[Math.floor(frames.length / 2)];
+     const lm = mid.landmarks;
+     console.warn('[DEBUG] mid-frame lm[15].v=' + (lm[15]?lm[15].v:'-') + ' lm[16].v=' + (lm[16]?lm[16].v:'-'));
+   }
+ }
 
  // ─── バットメトリクスを表示 ───────────────────────────────────────────
  const batBar = $('bat-metrics-bar');
