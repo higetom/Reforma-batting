@@ -406,18 +406,22 @@
    <div class="calib-inner">
      <div class="calib-title">スイングスピード 精度設定</div>
      <div id="calib-step1">
-       <div class="calib-desc">動画内の2点をタップして既知距離を指定します。<br>ホームベースの端、バットの両端など長さがわかる2点を選んでください。</div>
+       <div class="calib-desc">バットのグリップ端と先端をタップしてください。<br>斜めでも正確に計測できます。</div>
        <div id="calib-canvas-wrap">
          <canvas id="calib-canvas"></canvas>
        </div>
-       <div class="calib-status" id="calib-step1-status">1点目をタップ</div>
+       <div class="calib-status" id="calib-step1-status">1点目をタップ（グリップ端）</div>
      </div>
      <div id="calib-step2" style="display:none">
-       <div class="calib-desc" id="calib-step2-desc">2点間の実際の距離を選択してください</div>
+       <div class="calib-desc" id="calib-step2-desc">バットの実際の長さを選択してください</div>
        <div class="calib-dist-row">
+         <button class="calib-dist-btn" id="calib-d84">84cm</button>
+         <button class="calib-dist-btn" id="calib-d85">85cm</button>
+         <button class="calib-dist-btn" id="calib-d86">86cm</button>
+         <button class="calib-dist-btn" id="calib-d87">87cm</button>
+         <button class="calib-dist-btn" id="calib-d88">88cm</button>
+         <button class="calib-dist-btn" id="calib-d90">90cm</button>
          <button class="calib-dist-btn" id="calib-d43">ホームベース幅 43cm</button>
-         <button class="calib-dist-btn" id="calib-d84">バット長 84cm</button>
-         <button class="calib-dist-btn" id="calib-d90">バット長 90cm</button>
        </div>
        <div class="calib-custom-row">
          <label>自分で入力:</label>
@@ -1460,7 +1464,7 @@
    // キャリブレーションボタン表示制御（フレーム画像がある場合のみ）
    if (hasImages && calibOpenBtn) calibOpenBtn.style.display = '';
 
-   // ── モーダルを開く ──
+   // ── モーダルを開く（現在表示中のコマを使用）──
    function openCalibModal() {
      if (!hasImages || !capturedImgFrames[0]) return;
      calibP1 = null; calibP2 = null;
@@ -1469,6 +1473,14 @@
      calibDone.style.display  = 'none';
      calibStatus.textContent  = '1点目をタップ';
      calibModal.style.display = 'flex';
+
+     // 現在の再生位置に最も近い IDB フレームを選択
+     const currentT = frames[Math.min(currentFrameIdx, frames.length - 1)].t;
+     let bestIdx = 0, bestDiff = Infinity;
+     capturedImgFrames.forEach(function (f, i) {
+       const d = Math.abs((f.t || 0) - currentT);
+       if (d < bestDiff) { bestDiff = d; bestIdx = i; }
+     });
 
      const img = new Image();
      img.onload = function () {
@@ -1479,7 +1491,7 @@
        const ctx = calibCv.getContext('2d');
        ctx.drawImage(img, 0, 0);
      };
-     img.src = capturedImgFrames[0].img;
+     img.src = capturedImgFrames[bestIdx].img;
    }
 
    // ── キャンバスタップ ──
@@ -1500,7 +1512,7 @@
        ctx.arc(nx, ny, Math.max(8, calibCvNatW * 0.02), 0, Math.PI * 2);
        ctx.fillStyle = '#22d3ee';
        ctx.fill();
-       calibStatus.textContent = '2点目をタップ';
+       calibStatus.textContent = '2点目をタップ（バット先端）';
      } else if (!calibP2) {
        calibP2 = { x: nx, y: ny };
        ctx.beginPath();
@@ -1599,6 +1611,14 @@
    if (d43Btn) d43Btn.addEventListener('click', function () { applyCalib(43); });
    const d84Btn = $('calib-d84');
    if (d84Btn) d84Btn.addEventListener('click', function () { applyCalib(84); });
+   const d85Btn = $('calib-d85');
+   if (d85Btn) d85Btn.addEventListener('click', function () { applyCalib(85); });
+   const d86Btn = $('calib-d86');
+   if (d86Btn) d86Btn.addEventListener('click', function () { applyCalib(86); });
+   const d87Btn = $('calib-d87');
+   if (d87Btn) d87Btn.addEventListener('click', function () { applyCalib(87); });
+   const d88Btn = $('calib-d88');
+   if (d88Btn) d88Btn.addEventListener('click', function () { applyCalib(88); });
    const d90Btn = $('calib-d90');
    if (d90Btn) d90Btn.addEventListener('click', function () { applyCalib(90); });
    const customOkBtn = $('calib-custom-ok-btn');
