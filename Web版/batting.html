@@ -1210,6 +1210,13 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
      let videoTrack = null;
      const allSamples = [];
      let codecDescription = null;
+     let nbExpected = 0;
+     let resolved = false;
+     function tryResolve() {
+       if (resolved) return;
+       resolved = true;
+       resolve({ videoTrack: videoTrack, samples: allSamples, codecDescription: codecDescription });
+     }
 
      mp4.onReady = function(info) {
        videoTrack = info.tracks.find(function(t) { return t.type === 'video'; });
@@ -1217,6 +1224,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
          reject(new Error('WEBCODECS_FAILED: ビデオトラックが見つかりません'));
          return;
        }
+       nbExpected = videoTrack.nb_samples;
        // hvcC / avcC ボックスを取得して VideoDecoder の description を作る
        try {
          if (typeof DataStream !== 'undefined' && mp4.moov) {
@@ -1241,23 +1249,25 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
          videoTrack.video.width + 'x' + videoTrack.video.height,
          videoTrack.nb_samples + 'samples',
          'desc:', codecDescription ? codecDescription.byteLength + 'B' : 'none');
-       mp4.setExtractionOptions(videoTrack.id, null, { nbSamples: videoTrack.nb_samples });
+       mp4.setExtractionOptions(videoTrack.id, null, { nbSamples: nbExpected });
        mp4.start();
      };
 
      mp4.onSamples = function(id, user, sArr) {
        for (let i = 0; i < sArr.length; i++) allSamples.push(sArr[i]);
-       const nbTotal = videoTrack ? videoTrack.nb_samples : 1;
+       const nbTotal = nbExpected || 1;
        const pct = 5 + Math.min(25, (allSamples.length / nbTotal) * 25);
        setOverlayProgress(pct, 'WebCodecsで解析しています…',
          'サンプル読込: ' + allSamples.length + '/' + nbTotal);
+       // onFlush が来なくても全サンプル揃ったら解決する(MP4Box版依存の安全網)
+       if (nbExpected > 0 && allSamples.length >= nbExpected) {
+         setTimeout(tryResolve, 50); // 少し待って onFlush より先に解決させない
+       }
      };
 
-     mp4.onFlush = function() {
-       resolve({ videoTrack: videoTrack, samples: allSamples, codecDescription: codecDescription });
-     };
+     mp4.onFlush = function() { tryResolve(); };
      mp4.onError = function(e) {
-       reject(new Error('WEBCODECS_FAILED: MP4Boxエラー: ' + String(e)));
+       if (!resolved) reject(new Error('WEBCODECS_FAILED: MP4Boxエラー: ' + String(e)));
      };
 
      const buf = arrayBuffer.slice(0);
@@ -1283,6 +1293,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
    console.log('[webcodecs] demux done:', allSamples.length, 'samples',
      durSec.toFixed(2) + 's', codecStr);
+   // demux 完了 → デコード開始表示に切り替え
+   setOverlayProgress(30, 'WebCodecsで解析しています…', 'デコードを開始します…');
 
    // ── VideoDecoder サポート確認 ──
    try {
@@ -1391,11 +1403,15 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
        }
      }
 
-     decoder.flush()
-       .then(function() { try { decoder.close(); } catch (_) {} resolveAll(); })
-       .catch(function(e) {
-         rejectAll(new Error('WEBCODECS_FAILED: flush失敗: ' + e.message));
-       });
+     const flushTimeout = new Promise(function(_, rj) {
+       setTimeout(function() {
+         rj(new Error('WEBCODECS_UNAVAILABLE: デコードタイムアウト(20秒)'));
+       }, 20000);
+     });
+     Promise.race([
+       decoder.flush().then(function() { try { decoder.close(); } catch (_) {} }),
+       flushTimeout,
+     ]).then(resolveAll).catch(rejectAll);
    });
 
    // 時系列順にソート（B-frame reorder 対策）
