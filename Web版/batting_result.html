@@ -1150,7 +1150,7 @@
 
  // ── スイングスピード計算用にスムージング前の生位置を保存 ──
  // 速度計算: バットヘッド推定位置(前腕延長)を使用 — bat head speed に相当
- const BAT_TRAIL_RAW = BAT_TRAIL.map(b => ({ t: b.t, fi: b.fi, hx: b.hx, hy: b.hy }));
+ const BAT_TRAIL_RAW = BAT_TRAIL.map(b => ({ t: b.t, fi: b.fi, hx: b.hx, hy: b.hy, gx: b.gx, gy: b.gy }));
 
  // ── 7フレーム移動平均でバット軌道を平滑化 ──
  if (BAT_TRAIL.length > 4) {
@@ -1309,6 +1309,9 @@
 
  }
 
+ // ユーザーがキャリブレーション済みかどうか（YOLOの上書きを防ぐ）
+ let userCalibrated = false;
+
  // ─────────────────────────────────────────────────────────────────────────
  // YOLOv8 バット検出（非同期バックグラウンド処理）
  // IDB 画像フレームが存在し ReformaBatDetector が読込済みの場合のみ実行。
@@ -1427,15 +1430,19 @@
        return;
      }
 
-     // ── UI 更新 ──
-     const ssEl3 = $('swing-speed-kmh');
-     if (ssEl3) {
-       ssEl3.textContent = Math.round(yoloPeak) + ' km/h';
-       ssEl3.style.color = yoloPeak >= 140 ? '#4ade80' : yoloPeak >= 120 ? '#fbbf24' : '#60a5fa';
-     }
-     if (yoloStatusSpan) {
-       yoloStatusSpan.textContent = 'バット直接検出 (' + filteredBat.length + 'f)';
-       yoloStatusSpan.style.color = '#22d3ee';
+     // ── UI 更新 (ユーザーキャリブ済みの場合は上書きしない) ──
+     if (!userCalibrated) {
+       const ssEl3 = $('swing-speed-kmh');
+       if (ssEl3) {
+         ssEl3.textContent = Math.round(yoloPeak) + ' km/h';
+         ssEl3.style.color = yoloPeak >= 140 ? '#4ade80' : yoloPeak >= 120 ? '#fbbf24' : '#60a5fa';
+       }
+       if (yoloStatusSpan) {
+         yoloStatusSpan.textContent = 'バット直接検出 (' + filteredBat.length + 'f)';
+         yoloStatusSpan.style.color = '#22d3ee';
+       }
+     } else {
+       if (yoloStatusSpan) yoloStatusSpan.textContent = '基準距離キャリブ済';
      }
    }).catch(function (e) {
      console.warn('[YOLO] バット検出失敗（手首推定値を維持）:', e.message || e);
@@ -1551,14 +1558,27 @@
      const effScaleX = mPerPxNative * calibCvNatW;
      const effScaleY = mPerPxNative * calibCvNatH;
 
-     // BAT_TRAIL_RAW を使ってスイングスピードを再計算
+     // 物理的に正しいバット長(正規化) — X/Y それぞれ独立に補正
+     // BAT_NORM_LEN=0.30 は仮定値。キャリブ後はタップ距離から実際のバット長を計算。
+     // hx = gx + fdir_x * BAT_NORM_LEN → 正しくは gx + fdir_x * calibBatNormX
+     // calibBatNormX * effScaleX = distM が成り立つ(物理的に正確)
+     const calibBatNormX = pixDist / calibCvNatW;  // バット長 in norm_x 単位
+     const calibBatNormY = pixDist / calibCvNatH;  // バット長 in norm_y 単位
+
+     // BAT_TRAIL_RAW を使ってスイングスピードを再計算（校正済みバット長使用）
      const calibRaw = [null];
      for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
        const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
        const dt = (b.t - a.t) / 1000;
-       if (dt <= 0 || dt > 0.15) { calibRaw.push(null); continue; }
-       const dx = (b.hx - a.hx) * effScaleX;
-       const dy = (b.hy - a.hy) * effScaleY;
+       if (dt <= 0 || dt > 0.5) { calibRaw.push(null); continue; }
+       // 前腕方向 = (hx-gx)/BAT_NORM_LEN (正規化済み単位ベクトルの成分)
+       // 校正済みバットヘッド = wrist + 前腕方向 * calibBatNorm
+       const aHxC = a.gx + (a.hx - a.gx) / BAT_NORM_LEN * calibBatNormX;
+       const aHyC = a.gy + (a.hy - a.gy) / BAT_NORM_LEN * calibBatNormY;
+       const bHxC = b.gx + (b.hx - b.gx) / BAT_NORM_LEN * calibBatNormX;
+       const bHyC = b.gy + (b.hy - b.gy) / BAT_NORM_LEN * calibBatNormY;
+       const dx = (bHxC - aHxC) * effScaleX;
+       const dy = (bHyC - aHyC) * effScaleY;
        calibRaw.push(Math.hypot(dx, dy) / dt * 3.6);
      }
      // 3フレーム平滑化
@@ -1570,7 +1590,7 @@
        }
        return n > 0 ? sum / n : null;
      });
-     // スウィング範囲のピーク
+     // スウィング範囲のピーク（200km/h 上限）
      let peak = null;
      for (let i = 0; i < BAT_TRAIL.length; i++) {
        const fi = BAT_TRAIL[i].fi;
@@ -1583,22 +1603,28 @@
          if (sp !== null && sp <= 200 && (peak === null || sp > peak)) peak = sp;
        });
      }
+     calibStep2.style.display = 'none';
      if (peak !== null) {
+       userCalibrated = true;
        const ssEl = $('swing-speed-kmh');
        if (ssEl) {
          ssEl.textContent = Math.round(peak) + ' km/h';
          ssEl.style.color = peak >= 140 ? '#4ade80' : peak >= 120 ? '#fbbf24' : '#60a5fa';
        }
-       // ステータステキストを更新
+       // ステータスラベルを更新
        const statusSpanList = ssEl && ssEl.parentNode
          ? ssEl.parentNode.querySelectorAll('span[style*="font-size:9px"]') : [];
        statusSpanList.forEach(function (sp) {
          sp.textContent = '基準距離キャリブ済 (' + distCm + 'cm)';
          sp.style.color = '#4ade80';
        });
+       calibDone.style.display = '';
+     } else {
+       // スピード計算不可（フレームデータ不足）
+       calibDone.style.display = '';
+       const doneMsg = calibDone.querySelector('.calib-status');
+       if (doneMsg) doneMsg.textContent = 'フレームデータ不足。別のコマに移動してもう一度お試しください。';
      }
-     calibStep2.style.display = 'none';
-     calibDone.style.display  = '';
    }
 
    // ── ボタンイベント ──
