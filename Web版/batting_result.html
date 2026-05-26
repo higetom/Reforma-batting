@@ -1206,14 +1206,34 @@
      effScaleX = scaleX;
      effScaleY = scaleY;
    }
-   // フレーム間速度計算
+   // バット実長で前腕方向を物理空間に変換してバットヘッド位置を再計算
+   // 理由: BAT_NORM_LEN=0.30は正規化座標系での固定値だが、
+   //       ポートレート水平スイングでは実際の36cmにしかならず(86cmの42%)
+   //       速度が系統的に過小評価される。物理方向に変換することで正確なレバー長を使用。
+   function correctedBatHead(entry) {
+     const dx_n = entry.hx - entry.gx; // 正規化空間のバット方向ベクトル
+     const dy_n = entry.hy - entry.gy;
+     const dx_p = dx_n * effScaleX;    // 物理空間に変換 (アスペクト比補正)
+     const dy_p = dy_n * effScaleY;
+     const physLen = Math.hypot(dx_p, dy_p);
+     if (physLen < 1e-9) return { hx: entry.hx, hy: entry.hy };
+     // 正確なバット長で正規化座標のバットヘッド位置を再計算
+     return {
+       hx: entry.gx + (dx_p / physLen) * (batLenM / effScaleX),
+       hy: entry.gy + (dy_p / physLen) * (batLenM / effScaleY)
+     };
+   }
+
+   // フレーム間速度計算 (物理バットヘッド位置使用)
    const rawSpeeds = [null];
    for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
      const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
      const dt = (b.t - a.t) / 1000;
      if (dt <= 0 || dt > 0.5) { rawSpeeds.push(null); continue; }
-     const dx = (b.hx - a.hx) * effScaleX;
-     const dy = (b.hy - a.hy) * effScaleY;
+     const ca = correctedBatHead(a);
+     const cb = correctedBatHead(b);
+     const dx = (cb.hx - ca.hx) * effScaleX;
+     const dy = (cb.hy - ca.hy) * effScaleY;
      rawSpeeds.push(Math.hypot(dx, dy) / dt * 3.6);
    }
    // 外れ値除去: 有効値の中央値 × 2.5 を超えるものはnull
