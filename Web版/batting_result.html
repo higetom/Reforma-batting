@@ -943,17 +943,18 @@
  // ─────────────────────────────────────────
  // バット軌道 事前計算
  // ─────────────────────────────────────────
- // アナライザーのフェーズ名は ⑥フットプラント / ⑧コンタクト（丸数字付き）
- // ⑥フットプラント = 前足接地 = スイング開始の実質的な起点
+ // アナライザーのフェーズ名: '④前足接地'(前足接地=スイング開始起点) / '⑧コンタクト'
  const _phs = r.phases || {};
- const swingStartFI = _phs['⑥フットプラント'] != null
-   ? Math.round(_phs['⑥フットプラント'])
-   : _phs['⑤ストライド'] != null
-     ? Math.round(_phs['⑤ストライド'])
+ console.log('[DEBUG] phases:', JSON.stringify(_phs));
+ const swingStartFI = _phs['④前足接地'] != null
+   ? Math.round(_phs['④前足接地'])
+   : _phs['⑤ヒール接地'] != null
+     ? Math.round(_phs['⑤ヒール接地'])
      : Math.floor(frames.length * 0.38);
  const contactFI = _phs['⑧コンタクト'] != null
    ? Math.round(_phs['⑧コンタクト'])
    : Math.floor(frames.length * 0.68);
+ console.log('[DEBUG] frames.length=' + frames.length + ' swingStartFI=' + swingStartFI + ' contactFI=' + contactFI);
 
  // コンタクト時の手首高さ = ヒッティングプレーン基準
  // 横向き動画でも片方の手首が見えれば使用する
@@ -1036,7 +1037,13 @@
  swingN++;
  if (Math.abs(b.hy - planeRefY) < PLANE_TOL) inPlaneN++;
  });
- const inPlaneRate = swingN > 0 ? Math.round(inPlaneN / swingN * 100) : null;
+ let inPlaneRate = swingN > 0 ? Math.round(inPlaneN / swingN * 100) : null;
+ // フォールバック: フェーズ範囲内エントリなければ全BAT_TRAILで計算
+ if (inPlaneRate === null && BAT_TRAIL.length > 0) {
+   let allPlane = 0;
+   BAT_TRAIL.forEach(b => { if (Math.abs(b.hy - planeRefY) < PLANE_TOL) allPlane++; });
+   inPlaneRate = Math.round(allPlane / BAT_TRAIL.length * 100);
+ }
 
  // 攻撃角（バットヘッド軌跡の傾き、上向き正）
  let attackAngle = null;
@@ -1119,6 +1126,15 @@
  }
  // 異常値除去（>200km/h は計算エラー）
  if (peakSpeedKmh !== null && peakSpeedKmh > 200) peakSpeedKmh = null;
+
+ // フォールバック: フェーズ範囲内にエントリがなければ全BAT_TRAILのピークを使用
+ if (peakSpeedKmh === null && BAT_TRAIL.length > 0) {
+   for (let i = 0; i < BAT_TRAIL.length; i++) {
+     const sp = batSpeedsSmooth[i];
+     if (sp !== null && sp <= 200 && (peakSpeedKmh === null || sp > peakSpeedKmh)) peakSpeedKmh = sp;
+   }
+ }
+ console.log('[DEBUG] BAT_TRAIL.length=' + BAT_TRAIL.length + ' peakSpeedKmh=' + peakSpeedKmh + ' inPlaneRate=' + inPlaneRate);
 
  // ─── バットメトリクスを表示 ───────────────────────────────────────────
  const batBar = $('bat-metrics-bar');
