@@ -929,6 +929,9 @@
    const HALF = Math.floor(SMOOTH_W.length / 2); // 2
    const nLM = 33; // MediaPipe Pose ランドマーク数
    const nFrames = frames.length;
+   // 手首・肘 (13:左肘, 14:右肘, 15:左手首, 16:右手首) は速度計算精度のため平滑化しない
+   // 平滑化するとスウィング時の急激な角速度がぼかされ、スピードが3〜5倍過小評価される
+   const NO_SMOOTH_LM = new Set([13, 14, 15, 16]);
 
    // 平滑化前のスナップショットを確保（書き込み先と読み取り先を分離）
    const rawLM = frames.map(f => f.landmarks.map(l =>
@@ -937,6 +940,7 @@
 
    for (let fi = 0; fi < nFrames; fi++) {
      for (let li = 0; li < nLM; li++) {
+       if (NO_SMOOTH_LM.has(li)) continue; // 手首・肘は生データのまま保持
        let sx = 0, sy = 0, sz = 0, sv = 0, sw = 0;
        for (let k = 0; k < SMOOTH_W.length; k++) {
          const idx = fi - HALF + k;
@@ -1558,27 +1562,17 @@
      const effScaleX = mPerPxNative * calibCvNatW;
      const effScaleY = mPerPxNative * calibCvNatH;
 
-     // 物理的に正しいバット長(正規化) — X/Y それぞれ独立に補正
-     // BAT_NORM_LEN=0.30 は仮定値。キャリブ後はタップ距離から実際のバット長を計算。
-     // hx = gx + fdir_x * BAT_NORM_LEN → 正しくは gx + fdir_x * calibBatNormX
-     // calibBatNormX * effScaleX = distM が成り立つ(物理的に正確)
-     const calibBatNormX = pixDist / calibCvNatW;  // バット長 in norm_x 単位
-     const calibBatNormY = pixDist / calibCvNatH;  // バット長 in norm_y 単位
-
-     // BAT_TRAIL_RAW を使ってスイングスピードを再計算（校正済みバット長使用）
+     // BAT_TRAIL_RAW を使ってスイングスピードを再計算（校正済みスケール使用）
+     // 注: ランドマーク平滑化を手首・肘に対して無効化したため、
+     //     BAT_TRAIL_RAW の位置変化は実際の角速度を正確に反映している。
+     //     ここではスケールのみ差し替え（BAT_NORM_LEN は変更しない）。
      const calibRaw = [null];
      for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
        const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
        const dt = (b.t - a.t) / 1000;
        if (dt <= 0 || dt > 0.5) { calibRaw.push(null); continue; }
-       // 前腕方向 = (hx-gx)/BAT_NORM_LEN (正規化済み単位ベクトルの成分)
-       // 校正済みバットヘッド = wrist + 前腕方向 * calibBatNorm
-       const aHxC = a.gx + (a.hx - a.gx) / BAT_NORM_LEN * calibBatNormX;
-       const aHyC = a.gy + (a.hy - a.gy) / BAT_NORM_LEN * calibBatNormY;
-       const bHxC = b.gx + (b.hx - b.gx) / BAT_NORM_LEN * calibBatNormX;
-       const bHyC = b.gy + (b.hy - b.gy) / BAT_NORM_LEN * calibBatNormY;
-       const dx = (bHxC - aHxC) * effScaleX;
-       const dy = (bHyC - aHyC) * effScaleY;
+       const dx = (b.hx - a.hx) * effScaleX;
+       const dy = (b.hy - a.hy) * effScaleY;
        calibRaw.push(Math.hypot(dx, dy) / dt * 3.6);
      }
      // 3フレーム平滑化
