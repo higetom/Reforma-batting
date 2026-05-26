@@ -1240,24 +1240,51 @@
 
    window.ReformaBatDetector.runOnFrames(
      capturedImgFrames, YOLO_W, YOLO_H,
-     null // 進捗コールバック省略
+     null
    ).then(function (result) {
-     const { batTrack, maxBatWidthNorm, detectedFrames } = result;
+     const { batTrack, maxBatDiagPx, detectedFrames } = result;
 
-     // 最低10フレームかつ最大バット幅0.05以上で有効と判断
-     if (detectedFrames < 10 || maxBatWidthNorm < 0.05) {
+     // 検出フレームが少なすぎる場合は手首推定に戻す
+     if (detectedFrames < 5 || maxBatDiagPx < 10) {
        if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
        return;
      }
 
-     // ── スケール計算 ──
-     // maxBatWidthNorm は正規化 x 幅(0-1)。
-     // origW ピクセルに対して BAT_REAL_LEN_M m に相当 → mPerPx = BAT_REAL_LEN_M / (maxBatWidthNorm * YOLO_W)
-     const mPerPx = window.ReformaBatDetector.BAT_REAL_LEN_M / (maxBatWidthNorm * YOLO_W);
+     // ── スケール計算: バット対角線(px)を実長84cmに対応させる ──
+     // diagPx が最大の瞬間 = バットがカメラに最も垂直に向いた瞬間 ≈ 実長に最も近い
+     const mPerPx = window.ReformaBatDetector.BAT_REAL_LEN_M / maxBatDiagPx;
 
-     // ── バット中心座標を px に変換 ──
-     // batTrack: [{t(ms), cx(0-1), cy(0-1), ...}]
-     const batPx = batTrack.map(function (b) {
+     // ── 手首近接フィルター ──
+     // 検出バット中心がいずれかの手首から 40% フレーム以内に入るフレームのみ使用
+     // 理由: ネット・ポール等の誤検出はプレイヤーから遠い位置に現れる
+     function getNearestWrists(tMs) {
+       let best = null, bd = Infinity;
+       for (let fi = 0; fi < frames.length; fi++) {
+         const d = Math.abs(frames[fi].t - tMs);
+         if (d < bd) { bd = d; best = frames[fi]; }
+       }
+       if (!best || bd > 200) return null;
+       const lm = best.landmarks;
+       return { w15: lm[15] || null, w16: lm[16] || null };
+     }
+
+     const WRIST_DIST_MAX = 0.40; // 正規化座標(0-1)で40%以内
+     const filteredBat = batTrack.filter(function (b) {
+       const w = getNearestWrists(b.t);
+       if (!w) return true; // 姿勢データなし → 除外しない
+       const dist15 = w.w15 ? Math.hypot(b.cx - w.w15.x, b.cy - w.w15.y) : Infinity;
+       const dist16 = w.w16 ? Math.hypot(b.cx - w.w16.x, b.cy - w.w16.y) : Infinity;
+       return Math.min(dist15, dist16) < WRIST_DIST_MAX;
+     });
+
+     if (filteredBat.length < 3) {
+       // フィルター後に残ったフレームが少なすぎる = 全て誤検出の可能性
+       if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
+       return;
+     }
+
+     // ── バット中心を px に変換 ──
+     const batPx = filteredBat.map(function (b) {
        return { t: b.t, px: b.cx * YOLO_W, py: b.cy * YOLO_H };
      });
 
@@ -1282,8 +1309,9 @@
        return n > 0 ? sum / n : null;
      });
 
-     // ── スウィング範囲のピークスピード ──
-     // batTrack の t(ms) を swingStartFI/contactFI の時刻に変換して絞り込む
+     // ── スウィング範囲でピークを探す ──
+     // 最低速度 40km/h 未満の値は誤検出(ネット・ポール等)として除外
+     const YOLO_MIN_KMH = 40;
      const swingStartMs = frames[Math.min(swingStartFI, frames.length - 1)].t;
      const contactMs    = frames[Math.min(contactFI, frames.length - 1)].t;
 
@@ -1292,16 +1320,18 @@
        const t = batPx[i].t;
        if (t < swingStartMs || t > contactMs + 5 * (1000 / fps)) continue;
        const sp = yoloSmooth[i];
-       if (sp !== null && sp <= 200 && (yoloPeak === null || sp > yoloPeak)) yoloPeak = sp;
+       if (sp !== null && sp >= YOLO_MIN_KMH && sp <= 200 &&
+           (yoloPeak === null || sp > yoloPeak)) yoloPeak = sp;
      }
-
-     // フォールバック: フェーズ範囲外なら全体ピーク
+     // フォールバック: フェーズ範囲外でも最大を探す
      if (yoloPeak === null) {
        yoloSmooth.forEach(function (sp) {
-         if (sp !== null && sp <= 200 && (yoloPeak === null || sp > yoloPeak)) yoloPeak = sp;
+         if (sp !== null && sp >= YOLO_MIN_KMH && sp <= 200 &&
+             (yoloPeak === null || sp > yoloPeak)) yoloPeak = sp;
        });
      }
 
+     // ピークが閾値以下 → 誤検出と判断して手首推定に戻す
      if (yoloPeak === null) {
        if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
        return;
@@ -1314,7 +1344,7 @@
        ssEl3.style.color = yoloPeak >= 140 ? '#4ade80' : yoloPeak >= 120 ? '#fbbf24' : '#60a5fa';
      }
      if (yoloStatusSpan) {
-       yoloStatusSpan.textContent = 'バット直接検出 (' + detectedFrames + 'f)';
+       yoloStatusSpan.textContent = 'バット直接検出 (' + filteredBat.length + 'f)';
        yoloStatusSpan.style.color = '#22d3ee';
      }
    }).catch(function (e) {

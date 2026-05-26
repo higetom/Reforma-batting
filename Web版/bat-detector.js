@@ -33,7 +33,7 @@
   var INPUT_W    = 640;
   var INPUT_H    = 640;
   var BAT_CLS    = 34;    // COCO 0-indexed: baseball bat
-  var CONF_MIN   = 0.25;
+  var CONF_MIN   = 0.40; /* 信頼度閾値を上げて誤検出(ネット・ポール等)を抑制 */
   var NMS_IOU    = 0.45;
   var BAT_LEN_M  = 0.84;  // 標準バット長 84cm
 
@@ -243,7 +243,7 @@
    * ────────────────────────────────────────────────── */
   function runOnFrames(imgFrames, origW, origH, onProgress) {
     if (!imgFrames || imgFrames.length === 0) {
-      return Promise.resolve({ batTrack: [], maxBatWidthNorm: 0, detectedFrames: 0 });
+      return Promise.resolve({ batTrack: [], maxBatWidthNorm: 0, maxBatDiagPx: 0, detectedFrames: 0 });
     }
 
     return init().catch(function (e) {
@@ -255,6 +255,7 @@
       /* 逐次処理（Promise チェーン）— GPU 競合を避けるため並列不可 */
       var batTrack        = [];
       var maxBatWidthNorm = 0;
+      var maxBatDiagPx    = 0;
 
       function loop(idx) {
         if (idx >= imgFrames.length) {
@@ -273,8 +274,23 @@
             var bw = d.x2 - d.x1;
             var bh = d.y2 - d.y1;
 
-            batTrack.push({ t: frame.t, cx: cx, cy: cy, w: bw, h: bh, conf: d.conf });
-            if (bw > maxBatWidthNorm) maxBatWidthNorm = bw;
+            /* サイズ妥当性チェック:
+             * - 小さすぎ(< 3%): ノイズや遠景のバット→信頼できない
+             * - 大きすぎ(> 60%): フレームの大半を占める誤検出→除外
+             * バット長がフレーム高さの3〜60%範囲内であることを確認 */
+            var bwPx = bw * origW;
+            var bhPx = bh * origH;
+            var diagPx = Math.sqrt(bwPx * bwPx + bhPx * bhPx);
+            var maxFrameDim = Math.max(origW, origH);
+            var relSize = diagPx / maxFrameDim;
+            if (relSize < 0.03 || relSize > 0.60) {
+              /* サイズ外: このフレームはスキップ */
+            } else {
+              batTrack.push({ t: frame.t, cx: cx, cy: cy, w: bw, h: bh,
+                              diagPx: diagPx, conf: d.conf });
+              if (bw > maxBatWidthNorm) maxBatWidthNorm = bw;
+              if (diagPx > maxBatDiagPx) maxBatDiagPx = diagPx;
+            }
           }
         }).catch(function () {
           /* 推論エラーはスキップ */
@@ -290,6 +306,7 @@
         return {
           batTrack:        batTrack,
           maxBatWidthNorm: maxBatWidthNorm,
+          maxBatDiagPx:    maxBatDiagPx,
           detectedFrames:  batTrack.length,
         };
       });
