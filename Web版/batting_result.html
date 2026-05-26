@@ -1385,24 +1385,16 @@
  if (BAT_TRAIL[i].t > ms + 50) break;
  curBat = BAT_TRAIL[i];
  }
+ // 現在バット位置: 棒線は削除、グリップ位置に小さな白点のみ
  if (curBat) {
  const cgx = px(curBat.gx), cgy = py(curBat.gy);
- const chx = px(curBat.hx), chy = py(curBat.hy);
  const onPlane = Math.abs(curBat.hy - planeRefY) < PLANE_TOL;
- const batCol = onPlane ? '#4ade80' : '#f87171';
+ const dotCol = onPlane ? '#4ade80' : '#f87171';
  rCtx.save();
- rCtx.shadowColor = batCol; rCtx.shadowBlur = 6 * sc;
- rCtx.strokeStyle = batCol; rCtx.lineWidth = 2.5 * sc; rCtx.lineCap = 'round';
- rCtx.beginPath(); rCtx.moveTo(cgx, cgy); rCtx.lineTo(chx, chy); rCtx.stroke();
- rCtx.shadowBlur = 0;
- // バットヘッドドット
- rCtx.beginPath(); rCtx.arc(chx, chy, 3.5 * sc, 0, Math.PI * 2);
- rCtx.fillStyle = '#fff'; rCtx.fill();
- // グリップドット
- rCtx.beginPath(); rCtx.arc(cgx, cgy, 2 * sc, 0, Math.PI * 2);
- rCtx.fillStyle = 'rgba(255,255,255,0.6)'; rCtx.fill();
+ rCtx.beginPath(); rCtx.arc(cgx, cgy, 4 * sc, 0, Math.PI * 2);
+ rCtx.fillStyle = dotCol; rCtx.shadowColor = dotCol; rCtx.shadowBlur = 8 * sc;
+ rCtx.fill();
  rCtx.restore();
- drawLabel(chx, chy - 9 * sc, onPlane ? 'ON PLANE' : 'OFF PLANE', batCol, 'right');
  }
  }
 
