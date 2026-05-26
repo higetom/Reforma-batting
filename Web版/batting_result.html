@@ -1017,6 +1017,7 @@
  });
 
  // ── スイングスピード計算用にスムージング前の生位置を保存 ──
+ // 速度計算: バットヘッド推定位置(前腕延長)を使用 — bat head speed に相当
  const BAT_TRAIL_RAW = BAT_TRAIL.map(b => ({ t: b.t, fi: b.fi, hx: b.hx, hy: b.hy }));
 
  // ── 7フレーム移動平均でバット軌道を平滑化 ──
@@ -1037,13 +1038,13 @@
  BAT_TRAIL.forEach(b => {
  if (b.fi < swingStartFI || b.fi > contactFI + 8) return;
  swingN++;
- if (Math.abs(b.hy - planeRefY) < PLANE_TOL) inPlaneN++;
+ if (Math.abs(b.gy - planeRefY) < PLANE_TOL) inPlaneN++;
  });
  let inPlaneRate = swingN > 0 ? Math.round(inPlaneN / swingN * 100) : null;
  // フォールバック: フェーズ範囲内エントリなければ全BAT_TRAILで計算
  if (inPlaneRate === null && BAT_TRAIL.length > 0) {
    let allPlane = 0;
-   BAT_TRAIL.forEach(b => { if (Math.abs(b.hy - planeRefY) < PLANE_TOL) allPlane++; });
+   BAT_TRAIL.forEach(b => { if (Math.abs(b.gy - planeRefY) < PLANE_TOL) allPlane++; });
    inPlaneRate = Math.round(allPlane / BAT_TRAIL.length * 100);
  }
 
@@ -1053,13 +1054,13 @@
  const swingBats = BAT_TRAIL.filter(b => b.fi >= swingStartFI && b.fi <= contactFI);
  if (swingBats.length >= 4) {
  const n = swingBats.length;
- // 最初25% と最後25% の平均位置から傾き計算
+ // 最初25% と最後25% の平均位置から傾き計算（グリップ座標使用）
  const q1 = swingBats.slice(0, Math.max(1, Math.floor(n * 0.25)));
  const q4 = swingBats.slice(Math.floor(n * 0.75));
- const x1 = q1.reduce((s, b) => s + b.hx, 0) / q1.length;
- const y1 = q1.reduce((s, b) => s + b.hy, 0) / q1.length;
- const x4 = q4.reduce((s, b) => s + b.hx, 0) / q4.length;
- const y4 = q4.reduce((s, b) => s + b.hy, 0) / q4.length;
+ const x1 = q1.reduce((s, b) => s + b.gx, 0) / q1.length;
+ const y1 = q1.reduce((s, b) => s + b.gy, 0) / q1.length;
+ const x4 = q4.reduce((s, b) => s + b.gx, 0) / q4.length;
+ const y4 = q4.reduce((s, b) => s + b.gy, 0) / q4.length;
  const dx = x4 - x1, dy = y4 - y1;
  if (Math.abs(dx) > 0.01) {
  attackAngle = Math.round(Math.atan2(-dy, Math.abs(dx)) * 180 / Math.PI * 10) / 10;
@@ -1074,10 +1075,30 @@
  // ─── スイングスピード計算（スムージング前のRAWデータ使用）───────────────
  // 画像アスペクト比 (幅/高さ)
  const imgAspect = (reviewCanvas.width > 0 && reviewCanvas.height > 0)
-   ? reviewCanvas.width / reviewCanvas.height : 0.5625; // デフォルト 9:16
+   ? reviewCanvas.width / reviewCanvas.height : 0.5625;
 
- // トルソー高さ（肩中点→腰中点）の正規化Y距離を平均（スタンスフレームの最初30%）
  const stanceEndI = Math.max(1, Math.floor(frames.length * 0.30));
+
+ // ── スケール計算: 前腕長(肘→手首)を優先、フォールバックはトルソー ──
+ // 前腕は成人で約25.5cm(身長の14.6%)。MediaPipeで直接測定できるため身長入力不要。
+ const FOREARM_REAL_M = 0.255; // 成人前腕の平均値(m)
+ let forearmNormSum = 0, forearmNormCount = 0;
+ for (let i = 0; i < frames.length; i++) {
+   const lm = frames[i].landmarks;
+   if (!lm[13] || !lm[15] || !lm[14] || !lm[16]) continue;
+   // 両前腕を計測し、長い方(遠近法で縮んでいない方)を採用
+   const ldx = (lm[15].x - lm[13].x) * imgAspect;
+   const ldy = (lm[15].y - lm[13].y);
+   const lLen = Math.hypot(ldx, ldy);
+   const rdx = (lm[16].x - lm[14].x) * imgAspect;
+   const rdy = (lm[16].y - lm[14].y);
+   const rLen = Math.hypot(rdx, rdy);
+   const maxLen = Math.max(lLen, rLen);
+   if (maxLen > 0.03) { forearmNormSum += maxLen; forearmNormCount++; }
+ }
+ const forearmNorm = forearmNormCount > 0 ? forearmNormSum / forearmNormCount : 0;
+
+ // フォールバック用: トルソーY距離
  let normTorsoSum = 0, normTorsoCount = 0;
  for (let i = 0; i < stanceEndI; i++) {
    const lm = frames[i].landmarks;
@@ -1088,14 +1109,17 @@
    if (torsoY > 0.05) { normTorsoSum += torsoY; normTorsoCount++; }
  }
  const normTorsoY = normTorsoCount > 0 ? normTorsoSum / normTorsoCount : 0.25;
-
- // 実トルソー長さ（肩→腰 ≈ 身長×30%、デフォルト52cm）
  const heightCm = parseFloat(sessionStorage.getItem('reforma_height_cm') || '0') || 0;
  const realTorsoM = heightCm >= 120 && heightCm <= 220 ? (heightCm * 0.30 / 100) : 0.52;
 
- // 正規化単位→メートル変換スケール
- const scaleY = realTorsoM / normTorsoY;    // m per normalized-y unit
- const scaleX = scaleY * imgAspect;          // m per normalized-x unit（縦撮影補正）
+ // 前腕スケールが有効なら優先(身長入力不要・カメラ距離自動補正)
+ let scaleY;
+ if (forearmNorm > 0.03) {
+   scaleY = FOREARM_REAL_M / forearmNorm; // 前腕ベース: 身長入力不要
+ } else {
+   scaleY = realTorsoM / normTorsoY;      // トルソーベース: フォールバック
+ }
+ const scaleX = scaleY * imgAspect;
 
  // RAW バットヘッド速度（km/h）を連続フレーム間で計算
  const batSpeedsRaw = [null]; // 0番目はnull（前フレームなし）
@@ -1359,21 +1383,22 @@
  rCtx.setLineDash([]);
  rCtx.restore();
 
- // バットヘッド軌跡（過去700ms）
+ // 手首(グリップ)軌跡（過去700ms）— 実ランドマーク座標なので横向き動画でも正確
  const trail = BAT_TRAIL.filter(b => b.t <= ms && b.t >= ms - 700);
  if (trail.length > 1) {
  rCtx.save();
  for (let i = 1; i < trail.length; i++) {
  const a = trail[i - 1], b2 = trail[i];
  const alpha = (i / trail.length) * 0.85;
- const onPlane = Math.abs(b2.hy - planeRefY) < PLANE_TOL;
+ // グリップY座標でオンプレーン判定（手がヒットゾーンの高さを通っているか）
+ const onPlane = Math.abs(b2.gy - planeRefY) < PLANE_TOL;
  rCtx.strokeStyle = onPlane
  ? `rgba(74,222,128,${alpha})`
  : `rgba(248,113,113,${alpha * 0.9})`;
- rCtx.lineWidth = sc * 2; rCtx.lineCap = 'round';
+ rCtx.lineWidth = sc * 2.5; rCtx.lineCap = 'round';
  rCtx.beginPath();
- rCtx.moveTo(px(a.hx), py(a.hy));
- rCtx.lineTo(px(b2.hx), py(b2.hy));
+ rCtx.moveTo(px(a.gx), py(a.gy));
+ rCtx.lineTo(px(b2.gx), py(b2.gy));
  rCtx.stroke();
  }
  rCtx.restore();
@@ -1388,7 +1413,7 @@
  // 現在バット位置: 棒線は削除、グリップ位置に小さな白点のみ
  if (curBat) {
  const cgx = px(curBat.gx), cgy = py(curBat.gy);
- const onPlane = Math.abs(curBat.hy - planeRefY) < PLANE_TOL;
+ const onPlane = Math.abs(curBat.gy - planeRefY) < PLANE_TOL;
  const dotCol = onPlane ? '#4ade80' : '#f87171';
  rCtx.save();
  rCtx.beginPath(); rCtx.arc(cgx, cgy, 4 * sc, 0, Math.PI * 2);
