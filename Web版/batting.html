@@ -214,20 +214,16 @@
  撮影を準備する →
  </button>
 
- <!-- アップロード機能: iOS Safari は HEVC 変換に対応できないため非表示 -->
- <!-- デフォルト hidden、JS で デスクトップ判定時のみ visible にする -->
+ <!-- アップロード解析: iOS含む全デバイスで有効、JS で hidden 解除 -->
  <div id="upload-section" class="hidden" style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border-subtle)">
  <div class="text-tertiary text-small" style="text-align:center;margin-bottom:10px;letter-spacing:0.5px">
- または (PC環境向け)
+ または、撮りためた動画を使う
  </div>
- <button id="link-upload" class="btn btn-block" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border-subtle);padding:14px;font-size:15px;font-weight:500">
- <span style="display:inline-block;width:18px;height:18px;border:1.5px solid var(--text-secondary);border-radius:3px;margin-right:8px;vertical-align:-3px;position:relative">
- <span style="position:absolute;left:3px;top:3px;width:0;height:0;border-style:solid;border-width:5px 0 5px 8px;border-color:transparent transparent transparent var(--text-secondary)"></span>
- </span>
- 撮りだめた動画から解析する
+ <button id="link-upload" class="btn btn-block" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--color-info);padding:14px;font-size:15px;font-weight:500;touch-action:manipulation">
+ 📂　撮りためた動画から解析する
  </button>
  <div class="text-tertiary text-small" style="text-align:center;margin-top:8px;font-size:11.5px">
- 選手から共有された動画(mp4/mov)を解析できます。iPhone標準のHEVC形式にも対応(変換に10〜30秒)。
+ カメラロールのmp4・movを選択して解析。スローモーション動画にも対応。
  </div>
  </div>
  </div>
@@ -480,8 +476,9 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  let captureCanvas = null, captureCtx = null;
  let capturedFrameImages = [];   // [{t, img}, ...]
  let lastCaptureMs = -Infinity;
- const CAPTURE_INTERVAL_MS = 1000 / 15;   // 15fps
- const CAPTURE_W = 180;
+ const CAPTURE_INTERVAL_MS = 1000 / 60;   // 60fps（高fps間引きキャプチャ）
+ const CAPTURE_W = 720;                   // 解像度720px（高画質）
+ let actualVideoFps = 30;                 // 実際に取得できたfps（起動後に検出）
 
  function openReformaIDB() {
  return new Promise((resolve, reject) => {
@@ -552,7 +549,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  video: {
  facingMode: usingFront ? 'user' : { ideal: 'environment' },
  width: { ideal: 1280 }, height: { ideal: 720 },
- frameRate: { ideal: 30, max: 60 },
+ frameRate: { ideal: 120, max: 240 },
  },
  audio: false,
  });
@@ -563,6 +560,15 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  setTimeout(() => reject(new Error('camera timeout')), 5000);
  });
  await video.play();
+ // 実際に取得できたフレームレートを記録（スイングスピード計算に使用）
+ try {
+   const track = stream.getVideoTracks()[0];
+   const settings = track.getSettings();
+   if (settings.frameRate && settings.frameRate > 0) {
+     actualVideoFps = settings.frameRate;
+     console.log('[Camera] frameRate:', actualVideoFps.toFixed(1) + 'fps');
+   }
+ } catch (_e) { /* 取得失敗時はデフォルト30 */ }
  overlay.width = video.videoWidth;
  overlay.height = video.videoHeight;
  document.body.classList.toggle('cam-front', usingFront);
@@ -623,8 +629,12 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  captureCanvas.height = Math.round(CAPTURE_W * video.videoHeight / video.videoWidth) || 320;
  captureCtx = captureCanvas.getContext('2d');
  }
+ // 高fps撮影時（>65fps）は露出が短く暗くなるため自動で明るさ補正
+ const needsBrighten = actualVideoFps > 65;
+ if (needsBrighten) captureCtx.filter = 'brightness(1.4) contrast(1.1)';
  captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
- capturedFrameImages.push({ t: capT, img: captureCanvas.toDataURL('image/jpeg', 0.42) });
+ if (needsBrighten) captureCtx.filter = 'none';
+ capturedFrameImages.push({ t: capT, img: captureCanvas.toDataURL('image/jpeg', 0.85) });
  } catch (capErr) { console.warn('[Capture]', capErr); }
  }
  }
@@ -658,13 +668,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }, 800);
  }
 
- // 録画開始
- $('btn-start-recording').addEventListener('click', () => {
- $('btn-start-recording').classList.add('hidden');
- $('btn-switch-cam').classList.add('hidden');
- startCountdown(3, () => startRecording());
- });
-
+ // 録画開始（撮影ガイドモーダルから呼ばれる）
  function startRecording() {
  recording = true;
  recordedFrames = [];
@@ -774,6 +778,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  analysis: result,
  raw_frames: cleanFrames,
  raw_fps: fps,
+ actual_video_fps: actualVideoFps,
  raw_rmp_type: rmpType,
  captured_at: new Date().toISOString(),
  n_frames: recordedFrames.length,
@@ -831,16 +836,10 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // 判定基準: iOS デバイス(iPad の desktop mode 含む)→ 非表示
  // ─────────────────────────────────────────
  (function () {
- const ua = navigator.userAgent || '';
- const isIOS = /iPad|iPhone|iPod/.test(ua) ||
- (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
- if (!isIOS) {
+ // アップロード解析は全デバイスで有効（iOS含む）
  const uploadSec = document.getElementById('upload-section');
  if (uploadSec) uploadSec.classList.remove('hidden');
- console.log('[upload] section enabled for desktop browser');
- } else {
- console.log('[upload] section hidden on iOS (HEVC variant not supported)');
- }
+ console.log('[upload] section enabled');
  })();
 
  // ─────────────────────────────────────────
@@ -1360,6 +1359,13 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  relayCanvas.height = Math.max(1, Math.round(v.videoHeight * scale));
  console.log('[upload] relay canvas:', relayCanvas.width + 'x' + relayCanvas.height);
 
+ // JPEGフレームキャプチャ用（フォームレビュープレイヤー用）
+ const jpegCanvas = document.createElement('canvas');
+ const jpegCtx = jpegCanvas.getContext('2d');
+ jpegCanvas.width = CAPTURE_W; // 720px
+ jpegCanvas.height = Math.max(1, Math.round(CAPTURE_W * v.videoHeight / v.videoWidth));
+ const uploadJpegFrames = [];
+
  const hasRVFC = typeof v.requestVideoFrameCallback === 'function';
  const finishedRef = { value: false };
 
@@ -1399,6 +1405,12 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
  })),
  });
+
+ // JPEGフレームも同時キャプチャ（フォームレビュー用）
+ try {
+ jpegCtx.drawImage(v, 0, 0, jpegCanvas.width, jpegCanvas.height);
+ uploadJpegFrames.push({ t: currentTimeSec * 1000, img: jpegCanvas.toDataURL('image/jpeg', 0.85) });
+ } catch (_je) {}
  }
  } catch (e) { console.warn('[upload] detect error:', e.message); }
  // プログレス更新
@@ -1440,7 +1452,12 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  });
 
  const avgVis = visCnt > 0 ? visSum / visCnt : 0;
- console.log('[upload] extracted ' + collected.length + ' frames, avgVis=' + avgVis.toFixed(3));
+ console.log('[upload] extracted ' + collected.length + ' frames, avgVis=' + avgVis.toFixed(3) + ', jpegFrames=' + uploadJpegFrames.length);
+
+ // JPEGフレームをIDBに保存（フォームレビュー用）
+ if (uploadJpegFrames.length > 0) {
+   saveFramesToIDB(uploadJpegFrames).catch(e => console.warn('[upload] IDB save error:', e));
+ }
 
  // 早期診断: visibility 全て0 = フレーム読出に何らかの問題
  if (collected.length >= 5 && avgVis === 0) {
@@ -1690,6 +1707,12 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
  })),
  });
+
+ // JPEGフレームも同時キャプチャ（フォームレビュー用）
+ try {
+ jpegCtx.drawImage(v, 0, 0, jpegCanvas.width, jpegCanvas.height);
+ uploadJpegFrames.push({ t: currentTimeSec * 1000, img: jpegCanvas.toDataURL('image/jpeg', 0.85) });
+ } catch (_je) {}
  }
  } catch (e) { console.warn('[upload] play detect:', e.message); }
  }
@@ -1791,6 +1814,12 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
  })),
  });
+
+ // JPEGフレームも同時キャプチャ（フォームレビュー用）
+ try {
+ jpegCtx.drawImage(v, 0, 0, jpegCanvas.width, jpegCanvas.height);
+ uploadJpegFrames.push({ t: currentTimeSec * 1000, img: jpegCanvas.toDataURL('image/jpeg', 0.85) });
+ } catch (_je) {}
  }
  } catch (e) { console.warn('[upload] seek detect:', e.message); }
 
@@ -1805,8 +1834,100 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }
 
  showScreen('intro');
+
+ // ─── 撮影ガイドモーダル ───────────────────────────────────────
+ $('btn-start-recording').addEventListener('click', () => {
+   // 身長プリフィル
+   const savedH = sessionStorage.getItem('reforma_height_cm');
+   if (savedH) $('input-height-cm').value = savedH;
+   $('modal-shoot-guide').classList.remove('hidden');
+ });
+
+ $('btn-guide-confirm').addEventListener('click', () => {
+   const hVal = parseInt($('input-height-cm').value, 10);
+   if (hVal >= 120 && hVal <= 220) {
+     sessionStorage.setItem('reforma_height_cm', String(hVal));
+   } else {
+     sessionStorage.removeItem('reforma_height_cm');
+   }
+   $('modal-shoot-guide').classList.add('hidden');
+   $('btn-start-recording').classList.add('hidden');
+   $('btn-switch-cam').classList.add('hidden');
+   startCountdown(3, () => startRecording());
+ });
+
+ $('btn-guide-cancel').addEventListener('click', () => {
+   $('modal-shoot-guide').classList.add('hidden');
+ });
+
 })();
 </script>
+
+<!-- 撮影ガイドモーダル -->
+<div id="modal-shoot-guide" class="hidden" style="position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.88);display:flex;align-items:flex-end;justify-content:center">
+  <div style="background:var(--bg-card);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;border-top:1px solid var(--border-default);max-height:92vh;overflow-y:auto">
+
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:18px;font-weight:700;color:var(--text-primary)">撮影前チェック</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:5px">条件を揃えるとスイングスピードをより正確に計測できます</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
+        <div style="font-size:24px;line-height:1">📱</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">縦向きで固定</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">スマートフォンを縦向きのまま三脚等で固定</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
+        <div style="font-size:24px;line-height:1">📏</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">打者の真横から 2〜4m</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">横からの距離が近すぎても遠すぎても精度が落ちます</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
+        <div style="font-size:24px;line-height:1">⬆️</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">カメラは打者の腰の高さ</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">腰の高さにセットするとランドマーク検出が安定します</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
+        <div style="font-size:24px;line-height:1">🧍</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-primary)">全身をフレームに収める</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">頭から足先まで画面内に入るよう距離を調整</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:rgba(251,191,36,0.07);border-radius:10px;border:1px solid rgba(251,191,36,0.3)">
+        <div style="font-size:24px;line-height:1">☀️</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#fbbf24">明るい場所で撮影（重要）</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">高速撮影は露出が短くなります。屋外・照明の整った室内を選んでください</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 身長入力 -->
+    <div style="margin-bottom:18px;padding:14px 16px;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.28);border-radius:10px">
+      <div style="font-size:13px;font-weight:600;color:#60a5fa;margin-bottom:8px">🎯 身長を入力するとさらに精度が上がります（任意）</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <input type="number" id="input-height-cm" inputmode="numeric" placeholder="例：175" min="120" max="220"
+          style="flex:1;padding:11px 14px;background:var(--bg-primary);border:1px solid var(--border-default);border-radius:8px;color:var(--text-primary);font-size:16px;outline:none;-webkit-appearance:none;-moz-appearance:textfield">
+        <span style="font-size:14px;color:var(--text-secondary);white-space:nowrap;font-weight:500">cm</span>
+      </div>
+    </div>
+
+    <button id="btn-guide-confirm" class="btn btn-primary btn-block btn-large" style="touch-action:manipulation">
+      確認できました → 撮影開始
+    </button>
+    <button id="btn-guide-cancel" class="btn btn-secondary btn-block" style="margin-top:10px;background:transparent;color:var(--text-muted);border:1px solid var(--border-subtle);font-size:13px;touch-action:manipulation">
+      キャンセル
+    </button>
+  </div>
+</div>
 
 </body>
 </html>
