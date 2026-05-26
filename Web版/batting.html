@@ -683,7 +683,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  recordingTimer = setInterval(() => {
  const elapsed = performance.now() - recordingStartTime;
  const remain = MAX_RECORDING_MS - elapsed;
- $('recording-timer').textContent = `残り ${Math.max(0, remain / 1000).toFixed(1)}秒`;
+ $('recording-timer').textContent = `残り ${Math.max(0, remain / 1000).toFixed(1)}秒  📸${capturedFrameImages.length}f`;
  if (elapsed >= MIN_FINISH_MS && $('btn-finish-capture').disabled) {
  $('btn-finish-capture').disabled = false;
  $('btn-finish-capture').textContent = '✓ スイング完了 ・ 解析する';

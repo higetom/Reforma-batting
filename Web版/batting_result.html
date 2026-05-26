@@ -784,7 +784,12 @@
 
  // ─ IndexedDB からJPEGフレーム読込 ─
  let capturedImgFrames = null;
- try { capturedImgFrames = await loadFramesFromIDB(); } catch (e) {}
+ try { capturedImgFrames = await loadFramesFromIDB(); } catch (e) {
+ console.warn('[Review] IDB load error:', e);
+ }
+ console.log('[Review] capturedImgFrames:', capturedImgFrames
+ ? (Array.isArray(capturedImgFrames) ? capturedImgFrames.length + ' frames' : typeof capturedImgFrames)
+ : 'null');
 
  const hasImages = Array.isArray(capturedImgFrames) && capturedImgFrames.length > 0;
 
@@ -796,11 +801,20 @@
  reviewCanvas.width = tmpImg.naturalWidth || 180;
  reviewCanvas.height = tmpImg.naturalHeight || 320;
  $('review-no-video').classList.add('hidden');
+ // フレーム枚数を表示
+ const noVideoEl = $('review-no-video');
+ if (noVideoEl) noVideoEl.textContent = `📸 ${capturedImgFrames.length}フレーム読み込み済み`;
  } else {
  reviewCanvas.width = 180;
  reviewCanvas.height = 320;
  if (frameImg) frameImg.style.display = 'none';
- $('review-no-video').classList.remove('hidden');
+ const noVideoEl = $('review-no-video');
+ if (noVideoEl) {
+ noVideoEl.textContent = capturedImgFrames === null
+ ? 'スケルトン再生モード（IDB: null）'
+ : `スケルトン再生モード（IDB: ${Array.isArray(capturedImgFrames) ? '0frames' : typeof capturedImgFrames}）`;
+ noVideoEl.classList.remove('hidden');
+ }
  }
 
  section.classList.remove('hidden');
