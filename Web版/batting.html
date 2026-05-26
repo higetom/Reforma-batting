@@ -1294,6 +1294,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    const vidH       = videoTrackInfo.video.height;
    const lastSample = allSamples[allSamples.length - 1];
    const durSec     = (lastSample.cts + lastSample.duration) / timescale;
+   // 元動画の実FPS（MP4Boxメタデータから計算。スローモーション動画で重要）
+   const realVideoFps = allSamples.length / Math.max(0.1, durSec);
 
    console.log('[webcodecs] demux done:', allSamples.length, 'samples',
      durSec.toFixed(2) + 's', codecStr);
@@ -1409,8 +1411,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
      const flushTimeout = new Promise(function(_, rj) {
        setTimeout(function() {
-         rj(new Error('WEBCODECS_UNAVAILABLE: デコードタイムアウト(20秒)'));
-       }, 20000);
+         rj(new Error('WEBCODECS_UNAVAILABLE: デコードタイムアウト(90秒)。動画が長すぎるか端末の処理が追いつきません。'));
+       }, 90000);
      });
      Promise.race([
        decoder.flush().then(function() { try { decoder.close(); } catch (_) {} }),
@@ -1435,7 +1437,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    if (collected.length < 5) {
      throw new Error('WEBCODECS_FAILED: フレーム取得数が少なすぎます(' + collected.length + '枚)');
    }
-   return collected;
+   // realVideoFps を frames と一緒に返す（actual_video_fps 補正用）
+   return { frames: collected, realVideoFps: realVideoFps };
  }
 
  $('btn-analyze-upload').addEventListener('click', async () => {
@@ -1459,11 +1462,14 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
  // HEVC + WebCodecs 対応: HEVCのときはWebCodecsを優先試行 → 失敗時フォールバック
  let frames;
+ let wcRealFps = null; // WebCodecsパスでのみ取得できる元動画の実FPS
  if (pickedFileCodec === 'hevc' && typeof VideoDecoder !== 'undefined') {
    setOverlayProgress(3, 'HEVC動画をWebCodecsで解析します…', '変換不要・完全ローカル処理');
    try {
-     frames = await extractWithWebCodecs(pickedFile);
-     console.log('[upload] WebCodecs成功:', frames.length, 'frames');
+     const wcResult = await extractWithWebCodecs(pickedFile);
+     frames = wcResult.frames;
+     wcRealFps = wcResult.realVideoFps;
+     console.log('[upload] WebCodecs成功:', frames.length, 'frames, realFps:', wcRealFps);
    } catch (wcErr) {
      console.warn('[upload] WebCodecs失敗:', wcErr.message);
      if (/WEBCODECS_UNAVAILABLE/.test(wcErr.message)) {
@@ -1515,7 +1521,9 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  analysis: result,
  raw_frames: cleanFrames,
  raw_fps: fps,
- actual_video_fps: fps, // アップロード動画のFPS（フレームタイムスタンプから計算）
+ // actual_video_fps: WebCodecsパスでは元動画の実FPS(188fpsなど)を使用
+ // 従来パスではcollectedフレームから計算した値(≒30fps)
+ actual_video_fps: (wcRealFps && wcRealFps > 5) ? wcRealFps : fps,
  raw_rmp_type: rmpType,
  captured_at: new Date().toISOString(),
  n_frames: frames.length,
