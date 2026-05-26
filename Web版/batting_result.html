@@ -190,6 +190,59 @@
  display: block; font-size: 22px; font-weight: 600;
  font-family: var(--font-family-mono); color: var(--text-primary);
  }
+ /* キャリブレーション */
+ .calib-btn {
+   display: inline-block; margin-top: 5px; padding: 3px 10px;
+   font-size: 10px; color: #22d3ee; background: transparent;
+   border: 1px solid #22d3ee55; border-radius: 20px; cursor: pointer;
+   letter-spacing: 0.3px;
+ }
+ .calib-btn:active { opacity: 0.7; }
+ #calib-modal {
+   display: none; position: fixed; inset: 0; z-index: 9999;
+   background: rgba(0,0,0,0.88); flex-direction: column;
+   align-items: center; justify-content: center; padding: 16px;
+ }
+ .calib-inner {
+   width: 100%; max-width: 480px; background: #1a1f2e;
+   border: 1px solid #334155; border-radius: 12px; padding: 20px;
+ }
+ .calib-title {
+   font-size: 15px; font-weight: 600; color: #f1f5f9; margin-bottom: 12px;
+ }
+ .calib-desc {
+   font-size: 12px; color: #94a3b8; margin-bottom: 10px; line-height: 1.5;
+ }
+ #calib-canvas-wrap { position: relative; width: 100%; margin-bottom: 12px; cursor: crosshair; }
+ #calib-canvas { width: 100%; display: block; border-radius: 6px; }
+ .calib-dist-row {
+   display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+ }
+ .calib-dist-btn {
+   padding: 6px 12px; font-size: 12px; border-radius: 20px; cursor: pointer;
+   border: 1px solid #334155; background: #0f172a; color: #cbd5e1;
+ }
+ .calib-dist-btn:active { background: #1e293b; }
+ .calib-custom-row {
+   display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+ }
+ .calib-custom-row input {
+   width: 72px; padding: 6px 8px; border-radius: 6px;
+   border: 1px solid #334155; background: #0f172a; color: #f1f5f9;
+   font-size: 13px; text-align: center;
+ }
+ .calib-custom-row label { font-size: 12px; color: #94a3b8; }
+ .calib-custom-ok {
+   padding: 6px 14px; background: #22d3ee; color: #000; border: none;
+   border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer;
+ }
+ .calib-cancel {
+   width: 100%; padding: 9px; border: 1px solid #334155; background: transparent;
+   color: #64748b; border-radius: 8px; font-size: 13px; cursor: pointer; margin-top: 4px;
+ }
+ .calib-status {
+   font-size: 11px; color: #22d3ee; margin-top: 6px; text-align: center;
+ }
  .review-no-video-badge {
  position: absolute; top: 8px; right: 8px; z-index: 4;
  background: rgba(0,0,0,0.7); color: #9ca3af; font-size: 10px;
@@ -348,11 +401,44 @@
  <label class="review-ann-toggle"><input type="checkbox" data-ann="bat"> 手のパス</label>
  </div>
 
+ <!-- キャリブレーションモーダル -->
+ <div id="calib-modal">
+   <div class="calib-inner">
+     <div class="calib-title">スイングスピード 精度設定</div>
+     <div id="calib-step1">
+       <div class="calib-desc">動画内の2点をタップして既知距離を指定します。<br>ホームベースの端、バットの両端など長さがわかる2点を選んでください。</div>
+       <div id="calib-canvas-wrap">
+         <canvas id="calib-canvas"></canvas>
+       </div>
+       <div class="calib-status" id="calib-step1-status">1点目をタップ</div>
+     </div>
+     <div id="calib-step2" style="display:none">
+       <div class="calib-desc" id="calib-step2-desc">2点間の実際の距離を選択してください</div>
+       <div class="calib-dist-row">
+         <button class="calib-dist-btn" id="calib-d43">ホームベース幅 43cm</button>
+         <button class="calib-dist-btn" id="calib-d84">バット長 84cm</button>
+         <button class="calib-dist-btn" id="calib-d90">バット長 90cm</button>
+       </div>
+       <div class="calib-custom-row">
+         <label>自分で入力:</label>
+         <input type="number" id="calib-custom-cm" value="43" min="10" max="500">
+         <label>cm</label>
+         <button class="calib-custom-ok" id="calib-custom-ok-btn">確定</button>
+       </div>
+     </div>
+     <div id="calib-done" style="display:none">
+       <div class="calib-status">キャリブレーション完了。スイングスピードを再計算しました。</div>
+     </div>
+     <button class="calib-cancel" id="calib-cancel-btn">閉じる</button>
+   </div>
+ </div>
+
  <!-- バット軌道メトリクス -->
  <div id="bat-metrics-bar" class="bat-metrics-bar hidden">
  <div class="bat-metric-item" style="flex:1">
  <span class="bat-metric-label">推定スイングスピード <span style="font-size:8px;color:#6b7280">(参考値)</span></span>
  <span class="bat-metric-value" id="swing-speed-kmh">--</span>
+ <button class="calib-btn" id="calib-open-btn" style="display:none">基準距離を設定</button>
  </div>
  <div class="bat-metric-item" id="in-plane-cell" style="display:none">
  <span class="bat-metric-label">オンプレーン率</span>
@@ -484,7 +570,7 @@
 <script src="js/user-profile.js"></script>
 <script src="js/batting-data.js"></script>
 <script src="js/batting-analyzer.js"></script>
-<script src="bat-detector.js"></script>
+<script src="js/bat-detector.js"></script>
 <script>
 (function () {
  'use strict';
@@ -1350,6 +1436,175 @@
    }).catch(function (e) {
      console.warn('[YOLO] バット検出失敗（手首推定値を維持）:', e.message || e);
      if (yoloStatusSpan) yoloStatusSpan.textContent = '手首推定値(参考)';
+   });
+ }
+
+ // ─────────────────────────────────────────────────────────────────────────
+ // タップキャリブレーション機能
+ // 動画フレーム内の2点間の画面上距離と既知実距離からスケールを計算し、
+ // 手首軌跡ベースのスイングスピードを再計算して表示を更新する
+ // ─────────────────────────────────────────────────────────────────────────
+ {
+   let calibP1 = null, calibP2 = null;
+   let calibCvNatW = 1, calibCvNatH = 1;
+
+   const calibModal   = $('calib-modal');
+   const calibCv      = $('calib-canvas');
+   const calibWrap    = $('calib-canvas-wrap');
+   const calibStep1   = $('calib-step1');
+   const calibStep2   = $('calib-step2');
+   const calibDone    = $('calib-done');
+   const calibStatus  = $('calib-step1-status');
+   const calibOpenBtn = $('calib-open-btn');
+
+   // キャリブレーションボタン表示制御（フレーム画像がある場合のみ）
+   if (hasImages && calibOpenBtn) calibOpenBtn.style.display = '';
+
+   // ── モーダルを開く ──
+   function openCalibModal() {
+     if (!hasImages || !capturedImgFrames[0]) return;
+     calibP1 = null; calibP2 = null;
+     calibStep1.style.display = '';
+     calibStep2.style.display = 'none';
+     calibDone.style.display  = 'none';
+     calibStatus.textContent  = '1点目をタップ';
+     calibModal.style.display = 'flex';
+
+     const img = new Image();
+     img.onload = function () {
+       calibCvNatW = img.naturalWidth  || reviewCanvas.width;
+       calibCvNatH = img.naturalHeight || reviewCanvas.height;
+       calibCv.width  = calibCvNatW;
+       calibCv.height = calibCvNatH;
+       const ctx = calibCv.getContext('2d');
+       ctx.drawImage(img, 0, 0);
+     };
+     img.src = capturedImgFrames[0].img;
+   }
+
+   // ── キャンバスタップ ──
+   function onCalibTap(e) {
+     e.preventDefault();
+     const rect  = calibCv.getBoundingClientRect();
+     const touch = e.touches ? e.touches[0] : e;
+     // CSS px → native px
+     const scaleX = calibCvNatW / rect.width;
+     const scaleY = calibCvNatH / rect.height;
+     const nx = (touch.clientX - rect.left)  * scaleX;
+     const ny = (touch.clientY - rect.top)   * scaleY;
+     const ctx = calibCv.getContext('2d');
+
+     if (!calibP1) {
+       calibP1 = { x: nx, y: ny };
+       ctx.beginPath();
+       ctx.arc(nx, ny, Math.max(8, calibCvNatW * 0.02), 0, Math.PI * 2);
+       ctx.fillStyle = '#22d3ee';
+       ctx.fill();
+       calibStatus.textContent = '2点目をタップ';
+     } else if (!calibP2) {
+       calibP2 = { x: nx, y: ny };
+       ctx.beginPath();
+       ctx.arc(nx, ny, Math.max(8, calibCvNatW * 0.02), 0, Math.PI * 2);
+       ctx.fillStyle = '#4ade80';
+       ctx.fill();
+       ctx.beginPath();
+       ctx.moveTo(calibP1.x, calibP1.y);
+       ctx.lineTo(nx, ny);
+       ctx.strokeStyle = '#fbbf24';
+       ctx.lineWidth   = Math.max(2, calibCvNatW * 0.005);
+       ctx.stroke();
+       calibStep1.style.display = 'none';
+       calibStep2.style.display = '';
+     }
+   }
+
+   calibCv.addEventListener('click',     onCalibTap);
+   calibCv.addEventListener('touchstart', onCalibTap, { passive: false });
+
+   // ── 距離確定 → スピード再計算 ──
+   function applyCalib(distCm) {
+     if (!calibP1 || !calibP2) return;
+     const distM = distCm / 100;
+     const pixDist = Math.hypot(calibP2.x - calibP1.x, calibP2.y - calibP1.y);
+     if (pixDist < 10) {
+       calibStatus.textContent = '2点が近すぎます。もう一度開いてやり直してください。';
+       calibStep2.style.display = 'none';
+       calibStep1.style.display = '';
+       calibP1 = null; calibP2 = null;
+       return;
+     }
+     // m/px (元画像ネイティブ座標系)
+     const mPerPxNative = distM / pixDist;
+     // 正規化座標 → m に変換するスケール
+     const effScaleX = mPerPxNative * calibCvNatW;
+     const effScaleY = mPerPxNative * calibCvNatH;
+
+     // BAT_TRAIL_RAW を使ってスイングスピードを再計算
+     const calibRaw = [null];
+     for (let i = 1; i < BAT_TRAIL_RAW.length; i++) {
+       const a = BAT_TRAIL_RAW[i - 1], b = BAT_TRAIL_RAW[i];
+       const dt = (b.t - a.t) / 1000;
+       if (dt <= 0 || dt > 0.15) { calibRaw.push(null); continue; }
+       const dx = (b.hx - a.hx) * effScaleX;
+       const dy = (b.hy - a.hy) * effScaleY;
+       calibRaw.push(Math.hypot(dx, dy) / dt * 3.6);
+     }
+     // 3フレーム平滑化
+     const calibSmooth = calibRaw.map(function (s, i) {
+       if (s === null) return null;
+       let sum = 0, n = 0;
+       for (let j = Math.max(0, i-1); j <= Math.min(calibRaw.length-1, i+1); j++) {
+         if (calibRaw[j] !== null) { sum += calibRaw[j]; n++; }
+       }
+       return n > 0 ? sum / n : null;
+     });
+     // スウィング範囲のピーク
+     let peak = null;
+     for (let i = 0; i < BAT_TRAIL.length; i++) {
+       const fi = BAT_TRAIL[i].fi;
+       if (fi < swingStartFI || fi > contactFI + 5) continue;
+       const sp = calibSmooth[i];
+       if (sp !== null && sp <= 200 && (peak === null || sp > peak)) peak = sp;
+     }
+     if (peak === null && BAT_TRAIL.length > 0) {
+       calibSmooth.forEach(function (sp) {
+         if (sp !== null && sp <= 200 && (peak === null || sp > peak)) peak = sp;
+       });
+     }
+     if (peak !== null) {
+       const ssEl = $('swing-speed-kmh');
+       if (ssEl) {
+         ssEl.textContent = Math.round(peak) + ' km/h';
+         ssEl.style.color = peak >= 140 ? '#4ade80' : peak >= 120 ? '#fbbf24' : '#60a5fa';
+       }
+       // ステータステキストを更新
+       const statusSpanList = ssEl && ssEl.parentNode
+         ? ssEl.parentNode.querySelectorAll('span[style*="font-size:9px"]') : [];
+       statusSpanList.forEach(function (sp) {
+         sp.textContent = '基準距離キャリブ済 (' + distCm + 'cm)';
+         sp.style.color = '#4ade80';
+       });
+     }
+     calibStep2.style.display = 'none';
+     calibDone.style.display  = '';
+   }
+
+   // ── ボタンイベント ──
+   if (calibOpenBtn) calibOpenBtn.addEventListener('click', openCalibModal);
+   const cancelBtn = $('calib-cancel-btn');
+   if (cancelBtn) cancelBtn.addEventListener('click', function () {
+     calibModal.style.display = 'none';
+   });
+   const d43Btn = $('calib-d43');
+   if (d43Btn) d43Btn.addEventListener('click', function () { applyCalib(43); });
+   const d84Btn = $('calib-d84');
+   if (d84Btn) d84Btn.addEventListener('click', function () { applyCalib(84); });
+   const d90Btn = $('calib-d90');
+   if (d90Btn) d90Btn.addEventListener('click', function () { applyCalib(90); });
+   const customOkBtn = $('calib-custom-ok-btn');
+   if (customOkBtn) customOkBtn.addEventListener('click', function () {
+     const v = parseFloat($('calib-custom-cm').value);
+     if (v > 0) applyCalib(v);
    });
  }
 
