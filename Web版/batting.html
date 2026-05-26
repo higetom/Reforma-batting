@@ -1472,8 +1472,11 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
      console.log('[upload] WebCodecs成功:', frames.length, 'frames, realFps:', wcRealFps);
    } catch (wcErr) {
      console.warn('[upload] WebCodecs失敗:', wcErr.message);
-     if (/WEBCODECS_UNAVAILABLE/.test(wcErr.message)) {
-       // 非対応デバイス → 従来フローにフォールバック
+     if (/タイムアウト/.test(wcErr.message)) {
+       // タイムアウト: 動画が長すぎるか端末の処理が追いつかなかった
+       throw new Error('SLOW_VIDEO_TIMEOUT: ' + wcErr.message);
+     } else if (/WEBCODECS_UNAVAILABLE/.test(wcErr.message)) {
+       // 非対応デバイス → 従来フローにフォールバック(HEVC blackoutの可能性あり)
        setOverlayProgress(5, 'フレームを解析しています…', '動画を再生して解析');
        frames = await extractFromPreviewVideo(previewVideo);
      } else {
@@ -1543,9 +1546,16 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  console.error(e);
  // エラー種別に応じて改善ヒントを変える
  const msg = e.message || '不明なエラー';
- if (/WEBCODECS_FAILED/.test(msg)) {
+ if (/SLOW_VIDEO_TIMEOUT/.test(msg)) {
+ // タイムアウト: 高fps動画(スローモーション等)の処理時間超過
+ showRichError('動画の処理がタイムアウトしました', [
+ '動画が長すぎる可能性があります。10秒以内にトリミングしてから再試行してください',
+ 'ページを再読み込みしてから再試行してください',
+ '問題が続く場合は「撮影を準備する」からアプリ内で直接撮影してください',
+ ]);
+ } else if (/WEBCODECS_FAILED/.test(msg)) {
  // WebCodecs でデコードできなかった場合
- showRichError('WebCodecsでの解析に失敗しました', [
+ showRichError('動画の解析に失敗しました', [
  '「設定」→「カメラ」→「フォーマット」→「互換性優先」に変更して撮影した動画をお試しください',
  '「撮影を準備する」からその場で撮影すると確実に解析できます',
  'ページを再読み込みしてから再試行してください',
