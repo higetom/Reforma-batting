@@ -866,12 +866,14 @@
  ? capturedImgFrames[capturedImgFrames.length - 1].t / 1000
  : duration;
 
+
  // ─ 状態変数 ─
  let currentFrameIdx = 0;
  let isPlaying = false;
  let playbackSpeed = 0.25;
- let playLastTs = 0;
  let playRaf = null;
+ let playStartTs = 0;          // 再生開始時のperformance.now()
+ let playStartVirtualMs = 0;   // 再生開始時の動画時刻(ms)
 
  // ─ ランドマーク取得(時刻ベース) ─
  function getLandmarksAt(timeSec) {
@@ -1083,8 +1085,8 @@
 
  // ─── バットメトリクスを表示 ───────────────────────────────────────────
  const batBar = $('bat-metrics-bar');
- if (batBar && BAT_TRAIL.length > 0) {
-   batBar.classList.remove('hidden');
+ if (batBar) {
+   batBar.classList.remove('hidden'); // バット検出有無によらず常時表示
    const ipEl = $('in-plane-pct');
    if (ipEl) {
      ipEl.textContent = inPlaneRate != null ? inPlaneRate + '%' : '--';
@@ -1447,21 +1449,28 @@
  // ─ 再生ループ ─
  function playLoop(ts) {
  if (!isPlaying) return;
- const elapsed = (ts - playLastTs) / 1000 * playbackSpeed;
- playLastTs = ts;
-
  const srcArr = hasImages ? capturedImgFrames : frames;
  const maxIdx = srcArr.length - 1;
- const currentT = srcArr[currentFrameIdx].t / 1000;
- const targetT = currentT + elapsed;
+ const totalMs = srcArr[maxIdx].t;
 
- let nextIdx = currentFrameIdx;
- // targetT以下で最も大きい t を持つフレームへ進む（正しい速度制御）
- for (let i = currentFrameIdx + 1; i <= maxIdx; i++) {
- if (srcArr[i].t / 1000 <= targetT) nextIdx = i;
- else break;
+ // 壁時計経過 × 再生倍率 = 仮想動画時刻（積算方式でフレーム間隔に依存しない）
+ const wallElapsedMs = ts - playStartTs;
+ let virtualMs = playStartVirtualMs + wallElapsedMs * playbackSpeed;
+
+ // ループ処理
+ if (virtualMs >= totalMs) {
+   const over = virtualMs % totalMs;
+   playStartTs = ts;
+   playStartVirtualMs = 0;
+   virtualMs = over;
  }
- if (nextIdx >= maxIdx) nextIdx = 0; // ループ
+
+ // virtualMs 以下で最大のフレームを探す
+ let nextIdx = 0;
+ for (let i = 0; i <= maxIdx; i++) {
+   if (srcArr[i].t <= virtualMs) nextIdx = i;
+   else break;
+ }
 
  showFrame(nextIdx);
  playRaf = requestAnimationFrame(playLoop);
@@ -1472,10 +1481,12 @@
  isPlaying = !isPlaying;
  $('review-play-pause').textContent = isPlaying ? '⏸ 停止' : '▶ 再生';
  if (isPlaying) {
- playLastTs = performance.now();
- playRaf = requestAnimationFrame(playLoop);
+   const srcArr = hasImages ? capturedImgFrames : frames;
+   playStartTs = performance.now();
+   playStartVirtualMs = srcArr[currentFrameIdx].t;
+   playRaf = requestAnimationFrame(playLoop);
  } else {
- cancelAnimationFrame(playRaf);
+   cancelAnimationFrame(playRaf);
  }
  });
 
@@ -1496,9 +1507,15 @@
  // ─ 速度ボタン ─
  document.querySelectorAll('.review-speed-btn').forEach(btn => {
  btn.addEventListener('click', () => {
- document.querySelectorAll('.review-speed-btn').forEach(b => b.classList.remove('active'));
- btn.classList.add('active');
- playbackSpeed = parseFloat(btn.dataset.rate);
+   document.querySelectorAll('.review-speed-btn').forEach(b => b.classList.remove('active'));
+   btn.classList.add('active');
+   // 再生中の場合: 速度変更時に基準点を現在位置に更新（位置ジャンプ防止）
+   if (isPlaying) {
+     const srcArr = hasImages ? capturedImgFrames : frames;
+     playStartTs = performance.now();
+     playStartVirtualMs = srcArr[currentFrameIdx].t;
+   }
+   playbackSpeed = parseFloat(btn.dataset.rate);
  });
  });
 
