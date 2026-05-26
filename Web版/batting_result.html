@@ -156,11 +156,17 @@
  position: relative; width: 100%; aspect-ratio: 9/16; max-height: 65vh;
  background: #000; overflow: hidden;
  }
- .review-video {
+ .review-frame-img {
  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1;
  }
  .review-canvas-overlay {
  position: absolute; inset: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
+ }
+ .review-coaching-tip {
+ position: absolute; bottom: 46px; left: 8px; right: 8px; z-index: 4;
+ background: rgba(11,14,19,0.85); border-left: 3px solid #60a5fa;
+ border-radius: 6px; padding: 7px 10px;
+ font-size: 12px; color: #cbd5e1; line-height: 1.5; pointer-events: none;
  }
  .review-no-video-badge {
  position: absolute; top: 8px; right: 8px; z-index: 4;
@@ -302,8 +308,9 @@
 
  <!-- プレイヤー -->
  <div class="review-player-outer" id="review-player-outer">
- <video id="review-video" class="review-video" playsinline webkit-playsinline muted></video>
+ <img id="review-frame-img" class="review-frame-img" alt="">
  <canvas id="review-canvas" class="review-canvas-overlay"></canvas>
+ <div id="review-coaching-tip" class="review-coaching-tip hidden"></div>
  <div id="review-no-video" class="review-no-video-badge hidden">スケルトン再生モード</div>
  </div>
 
@@ -743,17 +750,17 @@
  }
 
  // ─────────────────────────────────────────
- // フォームレビュー (スロー動画 + アノテーション)
+ // フォームレビュー (JPEGフレーム + アノテーション)
  // ─────────────────────────────────────────
- async function loadVideoFromIDB() {
+ async function loadFramesFromIDB() {
  return new Promise(resolve => {
  try {
  const req = indexedDB.open('reforma_batting_v1', 1);
  req.onsuccess = e => {
  const db = e.target.result;
- if (!db.objectStoreNames.contains('videos')) { db.close(); resolve(null); return; }
- const tx = db.transaction('videos', 'readonly');
- const get = tx.objectStore('videos').get('last_swing');
+ if (!db.objectStoreNames.contains('frames')) { db.close(); resolve(null); return; }
+ const tx = db.transaction('frames', 'readonly');
+ const get = tx.objectStore('frames').get('last_swing_frames');
  get.onsuccess = ev => { db.close(); resolve(ev.target.result || null); };
  get.onerror = () => { db.close(); resolve(null); };
  };
@@ -767,43 +774,49 @@
  if (!frames || frames.length < 5) return;
 
  const section = $('review-section');
- const reviewVideo = $('review-video');
+ const frameImg = $('review-frame-img');
  const reviewCanvas = $('review-canvas');
+ const coachingTip = $('review-coaching-tip');
  const rCtx = reviewCanvas.getContext('2d');
 
  const duration = frames[frames.length - 1].t / 1000;
  const fps = r.fps || 30;
 
- // ─ IndexedDB から動画読込 ─
- let videoBlob = null;
- try { videoBlob = await loadVideoFromIDB(); } catch (e) {}
+ // ─ IndexedDB からJPEGフレーム読込 ─
+ let capturedImgFrames = null;
+ try { capturedImgFrames = await loadFramesFromIDB(); } catch (e) {}
 
- let videoDuration = duration;
+ const hasImages = Array.isArray(capturedImgFrames) && capturedImgFrames.length > 0;
 
- if (videoBlob) {
- const url = URL.createObjectURL(videoBlob);
- reviewVideo.src = url;
- reviewVideo.load();
- await new Promise(resolve => {
- reviewVideo.onloadedmetadata = resolve;
- setTimeout(resolve, 4000);
- });
- videoDuration = isFinite(reviewVideo.duration) && reviewVideo.duration > 0
- ? reviewVideo.duration : duration;
- reviewCanvas.width = reviewVideo.videoWidth || 720;
- reviewCanvas.height = reviewVideo.videoHeight || 1280;
- reviewVideo.playbackRate = 0.25; // デフォルト0.25x
+ // ─ キャンバスサイズ決定 ─
+ if (hasImages) {
+ const tmpImg = new Image();
+ tmpImg.src = capturedImgFrames[0].img;
+ await new Promise(res => { tmpImg.onload = res; setTimeout(res, 800); });
+ reviewCanvas.width = tmpImg.naturalWidth || 180;
+ reviewCanvas.height = tmpImg.naturalHeight || 320;
  $('review-no-video').classList.add('hidden');
  } else {
- reviewVideo.style.display = 'none';
+ reviewCanvas.width = 180;
+ reviewCanvas.height = 320;
+ if (frameImg) frameImg.style.display = 'none';
  $('review-no-video').classList.remove('hidden');
- reviewCanvas.width = 720;
- reviewCanvas.height = 1280;
  }
 
  section.classList.remove('hidden');
 
- // ─ ランドマーク補間 ─
+ const totalDuration = hasImages
+ ? capturedImgFrames[capturedImgFrames.length - 1].t / 1000
+ : duration;
+
+ // ─ 状態変数 ─
+ let currentFrameIdx = 0;
+ let isPlaying = false;
+ let playbackSpeed = 0.25;
+ let playLastTs = 0;
+ let playRaf = null;
+
+ // ─ ランドマーク取得(時刻ベース) ─
  function getLandmarksAt(timeSec) {
  const ms = timeSec * 1000;
  let best = frames[0], bestDiff = Infinity;
@@ -816,26 +829,15 @@
 
  // ─ 初期基準位置(最初の10%フレーム平均) ─
  const initN = Math.max(1, Math.floor(frames.length * 0.1));
- let initHipX = 0.5;
- let initHeadX = 0.5, initHeadY = 0.2;
- let initCount = 0;
+ let initHipX = 0, initHeadX = 0, initCount = 0;
  for (let i = 0; i < initN; i++) {
  const lm = frames[i].landmarks;
  if (lm[23] && lm[24]) initHipX += (lm[23].x + lm[24].x) / 2;
- if (lm[0]) { initHeadX += lm[0].x; initHeadY += lm[0].y; }
+ if (lm[0]) initHeadX += lm[0].x;
  initCount++;
  }
- if (initCount > 0) { initHipX /= initCount; initHeadX /= initCount; initHeadY /= initCount; }
-
- // ─ アノテーション切替 ─
- const annToggles = { axis: true, hip_sho: true, head: true, refline: true };
- document.querySelectorAll('[data-ann]').forEach(cb => {
- cb.addEventListener('change', () => {
- annToggles[cb.dataset.ann] = cb.checked;
- const t = videoBlob ? reviewVideo.currentTime : currentSkelTime;
- drawAnnotations(t);
- });
- });
+ if (initCount > 0) { initHipX /= initCount; initHeadX /= initCount; }
+ else { initHipX = 0.5; initHeadX = 0.5; }
 
  // ─ フェーズ名取得 ─
  const PHASE_NAMES_LIST = window.ReformaBattingData.PHASE_NAMES;
@@ -848,6 +850,29 @@
  }
  return cur;
  }
+
+ // ─ フェーズ別コーチングTip ─
+ const PHASE_TIPS = {
+ 'スタンス':      '軸足・前足の体重配分を確認。約60:40が理想的です。',
+ 'ロード':        '軸足に体重を乗せてバットをセット。肩の開きを抑えましょう。',
+ 'ストライド':    '前足の踏み出しを地面と平行に。上体のつっこみに注意。',
+ 'コックアップ':  '後ろ脇を締め、グリップを耳の高さに保ちましょう。',
+ 'スウィング開始':'腰→肩→腕の順番で回転。腰先行を意識して。',
+ 'アーリーコンタクト': 'バットヘッドをボールゾーンへ早めに入れましょう。',
+ 'コンタクト':    '頭を動かさず目でボールをとらえて。腕が伸びきる前にインパクト。',
+ 'フォロースルー1':'体の回転を最後まで使いきりましょう。',
+ 'フォロースルー2':'フィニッシュのバランスを確認。軸が残っていれば◎。',
+ };
+
+ // ─ アノテーション切替 ─
+ const annToggles = { axis: true, hip_sho: true, head: true, refline: true };
+ document.querySelectorAll('[data-ann]').forEach(cb => {
+ cb.checked = true;
+ cb.addEventListener('change', () => {
+ annToggles[cb.dataset.ann] = cb.checked;
+ showFrame(currentFrameIdx);
+ });
+ });
 
  // ─ アノテーション描画 ─
  function drawAnnotations(timeSec) {
@@ -880,9 +905,7 @@
  const lH = pt(23), rH = pt(24), lS = pt(11), rS = pt(12);
  if (lH && rH) {
  rCtx.save();
- rCtx.strokeStyle = '#fb923c';
- rCtx.lineWidth = 2.5;
- rCtx.lineCap = 'round';
+ rCtx.strokeStyle = '#fb923c'; rCtx.lineWidth = 2.5; rCtx.lineCap = 'round';
  rCtx.beginPath(); rCtx.moveTo(lH.x, lH.y); rCtx.lineTo(rH.x, rH.y); rCtx.stroke();
  rCtx.fillStyle = '#fb923c'; rCtx.font = '10px monospace';
  rCtx.fillText('腰', (lH.x + rH.x) / 2 + 4, (lH.y + rH.y) / 2 - 4);
@@ -890,15 +913,12 @@
  }
  if (lS && rS) {
  rCtx.save();
- rCtx.strokeStyle = '#60a5fa';
- rCtx.lineWidth = 2.5;
- rCtx.lineCap = 'round';
+ rCtx.strokeStyle = '#60a5fa'; rCtx.lineWidth = 2.5; rCtx.lineCap = 'round';
  rCtx.beginPath(); rCtx.moveTo(lS.x, lS.y); rCtx.lineTo(rS.x, rS.y); rCtx.stroke();
  rCtx.fillStyle = '#60a5fa'; rCtx.font = '10px monospace';
  rCtx.fillText('肩', (lS.x + rS.x) / 2 + 4, (lS.y + rS.y) / 2 - 4);
  rCtx.restore();
  }
- // 腰肩分離角テキスト
  if (lH && rH && lS && rS) {
  const hipAng = Math.atan2(rH.y - lH.y, rH.x - lH.x) * 180 / Math.PI;
  const shoAng = Math.atan2(rS.y - lS.y, rS.x - lS.x) * 180 / Math.PI;
@@ -915,7 +935,7 @@
  }
  }
 
- // 体幹軸(肩中点 → 腰中点の延長線)
+ // 体幹軸
  if (annToggles.axis) {
  const lH = pt(23), rH = pt(24), lS = pt(11), rS = pt(12);
  if (lH && rH && lS && rS) {
@@ -926,17 +946,14 @@
  if (len > 0) {
  const nx = dx / len, ny = dy / len;
  rCtx.save();
- // 実線(肩〜腰)
  rCtx.strokeStyle = '#4ade80'; rCtx.lineWidth = 3; rCtx.lineCap = 'round';
  rCtx.beginPath(); rCtx.moveTo(hx, hy); rCtx.lineTo(sx, sy); rCtx.stroke();
- // 延長線(破線)
  rCtx.setLineDash([6, 4]);
  rCtx.strokeStyle = 'rgba(74,222,128,0.4)'; rCtx.lineWidth = 1.5;
  rCtx.beginPath();
  rCtx.moveTo(sx - nx * H * 0.4, sy - ny * H * 0.4);
  rCtx.lineTo(hx + nx * H * 0.25, hy + ny * H * 0.25);
  rCtx.stroke();
- // 傾き角テキスト
  rCtx.setLineDash([]);
  const tiltDeg = Math.abs(Math.atan2(dx, -dy) * 180 / Math.PI);
  rCtx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -948,15 +965,14 @@
  }
  }
 
- // 頭部軌跡(過去0.5秒)
+ // 頭部軌跡(過去0.6秒)
  if (annToggles.head) {
  const ms = timeSec * 1000;
  const trail = frames.filter(f => f.t <= ms && f.t >= ms - 600 && f.landmarks[0]);
  trail.forEach((f, i) => {
  const alpha = (i + 1) / trail.length * 0.7;
- const hx = px(f.landmarks[0].x), hy = py(f.landmarks[0].y);
  rCtx.save();
- rCtx.beginPath(); rCtx.arc(hx, hy, 3, 0, Math.PI * 2);
+ rCtx.beginPath(); rCtx.arc(px(f.landmarks[0].x), py(f.landmarks[0].y), 3, 0, Math.PI * 2);
  rCtx.fillStyle = `rgba(251,191,36,${alpha})`; rCtx.fill();
  rCtx.restore();
  });
@@ -967,7 +983,6 @@
  rCtx.fillStyle = '#fbbf24'; rCtx.fill();
  rCtx.strokeStyle = '#0b0e13'; rCtx.lineWidth = 2; rCtx.stroke();
  rCtx.restore();
- // 頭部のX移動量
  const headDx = Math.abs(lm[0].x - initHeadX) * 100;
  rCtx.save();
  rCtx.fillStyle = headDx > 8 ? 'rgba(239,68,68,0.75)' : 'rgba(0,0,0,0.55)';
@@ -995,18 +1010,54 @@
  }
  }
 
+ // ─ フレーム表示(コア関数) ─
+ function showFrame(idx) {
+ const maxIdx = hasImages
+ ? capturedImgFrames.length - 1
+ : frames.length - 1;
+ currentFrameIdx = Math.max(0, Math.min(idx, maxIdx));
+
+ let timeSec;
+ if (hasImages) {
+ const cf = capturedImgFrames[currentFrameIdx];
+ timeSec = cf.t / 1000;
+ if (frameImg) frameImg.src = cf.img;
+ } else {
+ timeSec = frames[currentFrameIdx].t / 1000;
+ }
+
+ drawAnnotations(timeSec);
+ updateScrubberUI(timeSec);
+
+ // コーチングTip
+ if (coachingTip) {
+ const phaseName = getPhaseAt(timeSec);
+ const tip = PHASE_TIPS[phaseName] || '';
+ if (tip) {
+ coachingTip.textContent = tip;
+ coachingTip.classList.remove('hidden');
+ } else {
+ coachingTip.classList.add('hidden');
+ }
+ }
+ }
+
  // ─ スクラバー ─
  const scrubber = $('review-scrubber');
- function updateScrubberUI(t) {
- if (scrubber) scrubber.value = Math.round((t / videoDuration) * 1000);
+ function updateScrubberUI(timeSec) {
+ if (scrubber) scrubber.value = Math.round((timeSec / totalDuration) * 1000);
  }
 
  if (scrubber) {
  scrubber.addEventListener('input', () => {
- const t = (parseInt(scrubber.value, 10) / 1000) * videoDuration;
- if (videoBlob && reviewVideo.readyState >= 1) reviewVideo.currentTime = t;
- else currentSkelTime = t;
- drawAnnotations(t);
+ const t = (parseInt(scrubber.value, 10) / 1000) * totalDuration;
+ const srcArr = hasImages ? capturedImgFrames : frames;
+ let bestIdx = 0, bestDiff = Infinity;
+ srcArr.forEach((f, i) => {
+ const d = Math.abs(f.t / 1000 - t);
+ if (d < bestDiff) { bestDiff = d; bestIdx = i; }
+ });
+ showFrame(bestIdx);
  });
  }
 
@@ -1019,106 +1070,73 @@
  const fi = r.phases[pname];
  if (fi == null) return;
  const t = fi / fps;
- const pct = (t / videoDuration) * 100;
+ const pct = (t / totalDuration) * 100;
  const dot = document.createElement('div');
  dot.className = 'review-phase-dot';
  dot.style.left = pct.toFixed(1) + '%';
  dot.style.background = PCOLS[pname] || '#888';
  dot.title = pname + ' (' + t.toFixed(2) + 's)';
  dot.addEventListener('click', () => {
- if (videoBlob && reviewVideo.readyState >= 1) {
- reviewVideo.pause(); reviewVideo.currentTime = t;
- }
- currentSkelTime = t;
- updateScrubberUI(t);
- drawAnnotations(t);
+ const tMs = t * 1000;
+ const srcArr = hasImages ? capturedImgFrames : frames;
+ let bestIdx = 0, bestDiff = Infinity;
+ srcArr.forEach((f, i) => {
+ const d = Math.abs(f.t - tMs);
+ if (d < bestDiff) { bestDiff = d; bestIdx = i; }
+ });
+ showFrame(bestIdx);
  });
  wrap.appendChild(dot);
  });
  }
  buildPhaseMarkers();
 
- // ─ 動画モード再生ループ ─
- let rafReview = null;
- function startReviewLoop() {
- cancelAnimationFrame(rafReview);
- function loop() {
- if (!reviewVideo.paused) {
- drawAnnotations(reviewVideo.currentTime);
- updateScrubberUI(reviewVideo.currentTime);
+ // ─ 再生ループ ─
+ function playLoop(ts) {
+ if (!isPlaying) return;
+ const elapsed = (ts - playLastTs) / 1000 * playbackSpeed;
+ playLastTs = ts;
+
+ const srcArr = hasImages ? capturedImgFrames : frames;
+ const maxIdx = srcArr.length - 1;
+ const currentT = srcArr[currentFrameIdx].t / 1000;
+ const targetT = currentT + elapsed;
+
+ let nextIdx = currentFrameIdx;
+ for (let i = currentFrameIdx; i <= maxIdx; i++) {
+ if (srcArr[i].t / 1000 >= targetT) { nextIdx = i; break; }
+ nextIdx = i;
  }
- rafReview = requestAnimationFrame(loop);
- }
- rafReview = requestAnimationFrame(loop);
+ if (nextIdx >= maxIdx) nextIdx = 0; // ループ
+
+ showFrame(nextIdx);
+ playRaf = requestAnimationFrame(playLoop);
  }
 
- if (videoBlob) {
- reviewVideo.addEventListener('play', startReviewLoop);
- reviewVideo.addEventListener('pause', () => {
- drawAnnotations(reviewVideo.currentTime);
- });
- reviewVideo.addEventListener('seeked', () => drawAnnotations(reviewVideo.currentTime));
- reviewVideo.addEventListener('ended', () => {
- $('review-play-pause').textContent = '▶ 再生';
- });
- }
-
- // ─ スケルトン専用ループ変数 ─
- let currentSkelTime = 0;
- let skelPlaying = false;
- let skelSpeed = 0.25;
- let skelLastTs = 0;
- let skelRaf = null;
-
- function skelLoop(ts) {
- if (!skelPlaying) return;
- currentSkelTime += (ts - skelLastTs) / 1000 * skelSpeed;
- skelLastTs = ts;
- if (currentSkelTime >= duration) currentSkelTime = 0;
- updateScrubberUI(currentSkelTime);
- drawAnnotations(currentSkelTime);
- skelRaf = requestAnimationFrame(skelLoop);
- }
-
- // ─ 再生/停止ボタン ─
+ // ─ 再生/停止 ─
  $('review-play-pause').addEventListener('click', () => {
- if (videoBlob) {
- if (reviewVideo.paused) {
- reviewVideo.play();
- $('review-play-pause').textContent = '⏸ 停止';
+ isPlaying = !isPlaying;
+ $('review-play-pause').textContent = isPlaying ? '⏸ 停止' : '▶ 再生';
+ if (isPlaying) {
+ playLastTs = performance.now();
+ playRaf = requestAnimationFrame(playLoop);
  } else {
- reviewVideo.pause();
- $('review-play-pause').textContent = '▶ 再生';
- }
- } else {
- skelPlaying = !skelPlaying;
- $('review-play-pause').textContent = skelPlaying ? '⏸ 停止' : '▶ 再生';
- if (skelPlaying) {
- skelLastTs = performance.now();
- skelRaf = requestAnimationFrame(skelLoop);
- } else {
- cancelAnimationFrame(skelRaf);
- }
+ cancelAnimationFrame(playRaf);
  }
  });
 
  // ─ コマ送り ─
- const FRAME_STEP = 1 / fps;
  $('review-step-back').addEventListener('click', () => {
- const t0 = videoBlob ? reviewVideo.currentTime : currentSkelTime;
- const t = Math.max(0, t0 - FRAME_STEP);
- if (videoBlob) { reviewVideo.pause(); reviewVideo.currentTime = t; }
- else { currentSkelTime = t; }
- updateScrubberUI(t);
- drawAnnotations(t);
+ isPlaying = false;
+ cancelAnimationFrame(playRaf);
+ $('review-play-pause').textContent = '▶ 再生';
+ showFrame(currentFrameIdx - 1);
  });
  $('review-step-fwd').addEventListener('click', () => {
- const t0 = videoBlob ? reviewVideo.currentTime : currentSkelTime;
- const t = Math.min(videoDuration, t0 + FRAME_STEP);
- if (videoBlob) { reviewVideo.pause(); reviewVideo.currentTime = t; }
- else { currentSkelTime = t; }
- updateScrubberUI(t);
- drawAnnotations(t);
+ isPlaying = false;
+ cancelAnimationFrame(playRaf);
+ $('review-play-pause').textContent = '▶ 再生';
+ showFrame(currentFrameIdx + 1);
  });
 
  // ─ 速度ボタン ─
@@ -1126,14 +1144,12 @@
  btn.addEventListener('click', () => {
  document.querySelectorAll('.review-speed-btn').forEach(b => b.classList.remove('active'));
  btn.classList.add('active');
- const rate = parseFloat(btn.dataset.rate);
- if (videoBlob) reviewVideo.playbackRate = rate;
- else skelSpeed = rate;
+ playbackSpeed = parseFloat(btn.dataset.rate);
  });
  });
 
- // ─ 初期描画 ─
- drawAnnotations(0);
+ // ─ 初期表示 ─
+ showFrame(0);
  }
 
  // ─────────────────────────────────────────

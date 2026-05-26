@@ -475,69 +475,38 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  const MIN_FINISH_MS = 3000; // 3秒経過後に「完了」ボタン活性化
  let monitor = null;
 
- // ─── MediaRecorder + IndexedDB (フォームレビュー用) ───
- let mediaRecorder = null;
- let mediaChunks = [];
- let mediaRecordingActive = false;
+ // ─── JPEGフレームキャプチャ + IndexedDB (フォームレビュー用) ───
  const REFORMA_IDB_NAME = 'reforma_batting_v1';
+ let captureCanvas = null, captureCtx = null;
+ let capturedFrameImages = [];   // [{t, img}, ...]
+ let lastCaptureMs = -Infinity;
+ const CAPTURE_INTERVAL_MS = 1000 / 15;   // 15fps
+ const CAPTURE_W = 180;
 
  function openReformaIDB() {
  return new Promise((resolve, reject) => {
  const req = indexedDB.open(REFORMA_IDB_NAME, 1);
  req.onupgradeneeded = e => {
  const db = e.target.result;
- if (!db.objectStoreNames.contains('videos')) db.createObjectStore('videos');
+ if (!db.objectStoreNames.contains('frames')) db.createObjectStore('frames');
  };
  req.onsuccess = e => resolve(e.target.result);
  req.onerror = e => reject(e.target.error);
  });
  }
 
- async function saveVideoBlob(blob) {
+ async function saveFramesToIDB(frmArr) {
  try {
  const db = await openReformaIDB();
  await new Promise((resolve, reject) => {
- const tx = db.transaction('videos', 'readwrite');
- tx.objectStore('videos').put(blob, 'last_swing');
+ const tx = db.transaction('frames', 'readwrite');
+ tx.objectStore('frames').put(frmArr, 'last_swing_frames');
  tx.oncomplete = () => { db.close(); resolve(); };
  tx.onerror = e => { db.close(); reject(e.target.error); };
  });
  } catch (e) {
- console.warn('[IDB] video save failed:', e);
+ console.warn('[IDB] frames save failed:', e);
  }
- }
-
- function startMediaCapture() {
- if (!stream || typeof MediaRecorder === 'undefined') return;
- const mimeType =
- MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4' :
- MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' :
- MediaRecorder.isTypeSupported('video/webm') ? 'video/webm' : '';
- if (!mimeType) { console.warn('[MediaRecorder] no supported format'); return; }
- try {
- mediaRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2000000 });
- mediaChunks = [];
- mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) mediaChunks.push(e.data); };
- mediaRecorder.start(200); // 200ms タイムスライス
- mediaRecordingActive = true;
- } catch (e) {
- console.warn('[MediaRecorder] start error:', e);
- }
- }
-
- function stopMediaCapture() {
- return new Promise(resolve => {
- if (!mediaRecorder || mediaRecorder.state === 'inactive' || !mediaRecordingActive) {
- resolve(null); return;
- }
- mediaRecorder.onstop = () => {
- mediaRecordingActive = false;
- if (mediaChunks.length === 0) { resolve(null); return; }
- const blob = new Blob(mediaChunks, { type: mediaChunks[0].type || 'video/webm' });
- resolve(blob);
- };
- try { mediaRecorder.stop(); } catch (e) { resolve(null); }
- });
  }
 
  // モデル進捗
@@ -643,6 +612,21 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  z: +l.z.toFixed(4), v: +(l.visibility || 0).toFixed(3),
  })),
  });
+ // ── JPEGフレームキャプチャ (15fps) ──
+ const capT = now - recordingStartTime;
+ if (capT - lastCaptureMs >= CAPTURE_INTERVAL_MS) {
+ lastCaptureMs = capT;
+ try {
+ if (!captureCanvas) {
+ captureCanvas = document.createElement('canvas');
+ captureCanvas.width = CAPTURE_W;
+ captureCanvas.height = Math.round(CAPTURE_W * video.videoHeight / video.videoWidth) || 320;
+ captureCtx = captureCanvas.getContext('2d');
+ }
+ captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+ capturedFrameImages.push({ t: capT, img: captureCanvas.toDataURL('image/jpeg', 0.42) });
+ } catch (capErr) { console.warn('[Capture]', capErr); }
+ }
  }
  const snap = monitor.getSnapshot();
  $('fps-pill').textContent = snap.fps.toFixed(0) + ' fps';
@@ -688,7 +672,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  recordingStartTime = performance.now();
  captureRequestedStop = false;
  captureWasAborted = false;
- startMediaCapture(); // 動画も同時録画(フォームレビュー用)
+ capturedFrameImages = []; lastCaptureMs = -Infinity; captureCanvas = null;
 
  $('recording-badge').classList.remove('hidden');
  $('btn-finish-capture').classList.remove('hidden');
@@ -731,24 +715,22 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
  detecting = false;
 
- // MediaRecorder をカメラ停止より先に止める(stream が必要)
- const videoBlob = await stopMediaCapture();
-
  if (stream) {
  stream.getTracks().forEach(t => t.stop());
  stream = null;
  }
 
  if (captureWasAborted) {
+ capturedFrameImages = [];
  location.reload();
  return;
  }
 
  showScreen('analyzing');
 
- // 動画を IndexedDB に保存(バックグラウンド — 失敗しても解析は続ける)
- if (videoBlob) {
- saveVideoBlob(videoBlob).catch(e => console.warn('[IDB] background save error:', e));
+ // JPEGフレームを IndexedDB に保存(バックグラウンド)
+ if (capturedFrameImages.length > 0) {
+ saveFramesToIDB(capturedFrameImages).catch(e => console.warn('[IDB] background save error:', e));
  }
 
  // 解析実行
