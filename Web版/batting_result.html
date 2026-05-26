@@ -755,7 +755,7 @@
  async function loadFramesFromIDB() {
  return new Promise(resolve => {
  try {
- const req = indexedDB.open('reforma_batting_v1', 1);
+ const req = indexedDB.open('reforma_batting_v1', 2); // v2: frames store
  req.onsuccess = e => {
  const db = e.target.result;
  if (!db.objectStoreNames.contains('frames')) { db.close(); resolve(null); return; }
