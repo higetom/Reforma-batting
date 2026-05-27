@@ -1370,10 +1370,12 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
            if (timeSec - lastCollectedSec >= frameIntervalSec - 0.001) {
              lastCollectedSec = timeSec;
              try {
-               relayCtx.drawImage(frame, 0, 0, relayCanvas.width, relayCanvas.height);
                const mpTs = Math.max(lastMediaPipeTs + 1, tMs + 1);
                lastMediaPipeTs = mpTs;
-               const result    = poseLandmarker.detectForVideo(relayCanvas, mpTs);
+               // VideoFrame を直接 MediaPipe に渡す（canvas経由を避けてiOS HEVC制約を回避）
+               // drawImage(frame)→canvas は iOS Safari で HEVC が黒になるが、
+               // detectForVideo(frame) は WebGL テクスチャパスを使うため制約を受けない
+               const result    = poseLandmarker.detectForVideo(frame, mpTs);
                const landmarks = (result.landmarks && result.landmarks[0]) || null;
                if (landmarks) {
                  const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
