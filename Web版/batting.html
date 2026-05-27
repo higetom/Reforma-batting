@@ -1200,7 +1200,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
    // FourCCで判定できなかった場合はMIMEタイプで判断
    if (file.type === 'video/quicktime') return 'hevc'; // iPhone .mov = HEVC
-   if (file.type === 'video/mp4') return 'h264';
+   // video/mp4 は H.264 とは限らない（HEVC .mp4 も同じ MIME タイプ）→ 不明扱い
    return 'unknown';
  }
 
@@ -1463,6 +1463,10 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    if (collected.length < 5) {
      throw new Error('WEBCODECS_FAILED: フレーム取得数が少なすぎます(' + collected.length + '枚)');
    }
+   // 全フレーム visibility=0 = canvas 読出が黒フレームになっている（iOS HEVC 制約等）
+   if (avgVis === 0 && collected.length >= 5) {
+     throw new Error('WEBCODECS_FAILED: デコードフレームで姿勢検出不可（全' + collected.length + 'フレームの認識精度0%）');
+   }
    // realVideoFps を frames と一緒に返す（actual_video_fps 補正用）
    return { frames: collected, realVideoFps: realVideoFps };
  }
@@ -1489,7 +1493,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // HEVC + WebCodecs 対応: HEVCのときはWebCodecsを優先試行 → 失敗時フォールバック
  let frames;
  let wcRealFps = null; // WebCodecsパスでのみ取得できる元動画の実FPS
- if (pickedFileCodec === 'hevc' && typeof VideoDecoder !== 'undefined') {
+ if (pickedFileCodec !== 'h264' && typeof VideoDecoder !== 'undefined') {
    setOverlayProgress(3, 'HEVC動画をWebCodecsで解析します…', '変換不要・完全ローカル処理');
    try {
      const wcResult = await extractWithWebCodecs(pickedFile);
@@ -1502,7 +1506,13 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
        // タイムアウト: 動画が長すぎるか端末の処理が追いつかなかった
        throw new Error('SLOW_VIDEO_TIMEOUT: ' + wcErr.message);
      } else if (/WEBCODECS_UNAVAILABLE|WEBCODECS_FAILED/.test(wcErr.message)) {
-       // WebCodecs非対応 → FFmpegでH.264に変換してから解析
+       // iOS Safari では FFmpeg Worker が hang する → 即座にエラー表示
+       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+       if (isIOS) {
+         throw new Error('IOS_HEVC_UNSUPPORTED: iOSでHEVC動画の解析に失敗しました');
+       }
+       // 非iOS: FFmpegでH.264に変換してから解析
        console.warn('[upload] WebCodecs失敗 → FFmpeg変換フォールバック:', wcErr.message);
        try {
          setOverlayProgress(5, 'HEVC動画を変換しています…', '初回のみ約25MBダウンロード');
@@ -1610,6 +1620,12 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  '「設定」→「カメラ」→「フォーマット」→「互換性優先」に変更して撮影した動画をお試しください',
  '「撮影を準備する」からその場で撮影すると確実に解析できます',
  'ページを再読み込みしてから再試行してください',
+ ]);
+ } else if (/IOS_HEVC_UNSUPPORTED/.test(msg)) {
+ // iOS Safari: WebCodecs HEVC 失敗 + FFmpeg スキップ
+ showRichError('この動画はSafariで解析できません', [
+ 'iPhoneの「設定」→「カメラ」→「フォーマット」→「互換性優先」に変更してから撮影した動画を使用してください',
+ '「撮影を準備する」からアプリ内で直接撮影すると確実に解析できます',
  ]);
  } else if (/HEVC_BLACKOUT/.test(msg)) {
  // HEVC ブラックアウト — WebCodecs非対応環境でfallbackも失敗
