@@ -1158,24 +1158,50 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  }
 
  /**
- * 動画ファイルの先頭4KBを読み、コーデックを判別。
+ * 動画ファイルのコーデックを判別。
  * MP4/MOV コンテナ内の FourCC を検索する。
- * - 'hev1' / 'hvc1' → HEVC(H.265) ← iPhone標準・Safari解析不可
+ * - 'hev1' / 'hvc1' / 'HEVC' → HEVC(H.265) ← iPhone標準・Safari解析不可
  * - 'avc1' → H.264 ← 解析可能
+ *
+ * 注意: iPhone大容量ファイルではmoovアトムがファイル末尾にある場合があるため
+ * 先頭64KB + 末尾64KB の両方を検索する。
  */
  async function detectVideoCodec(file) {
- const blob = file.slice(0, 4096);
- const buf = new Uint8Array(await blob.arrayBuffer());
- let s = '';
- for (let i = 0; i < buf.length; i++) {
- const c = buf[i];
- s += (c >= 32 && c < 127) ? String.fromCharCode(c) : '.';
- }
- if (s.indexOf('hev1') >= 0 || s.indexOf('hvc1') >= 0) return 'hevc';
- if (s.indexOf('avc1') >= 0) return 'h264';
- if (file.type === 'video/mp4') return 'h264';
- if (file.type === 'video/quicktime') return 'hevc';
- return 'unknown';
+   const READ_SIZE = 64 * 1024; // 64KB
+   function bufToStr(arr) {
+     let s = '';
+     for (let i = 0; i < arr.length; i++) {
+       const c = arr[i];
+       s += (c >= 32 && c < 127) ? String.fromCharCode(c) : '.';
+     }
+     return s;
+   }
+   function checkHevc(s) {
+     return s.indexOf('hev1') >= 0 || s.indexOf('hvc1') >= 0 || s.indexOf('HEVC') >= 0;
+   }
+   function checkH264(s) {
+     return s.indexOf('avc1') >= 0;
+   }
+
+   // 先頭64KB
+   const headBuf = new Uint8Array(await file.slice(0, READ_SIZE).arrayBuffer());
+   const headStr = bufToStr(headBuf);
+   if (checkHevc(headStr)) return 'hevc';
+   if (checkH264(headStr)) return 'h264';
+
+   // 末尾64KB（先頭で見つからなかった場合のみ）
+   if (file.size > READ_SIZE) {
+     const tailStart = Math.max(READ_SIZE, file.size - READ_SIZE);
+     const tailBuf = new Uint8Array(await file.slice(tailStart).arrayBuffer());
+     const tailStr = bufToStr(tailBuf);
+     if (checkHevc(tailStr)) return 'hevc';
+     if (checkH264(tailStr)) return 'h264';
+   }
+
+   // FourCCで判定できなかった場合はMIMEタイプで判断
+   if (file.type === 'video/quicktime') return 'hevc'; // iPhone .mov = HEVC
+   if (file.type === 'video/mp4') return 'h264';
+   return 'unknown';
  }
 
   // ─────────────────────────────────────────
