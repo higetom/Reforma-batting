@@ -1328,16 +1328,16 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    // demux 完了 → デコード開始表示に切り替え
    setOverlayProgress(30, 'WebCodecsで解析しています…', 'デコードを開始します…');
 
-   // ── VideoDecoder サポート確認 ──
+   // ── VideoDecoder サポート確認（非致命的チェック）──
+   // isConfigSupported が false でも実際に動く場合があるため警告のみ
    try {
      const cfg = { codec: codecStr, codedWidth: vidW, codedHeight: vidH };
      if (descBytes) cfg.description = descBytes;
      const check = await VideoDecoder.isConfigSupported(cfg);
      if (!check.supported) {
-       throw new Error('WEBCODECS_UNAVAILABLE: ' + codecStr + ' はこのデバイスでWebCodecsデコードできません');
+       console.warn('[webcodecs] isConfigSupported=false for', codecStr, '— デコードは継続試行');
      }
    } catch (e) {
-     if (/WEBCODECS_UNAVAILABLE/.test(e.message)) throw e;
      console.warn('[webcodecs] isConfigSupported エラー(継続):', e.message);
    }
 
@@ -1501,10 +1501,28 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
      if (/タイムアウト/.test(wcErr.message)) {
        // タイムアウト: 動画が長すぎるか端末の処理が追いつかなかった
        throw new Error('SLOW_VIDEO_TIMEOUT: ' + wcErr.message);
-     } else if (/WEBCODECS_UNAVAILABLE/.test(wcErr.message)) {
-       // 非対応デバイス → 従来フローにフォールバック(HEVC blackoutの可能性あり)
-       setOverlayProgress(5, 'フレームを解析しています…', '動画を再生して解析');
-       frames = await extractFromPreviewVideo(previewVideo);
+     } else if (/WEBCODECS_UNAVAILABLE|WEBCODECS_FAILED/.test(wcErr.message)) {
+       // WebCodecs非対応 → FFmpegでH.264に変換してから解析
+       console.warn('[upload] WebCodecs失敗 → FFmpeg変換フォールバック:', wcErr.message);
+       try {
+         setOverlayProgress(5, 'HEVC動画を変換しています…', '初回のみ約25MBダウンロード');
+         const convertedBlob = await convertVideoToMP4(pickedFile, function(pct, msg, detail) {
+           setOverlayProgress(5 + pct * 0.45, msg, detail);
+         });
+         const convertedUrl = URL.createObjectURL(convertedBlob);
+         previewVideo.src = convertedUrl;
+         previewVideo.load();
+         await new Promise(function(resolve) {
+           previewVideo.addEventListener('loadeddata', resolve, { once: true });
+           setTimeout(resolve, 8000);
+         });
+         setOverlayProgress(52, 'フレームを解析しています…', '変換済み動画で解析中');
+         frames = await extractFromPreviewVideo(previewVideo);
+         try { URL.revokeObjectURL(convertedUrl); } catch (e) {}
+       } catch (ffErr) {
+         console.warn('[upload] FFmpeg変換も失敗:', ffErr.message);
+         throw new Error('FFMPEG_FAILED: HEVC動画の変換に失敗しました: ' + ffErr.message);
+       }
      } else {
        throw wcErr; // 他のエラーはそのまま上に投げる
      }
@@ -1578,6 +1596,13 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  '動画が長すぎる可能性があります。10秒以内にトリミングしてから再試行してください',
  'ページを再読み込みしてから再試行してください',
  '問題が続く場合は「撮影を準備する」からアプリ内で直接撮影してください',
+ ]);
+ } else if (/FFMPEG_FAILED/.test(msg)) {
+ // FFmpeg変換失敗 — iOS SafariでFFmpeg.wasmが動かない可能性
+ showRichError('HEVC動画の変換に失敗しました', [
+ '「設定」→「カメラ」→「フォーマット」→「互換性優先」に変更して撮影した動画をお試しください',
+ 'Wi-Fi環境で再試行してください（変換ツール約25MBのダウンロードが必要）',
+ '「撮影を準備する」からアプリ内で直接撮影すると確実に解析できます',
  ]);
  } else if (/WEBCODECS_FAILED/.test(msg)) {
  // WebCodecs でデコードできなかった場合
