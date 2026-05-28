@@ -253,9 +253,9 @@
  </div>
  </div>
 
- <div style="padding:14px 16px;background:rgba(239,68,68,0.08);border:2px solid rgba(239,68,68,0.5);border-radius:var(--radius-md);margin-bottom:10px">
- <div style="font-size:12px;font-weight:700;color:#f87171;letter-spacing:0.5px;margin-bottom:4px">スイングスピード精度に直結【必須】</div>
- <div style="font-size:13px;color:var(--text-secondary);line-height:1.7"><b style="color:var(--text-primary)">スローモーション（120fps以上）</b>で撮影してください。通常撮影（30fps）では誤差が3倍以上になります。<br><span style="font-size:11.5px;color:var(--text-muted)">iPhone: カメラアプリ →「スロー」モードで撮影</span></div>
+ <div style="padding:14px 16px;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.28);border-radius:var(--radius-md);margin-bottom:10px">
+ <div style="font-size:12px;font-weight:700;color:#60a5fa;letter-spacing:0.5px;margin-bottom:4px">スイングスピードの精度について</div>
+ <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">通常撮影（30fps）でも解析できますが、スイングスピードの誤差が大きくなります。より正確に計測したい場合は、iPhoneの<b style="color:var(--text-primary)">「設定」→「カメラ」→「フォーマット」→「互換性優先」</b>に変更してからスロー撮影（H.264形式）した動画をアップロードしてください。</div>
  </div>
  <div class="card-emphasized card" style="padding:16px;border-left:3px solid var(--color-info)">
  <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
@@ -1370,12 +1370,10 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
            if (timeSec - lastCollectedSec >= frameIntervalSec - 0.001) {
              lastCollectedSec = timeSec;
              try {
+               relayCtx.drawImage(frame, 0, 0, relayCanvas.width, relayCanvas.height);
                const mpTs = Math.max(lastMediaPipeTs + 1, tMs + 1);
                lastMediaPipeTs = mpTs;
-               // VideoFrame を直接 MediaPipe に渡す（canvas経由を避けてiOS HEVC制約を回避）
-               // drawImage(frame)→canvas は iOS Safari で HEVC が黒になるが、
-               // detectForVideo(frame) は WebGL テクスチャパスを使うため制約を受けない
-               const result    = poseLandmarker.detectForVideo(frame, mpTs);
+               const result    = poseLandmarker.detectForVideo(relayCanvas, mpTs);
                const landmarks = (result.landmarks && result.landmarks[0]) || null;
                if (landmarks) {
                  const CORE = [11, 12, 23, 24, 25, 26, 27, 28];
@@ -2249,57 +2247,50 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
     <div style="text-align:center;margin-bottom:18px">
       <div style="font-size:18px;font-weight:700;color:var(--text-primary)">撮影前チェック</div>
-      <div style="font-size:12px;color:var(--text-muted);margin-top:5px">条件を揃えるとスイングスピードをより正確に計測できます</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:5px">条件を揃えると解析精度が上がります</div>
     </div>
 
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
-      <div style="display:flex;align-items:flex-start;gap:12px;padding:14px;background:rgba(239,68,68,0.08);border-radius:10px;border:2px solid rgba(239,68,68,0.5)">
-        <div style="font-size:24px;line-height:1">🎥</div>
-        <div>
-          <div style="font-size:13px;font-weight:700;color:#f87171">スローモーション（120fps以上）で撮影【必須】</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">通常撮影（30fps）ではスイングスピードの誤差が3倍以上になります。iPhoneは「カメラ」→「スロー」で撮影してください。</div>
-        </div>
-      </div>
       <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
-        <div style="font-size:24px;line-height:1">📱</div>
+        <div style="min-width:28px;height:28px;border-radius:6px;background:var(--bg-primary);border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text-muted);flex-shrink:0;margin-top:1px">01</div>
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text-primary)">縦向きで固定</div>
           <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">スマートフォンを縦向きのまま三脚等で固定</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
-        <div style="font-size:24px;line-height:1">📏</div>
+        <div style="min-width:28px;height:28px;border-radius:6px;background:var(--bg-primary);border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text-muted);flex-shrink:0;margin-top:1px">02</div>
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text-primary)">打者の真横から 2〜4m</div>
           <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">横からの距離が近すぎても遠すぎても精度が落ちます</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
-        <div style="font-size:24px;line-height:1">⬆️</div>
+        <div style="min-width:28px;height:28px;border-radius:6px;background:var(--bg-primary);border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text-muted);flex-shrink:0;margin-top:1px">03</div>
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text-primary)">カメラは打者の腰の高さ</div>
           <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">腰の高さにセットするとランドマーク検出が安定します</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border-subtle)">
-        <div style="font-size:24px;line-height:1">🧍</div>
+        <div style="min-width:28px;height:28px;border-radius:6px;background:var(--bg-primary);border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text-muted);flex-shrink:0;margin-top:1px">04</div>
         <div>
           <div style="font-size:13px;font-weight:600;color:var(--text-primary)">全身をフレームに収める</div>
           <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">頭から足先まで画面内に入るよう距離を調整</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;background:rgba(251,191,36,0.07);border-radius:10px;border:1px solid rgba(251,191,36,0.3)">
-        <div style="font-size:24px;line-height:1">☀️</div>
+        <div style="min-width:28px;height:28px;border-radius:6px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fbbf24;flex-shrink:0;margin-top:1px">!</div>
         <div>
           <div style="font-size:13px;font-weight:600;color:#fbbf24">明るい場所で撮影（重要）</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">高速撮影は露出が短くなります。屋外・照明の整った室内を選んでください</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">屋外・照明の整った室内を選んでください。暗い場所では検出精度が大幅に低下します</div>
         </div>
       </div>
     </div>
 
     <!-- 身長入力 -->
     <div style="margin-bottom:18px;padding:14px 16px;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.28);border-radius:10px">
-      <div style="font-size:13px;font-weight:600;color:#60a5fa;margin-bottom:8px">🎯 身長を入力するとさらに精度が上がります（任意）</div>
+      <div style="font-size:13px;font-weight:600;color:#60a5fa;margin-bottom:8px">身長を入力するとさらに精度が上がります（任意）</div>
       <div style="display:flex;align-items:center;gap:10px">
         <input type="number" id="input-height-cm" inputmode="numeric" placeholder="例：175" min="120" max="220"
           style="flex:1;padding:11px 14px;background:var(--bg-primary);border:1px solid var(--border-default);border-radius:8px;color:var(--text-primary);font-size:16px;outline:none;-webkit-appearance:none;-moz-appearance:textfield">
