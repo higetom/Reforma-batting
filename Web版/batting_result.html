@@ -535,6 +535,16 @@
  }
 
  let analysis = payload.analysis;
+
+ // アップロード動画の場合はバットスピードセクションを非表示
+ // （スロー動画が使えないため信頼性のある値を出せない。今後対応予定）
+ if (payload.source === 'upload') {
+   const batBar = $('bat-metrics-bar');
+   if (batBar) batBar.style.display = 'none';
+   const fpsBanner = $('fps-warning-banner');
+   if (fpsBanner) fpsBanner.style.display = 'none';
+ }
+
  setTimeout(() => renderResult(analysis), 200);
 
  // ─────────────────────────────────────────
@@ -1199,9 +1209,9 @@
  const scaleY = realTorsoM / normTorsoY;
  const scaleX = scaleY * imgAspect;
 
- // ─── バットメトリクスを表示 ───────────────────────────────────────────
+ // ─── バットメトリクスを表示（アップロード動画では非表示維持） ───────────────────────────────────────────
  const batBar = $('bat-metrics-bar');
- if (batBar) {
+ if (batBar && payload.source !== 'upload') {
    batBar.classList.remove('hidden'); // バット検出有無によらず常時表示
    const ipEl = $('in-plane-pct');
    if (ipEl) {

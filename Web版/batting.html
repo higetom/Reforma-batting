@@ -1493,10 +1493,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // HEVC + WebCodecs 対応: HEVCのときはWebCodecsを優先試行 → 失敗時フォールバック
  let frames;
  let wcRealFps = null; // WebCodecsパスでのみ取得できる元動画の実FPS
- // iOS Safari: <video>→canvas は HEVC でブラックアウトするため、コーデック問わず WebCodecs を優先
- const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
- if ((pickedFileCodec !== 'h264' || isIOSDevice) && typeof VideoDecoder !== 'undefined') {
+ // H.264以外（HEVC・不明）の場合のみWebCodecsを試行。H.264通常動画はextractFromPreviewVideoを使う
+ if (pickedFileCodec !== 'h264' && typeof VideoDecoder !== 'undefined') {
    setOverlayProgress(3, 'WebCodecsで動画を解析します…', '変換不要・完全ローカル処理');
    try {
      const wcResult = await extractWithWebCodecs(pickedFile);
