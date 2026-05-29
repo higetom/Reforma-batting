@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="theme-color" content="#0b0e13">
+ <meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data: blob:;
+  object-src 'none'; base-uri 'self';
+ ">
+ <title>記録 — Re'forma</title>
+ <link rel="stylesheet" href="css/common.css">
+ <style>
+  /* 記録カード */
+  .record-card {
+   background: var(--bg-card); border: 1px solid var(--border-subtle);
+   border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden;
+  }
+  .record-card-header {
+   display: flex; gap: 12px; padding: 14px 14px 10px; align-items: flex-start;
+  }
+  .record-thumb {
+   width: 60px; height: 80px; border-radius: var(--radius-md);
+   object-fit: cover; background: var(--bg-secondary); flex-shrink: 0;
+   display: flex; align-items: center; justify-content: center;
+   overflow: hidden;
+  }
+  .record-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .record-thumb-placeholder {
+   width: 60px; height: 80px; border-radius: var(--radius-md);
+   background: var(--bg-secondary); flex-shrink: 0;
+   display: flex; align-items: center; justify-content: center;
+   border: 1px solid var(--border-subtle);
+  }
+  .record-info { flex: 1; min-width: 0; }
+  .record-date { font-size: 11px; color: var(--text-muted); font-family: var(--font-family-mono); }
+  .record-player { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
+  .record-meta { font-size: 11px; color: var(--text-secondary); margin-top: 3px; }
+  .record-score-badge {
+   flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+   display: flex; align-items: center; justify-content: center;
+   flex-direction: column; background: var(--bg-secondary);
+   border: 2px solid var(--border-subtle); font-family: var(--font-family-mono);
+  }
+  .record-score-num { font-size: 16px; font-weight: 600; }
+  .record-score-sub { font-size: 8px; color: var(--text-muted); }
+
+  /* タグ */
+  .record-tags {
+   display: flex; flex-wrap: wrap; gap: 5px; padding: 0 14px 10px;
+  }
+  .record-tag {
+   padding: 2px 8px; border-radius: 99px; font-size: 10px; font-weight: 600;
+   border: 1px solid;
+  }
+  .record-tag--best   { color: #10b981; border-color: #10b98155; background: rgba(16,185,129,0.08); }
+  .record-tag--issue  { color: #f59e0b; border-color: #f59e0b55; background: rgba(245,158,11,0.08); }
+  .record-tag--course { color: #60a5fa; border-color: #60a5fa55; background: rgba(96,165,250,0.08); }
+
+  /* 詳細展開 */
+  .record-detail { display: none; border-top: 1px solid var(--border-subtle); }
+  .record-detail.open { display: block; }
+  .record-detail-inner { padding: 14px; }
+  .detail-section { margin-bottom: 14px; }
+  .detail-label {
+   font-size: 10px; letter-spacing: 1.5px; font-weight: 700;
+   color: var(--text-muted); margin-bottom: 6px;
+  }
+  .memo-text {
+   font-size: 13px; color: var(--text-secondary); line-height: 1.7;
+   white-space: pre-wrap;
+  }
+  .drill-item {
+   font-size: 12.5px; color: var(--text-secondary); line-height: 1.65;
+   padding: 6px 0; border-bottom: 1px solid var(--border-subtle);
+   display: flex; gap: 8px;
+  }
+  .drill-item:last-child { border-bottom: none; }
+  .drill-bullet { color: var(--reforma-red); flex-shrink: 0; font-weight: 700; }
+
+  /* Kinetic Chain ミニ表示 */
+  .mini-chain { display: flex; flex-wrap: wrap; gap: 5px; }
+  .mini-link {
+   font-size: 11px; padding: 3px 8px; border-radius: 6px;
+   border: 1px solid; font-weight: 500;
+  }
+
+  /* 展開ボタン */
+  .record-toggle {
+   width: 100%; padding: 10px; background: none; border: none;
+   border-top: 1px solid var(--border-subtle); cursor: pointer;
+   font-size: 12px; color: var(--text-muted); display: flex;
+   align-items: center; justify-content: center; gap: 5px;
+   touch-action: manipulation;
+  }
+
+  /* 空状態 */
+  .empty-state {
+   text-align: center; padding: 64px 24px;
+   color: var(--text-muted);
+  }
+  .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+  .empty-state-title { font-size: 16px; font-weight: 500; margin-bottom: 8px; color: var(--text-secondary); }
+  .empty-state-body { font-size: 13px; line-height: 1.7; }
+ </style>
+</head>
+<body>
+
+<header class="rf-header">
+ <div class="rf-brand">
+  <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
+ </div>
+ <span class="text-small text-muted">記録</span>
+</header>
+
+<main style="padding: 12px; max-width: 480px; margin: 0 auto;">
+
+ <div id="record-count" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;text-align:right"></div>
+ <div id="record-list">
+  <div class="empty-state" id="loading-msg">
+   <div class="empty-state-title">読み込み中...</div>
+  </div>
+ </div>
+
+</main>
+
+<script src="js/user-profile.js"></script>
+<script src="js/batting-data.js"></script>
+<script src="js/records-db.js"></script>
+<script src="js/navbar.js"></script>
+<script>
+(function () {
+ 'use strict';
+
+ var SCORE_COLORS = { good: '#10b981', mid: '#3b82f6', low: '#f59e0b', bad: '#ef4444' };
+ function scoreColor(s) {
+  if (!s) return SCORE_COLORS.bad;
+  if (s >= 85) return SCORE_COLORS.good;
+  if (s >= 70) return SCORE_COLORS.mid;
+  if (s >= 55) return SCORE_COLORS.low;
+  return SCORE_COLORS.bad;
+ }
+ function scoreLabel(s, isYouth) {
+  if (!s && s !== 0) return '---';
+  if (isYouth) {
+   if (s >= 85) return 'バッチリ！';
+   if (s >= 70) return 'いい感じ！';
+   if (s >= 55) return 'もう少し！';
+   return '練習あるのみ！';
+  }
+  return s + 'pt';
+ }
+ function formatDate(iso) {
+  try {
+   var d = new Date(iso);
+   return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() +
+          ' ' + ('0'+d.getHours()).slice(-2) + ':' + ('0'+d.getMinutes()).slice(-2);
+  } catch (e) { return iso; }
+ }
+
+ var STATUS_COLORS = { ok:'#10b981', off_range:'#f59e0b', caution:'#f97316', bottleneck:'#ef4444', unmeasured:'#6e7681' };
+ var STATUS_LABELS = { ok:'範囲内', off_range:'範囲外', caution:'要注意', bottleneck:'最弱', unmeasured:'未計測' };
+
+ function buildCard(rec) {
+  var isYouth = rec.ageGroup === 'elementary' || rec.ageGroup === 'junior';
+  var sum = rec.summary || {};
+  var totalScore = sum.total_score && sum.total_score.total;
+  var col = scoreColor(totalScore);
+  var courseTag = rec.tags.filter(function(t){ return t !== 'ベスト' && t !== '課題'; });
+  var isBest = rec.tags.indexOf('ベスト') >= 0;
+  var isIssue = rec.tags.indexOf('課題') >= 0;
+
+  // Kinetic Chain ミニ
+  var chainHtml = '';
+  if (sum.kinetic_chain && sum.kinetic_chain.links) {
+   chainHtml = '<div class="mini-chain">';
+   sum.kinetic_chain.links.forEach(function(l) {
+    var c = STATUS_COLORS[l.status] || '#6e7681';
+    chainHtml += '<span class="mini-link" style="color:' + c + ';border-color:' + c + '44;background:' + c + '11">' +
+      l.label_friendly + '</span>';
+   });
+   chainHtml += '</div>';
+  }
+
+  // ドリル
+  var drillsHtml = '';
+  if (rec.drills && rec.drills.length > 0) {
+   drillsHtml = rec.drills.map(function(d) {
+    return '<div class="drill-item"><span class="drill-bullet">></span>' + d + '</div>';
+   }).join('');
+  } else {
+   drillsHtml = '<div style="font-size:12px;color:var(--text-muted)">ドリル情報なし</div>';
+  }
+
+  // メモ
+  var memoHtml = rec.memo
+   ? '<div class="memo-text">' + rec.memo.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>'
+   : '<div style="font-size:12px;color:var(--text-muted)">メモなし</div>';
+
+  var div = document.createElement('div');
+  div.className = 'record-card';
+  div.innerHTML =
+   '<div class="record-card-header">' +
+    (rec.thumbnail
+     ? '<div class="record-thumb"><img src="' + rec.thumbnail + '" alt="スイング画像" loading="lazy"></div>'
+     : '<div class="record-thumb-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#484f58" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>'
+    ) +
+    '<div class="record-info">' +
+     '<div class="record-date">' + formatDate(rec.savedAt) + '</div>' +
+     '<div class="record-player">' + (rec.playerName || '名前未設定') + 'さん</div>' +
+     '<div class="record-meta">' + (sum.side_jp || '') + ' / ' + (sum.n_frames || '--') + 'f / ' + Math.round(sum.raw_fps || 0) + 'fps</div>' +
+    '</div>' +
+    '<div class="record-score-badge" style="border-color:' + col + '">' +
+     '<span class="record-score-num" style="color:' + col + '">' + (totalScore != null ? totalScore : '--') + '</span>' +
+     '<span class="record-score-sub">/ 100</span>' +
+    '</div>' +
+   '</div>' +
+   '<div class="record-tags">' +
+    (isBest ? '<span class="record-tag record-tag--best">ベスト</span>' : '') +
+    (isIssue ? '<span class="record-tag record-tag--issue">課題</span>' : '') +
+    courseTag.map(function(t){ return '<span class="record-tag record-tag--course">' + t + '</span>'; }).join('') +
+   '</div>' +
+   '<button class="record-toggle" data-open="0">詳細を見る &#8964;</button>' +
+   '<div class="record-detail">' +
+    '<div class="record-detail-inner">' +
+     (chainHtml ? '<div class="detail-section"><div class="detail-label">動作連鎖（Kinetic Chain）</div>' + chainHtml + '</div>' : '') +
+     '<div class="detail-section"><div class="detail-label">課題・メモ</div>' + memoHtml + '</div>' +
+     '<div class="detail-section"><div class="detail-label">推奨練習メニュー（優先課題 Phase 1）</div>' + drillsHtml + '</div>' +
+     '<div style="text-align:right;margin-top:8px">' +
+      '<button class="btn btn-secondary" data-delete="' + rec.id + '" style="font-size:11px;padding:5px 12px;color:var(--color-danger);border-color:var(--color-danger);background:transparent">削除</button>' +
+     '</div>' +
+    '</div>' +
+   '</div>';
+
+  // 展開トグル
+  var toggle = div.querySelector('.record-toggle');
+  var detail = div.querySelector('.record-detail');
+  toggle.addEventListener('click', function () {
+   var isOpen = detail.classList.toggle('open');
+   toggle.innerHTML = (isOpen ? '閉じる &#8963;' : '詳細を見る &#8964;');
+  });
+
+  // 削除ボタン
+  var delBtn = div.querySelector('[data-delete]');
+  if (delBtn) {
+   delBtn.addEventListener('click', function () {
+    if (!confirm('この記録を削除しますか？')) return;
+    window.ReformaRecordsDB.deleteRecord(rec.id).then(function () {
+     div.remove();
+     updateCount();
+    }).catch(function (e) { alert('削除失敗: ' + e.message); });
+   });
+  }
+
+  return div;
+ }
+
+ function updateCount() {
+  var cards = document.querySelectorAll('.record-card').length;
+  var el = document.getElementById('record-count');
+  if (el) {
+   el.textContent = cards > 0 ? cards + ' / ' + window.ReformaRecordsDB.MAX_RECORDS + ' 件保存中' : '';
+  }
+ }
+
+ // ── 記録一覧表示 ────────────────────────────────────────────
+ window.ReformaRecordsDB.getAllRecords().then(function (records) {
+  var list = document.getElementById('record-list');
+  list.innerHTML = '';
+  if (records.length === 0) {
+   list.innerHTML =
+    '<div class="empty-state">' +
+    '<div class="empty-state-icon">' +
+    '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">' +
+    '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>' +
+    '<polyline points="14 2 14 8 20 8"/>' +
+    '</svg></div>' +
+    '<div class="empty-state-title">記録がまだありません</div>' +
+    '<div class="empty-state-body">解析結果画面の「この記録を保存する」ボタンから保存できます。最大' + window.ReformaRecordsDB.MAX_RECORDS + '件保存可能です。</div>' +
+    '</div>';
+  } else {
+   records.forEach(function (rec) {
+    list.appendChild(buildCard(rec));
+   });
+   updateCount();
+  }
+ }).catch(function (e) {
+  document.getElementById('record-list').innerHTML =
+   '<div class="alert alert-danger">記録の読み込みに失敗しました: ' + e.message + '</div>';
+ });
+})();
+</script>
+
+</body>
+</html>

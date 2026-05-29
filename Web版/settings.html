@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+ <meta name="apple-mobile-web-app-capable" content="yes">
+ <meta name="theme-color" content="#0b0e13">
+ <meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self' data:;
+  object-src 'none'; base-uri 'self';
+ ">
+ <title>設定 — Re'forma</title>
+ <link rel="stylesheet" href="css/common.css">
+ <style>
+  .settings-section {
+   background: var(--bg-card); border-radius: var(--radius-lg);
+   margin: 0 0 16px; overflow: hidden;
+   border: 1px solid var(--border-subtle);
+  }
+  .settings-section-title {
+   font-size: 11px; letter-spacing: 1.5px; font-weight: 700;
+   color: var(--text-tertiary); padding: 14px 16px 6px;
+  }
+  .settings-row {
+   display: flex; align-items: center; justify-content: space-between;
+   padding: 14px 16px; border-top: 1px solid var(--border-subtle); gap: 12px;
+  }
+  .settings-row:first-of-type { border-top: none; }
+  .settings-row-label { font-size: 14px; color: var(--text-primary); font-weight: 500; }
+  .settings-row-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .settings-row-value { font-size: 13px; color: var(--text-secondary); font-family: var(--font-family-mono); }
+
+  /* 年齢層ボタングリッド */
+  .age-grid {
+   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+   padding: 8px 16px 14px;
+  }
+  .age-btn {
+   padding: 12px 8px; border-radius: var(--radius-md);
+   border: 1.5px solid var(--border-subtle);
+   background: var(--bg-secondary); color: var(--text-secondary);
+   font-size: 13px; font-weight: 500; cursor: pointer;
+   text-align: center; transition: all 0.15s;
+   touch-action: manipulation; line-height: 1.4;
+  }
+  .age-btn.active {
+   border-color: var(--reforma-red); background: rgba(239,68,68,0.08);
+   color: var(--reforma-red);
+  }
+  .age-btn-sub { font-size: 11px; color: inherit; opacity: 0.7; display: block; margin-top: 2px; }
+
+  /* 名前・身長入力 */
+  .settings-input {
+   flex: 1; background: transparent; border: none; outline: none;
+   font-size: 15px; color: var(--text-primary); text-align: right;
+   font-family: inherit;
+  }
+  .settings-input::placeholder { color: var(--text-muted); }
+
+  /* 保存バナー */
+  #save-banner {
+   position: fixed; top: 0; left: 0; right: 0; z-index: 500;
+   background: #10b981; color: #fff; text-align: center;
+   padding: 14px; font-size: 14px; font-weight: 600;
+   transform: translateY(-100%); transition: transform 0.3s;
+  }
+  #save-banner.show { transform: translateY(0); }
+
+  /* プロファイルバッジ */
+  .profile-badge {
+   display: flex; align-items: center; gap: 14px;
+   padding: 20px 16px; margin-bottom: 16px;
+   background: var(--bg-card); border-radius: var(--radius-lg);
+   border: 1px solid var(--border-subtle);
+  }
+  .profile-avatar {
+   width: 52px; height: 52px; border-radius: 50%;
+   background: rgba(239,68,68,0.15); display: flex; align-items: center;
+   justify-content: center; font-size: 22px; font-weight: 700;
+   color: var(--reforma-red); flex-shrink: 0;
+  }
+  .profile-name { font-size: 18px; font-weight: 500; color: var(--text-primary); }
+  .profile-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+ </style>
+</head>
+<body>
+
+<header class="rf-header">
+ <div class="rf-brand">
+  <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
+ </div>
+ <span class="text-small text-muted">設定</span>
+</header>
+
+<div id="save-banner">設定を保存しました</div>
+
+<main style="padding: 16px; max-width: 480px; margin: 0 auto;">
+
+ <!-- プロファイルバッジ -->
+ <div class="profile-badge" id="profile-badge" style="display:none">
+  <div class="profile-avatar" id="avatar-initials">?</div>
+  <div>
+   <div class="profile-name" id="badge-name">--</div>
+   <div class="profile-sub" id="badge-sub">--</div>
+  </div>
+ </div>
+
+ <!-- 基本プロファイル -->
+ <div class="settings-section">
+  <div class="settings-section-title">プロファイル</div>
+
+  <div class="settings-row">
+   <div>
+    <div class="settings-row-label">名前</div>
+    <div class="settings-row-sub">解析結果に表示されます</div>
+   </div>
+   <input type="text" class="settings-input" id="input-name"
+    placeholder="例：たろう" maxlength="20" autocomplete="off"
+    inputmode="text">
+  </div>
+
+  <div class="settings-row" style="display:block; padding-bottom: 0;">
+   <div class="settings-row-label" style="margin-bottom: 8px;">年齢層</div>
+   <div class="age-grid">
+    <button class="age-btn" data-age="elementary">
+     小学生
+     <span class="age-btn-sub">スコアゲームとして挑戦</span>
+    </button>
+    <button class="age-btn" data-age="junior">
+     中高生
+     <span class="age-btn-sub">成長段階の動作改善</span>
+    </button>
+    <button class="age-btn" data-age="adult">
+     大人・一般
+     <span class="age-btn-sub">観察型の詳細フィードバック</span>
+    </button>
+    <button class="age-btn" data-age="coach">
+     指導者・コーチ
+     <span class="age-btn-sub">選手指導に活用</span>
+    </button>
+   </div>
+  </div>
+ </div>
+
+ <!-- 身長設定 -->
+ <div class="settings-section">
+  <div class="settings-section-title">計測精度の向上</div>
+  <div class="settings-row">
+   <div>
+    <div class="settings-row-label">身長</div>
+    <div class="settings-row-sub">入力するとストライド計算の精度が上がります</div>
+   </div>
+   <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+    <input type="number" class="settings-input" id="input-height"
+     placeholder="175" min="100" max="230" inputmode="numeric"
+     style="width:60px; text-align:right;">
+    <span style="font-size:13px;color:var(--text-muted)">cm</span>
+   </div>
+  </div>
+ </div>
+
+ <!-- アプリについて -->
+ <div class="settings-section">
+  <div class="settings-section-title">アプリについて</div>
+  <div class="settings-row">
+   <div>
+    <div class="settings-row-label">監修</div>
+   </div>
+   <div class="settings-row-value">理学療法士 / PT</div>
+  </div>
+  <div class="settings-row">
+   <div>
+    <div class="settings-row-label">協力</div>
+   </div>
+   <div class="settings-row-value">社会人野球 日本一チーム</div>
+  </div>
+  <div class="settings-row">
+   <div>
+    <div class="settings-row-label">データの扱い</div>
+   </div>
+   <div class="settings-row-value">端末内のみ・送信なし</div>
+  </div>
+ </div>
+
+ <!-- データリセット -->
+ <div class="settings-section">
+  <div class="settings-section-title">データ管理</div>
+  <div class="settings-row">
+   <div>
+    <div class="settings-row-label" style="color:var(--color-danger)">記録をすべて削除</div>
+    <div class="settings-row-sub">保存した解析記録をすべて削除します</div>
+   </div>
+   <button id="btn-clear-records" style="padding:6px 12px;border:1px solid var(--color-danger);border-radius:6px;background:transparent;color:var(--color-danger);font-size:12px;cursor:pointer;flex-shrink:0">削除</button>
+  </div>
+ </div>
+
+ <!-- 保存ボタン -->
+ <button id="btn-save" class="btn btn-primary btn-large btn-block" style="margin-top:8px">
+  設定を保存する
+ </button>
+
+</main>
+
+<script src="js/user-profile.js"></script>
+<script src="js/navbar.js"></script>
+<script>
+(function () {
+ 'use strict';
+
+ var selectedAge = null;
+
+ // ── 現在のプロファイルを読み込んで表示 ──────────────────────
+ function loadProfile() {
+  var p = window.ReformaUserProfile.load();
+  if (p) {
+   document.getElementById('input-name').value = p.name || '';
+   if (p.ageGroup) {
+    selectedAge = p.ageGroup;
+    document.querySelectorAll('.age-btn').forEach(function (b) {
+     b.classList.toggle('active', b.dataset.age === p.ageGroup);
+    });
+   }
+   updateBadge(p);
+  }
+  // 身長
+  var h = sessionStorage.getItem('reforma_height_cm');
+  if (h) document.getElementById('input-height').value = h;
+ }
+
+ function updateBadge(p) {
+  if (!p || !p.name) return;
+  var badge = document.getElementById('profile-badge');
+  var av = document.getElementById('avatar-initials');
+  var bn = document.getElementById('badge-name');
+  var bs = document.getElementById('badge-sub');
+  if (badge) badge.style.display = 'flex';
+  if (av) av.textContent = (p.name || '?').charAt(0);
+  if (bn) bn.textContent = p.name + 'さん';
+  var ageLabels = {
+   elementary: '小学生',
+   junior: '中高生',
+   adult: '大人・一般',
+   coach: '指導者・コーチ',
+  };
+  if (bs) bs.textContent = p.ageGroup ? ageLabels[p.ageGroup] || '' : '年齢層未設定';
+ }
+
+ // ── 年齢層ボタン ─────────────────────────────────────────────
+ document.querySelectorAll('.age-btn').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+   selectedAge = btn.dataset.age;
+   document.querySelectorAll('.age-btn').forEach(function (b) {
+    b.classList.remove('active');
+   });
+   btn.classList.add('active');
+  });
+ });
+
+ // ── 保存 ────────────────────────────────────────────────────
+ document.getElementById('btn-save').addEventListener('click', function () {
+  var name = document.getElementById('input-name').value.trim();
+  if (!name) {
+   alert('名前を入力してください');
+   document.getElementById('input-name').focus();
+   return;
+  }
+  var result = window.ReformaUserProfile.save({
+   name: name,
+   ageGroup: selectedAge,
+  });
+  if (!result.success) {
+   alert('保存失敗: ' + result.error);
+   return;
+  }
+  // 身長保存
+  var h = parseInt(document.getElementById('input-height').value, 10);
+  if (h >= 100 && h <= 230) {
+   sessionStorage.setItem('reforma_height_cm', String(h));
+   localStorage.setItem('reforma_height_cm', String(h)); // 永続化
+  }
+  // バッジ更新
+  updateBadge(result.profile);
+  // 保存完了バナー
+  var banner = document.getElementById('save-banner');
+  banner.classList.add('show');
+  setTimeout(function () { banner.classList.remove('show'); }, 2000);
+ });
+
+ // ── 記録削除 ──────────────────────────────────────────────
+ document.getElementById('btn-clear-records').addEventListener('click', function () {
+  if (!confirm('保存した解析記録をすべて削除しますか？\nこの操作は取り消せません。')) return;
+  try {
+   var req = indexedDB.open('reforma_batting_v1', 3);
+   req.onsuccess = function (e) {
+    var db = e.target.result;
+    var stores = ['saved_records'];
+    stores.forEach(function (s) {
+     if (db.objectStoreNames.contains(s)) {
+      var tx = db.transaction(s, 'readwrite');
+      tx.objectStore(s).clear();
+     }
+    });
+    db.close();
+    alert('記録を削除しました');
+   };
+  } catch (e) {
+   console.warn('IDB clear error:', e);
+   alert('削除中にエラーが発生しました');
+  }
+ });
+
+ // ── 身長は localStorage からも復元 ─────────────────────────
+ (function () {
+  var h = localStorage.getItem('reforma_height_cm') || sessionStorage.getItem('reforma_height_cm');
+  if (h) document.getElementById('input-height').value = h;
+ })();
+
+ loadProfile();
+})();
+</script>
+
+</body>
+</html>
