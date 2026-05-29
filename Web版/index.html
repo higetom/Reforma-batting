@@ -39,21 +39,34 @@
     /* Hero */
     .home-hero {
       text-align: center;
-      padding: 44px 24px 28px;
+      padding: 52px 24px 32px;
+      position: relative;
+      overflow: hidden;
+    }
+    .home-hero::before {
+      content: '';
+      position: absolute;
+      top: -40px; left: 50%;
+      transform: translateX(-50%);
+      width: 280px; height: 280px;
+      background: radial-gradient(circle, rgba(230,57,70,0.14) 0%, transparent 70%);
+      pointer-events: none;
     }
     .home-logo-img {
-      max-height: 80px;
-      max-width: 220px;
+      max-height: 88px;
+      max-width: 240px;
       object-fit: contain;
       display: block;
       margin: 0 auto;
+      position: relative;
     }
     .home-logo-text {
-      font-size: 34px;
+      font-size: 38px;
       font-weight: 300;
       letter-spacing: 0.04em;
       color: #fff;
       line-height: 1;
+      position: relative;
     }
     .home-logo-text .rf-re { color: #e63946; }
     .home-tagline {
@@ -61,8 +74,15 @@
       color: #6e7681;
       letter-spacing: 0.14em;
       text-transform: uppercase;
-      margin-top: 8px;
+      margin-top: 10px;
     }
+    .home-credits {
+      font-size: 10.5px;
+      color: #484e58;
+      margin-top: 10px;
+      line-height: 1.7;
+    }
+    .home-credits span { color: #6e7681; }
     .home-venue-badge {
       display: inline-flex;
       align-items: center;
@@ -111,7 +131,7 @@
       background: #161b22;
       border: 1px solid #21262d;
       border-radius: 14px;
-      padding: 20px 12px 18px;
+      padding: 22px 12px 18px;
       text-align: center;
       text-decoration: none;
       color: #e5e7eb;
@@ -121,6 +141,16 @@
       gap: 10px;
       -webkit-tap-highlight-color: transparent;
       transition: background 0.1s;
+      position: relative;
+      overflow: hidden;
+    }
+    .home-quick-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #e63946, transparent);
+      opacity: 0.5;
     }
     .home-quick-card:active { background: #1c2430; }
     .home-quick-icon {
@@ -235,6 +265,10 @@
       <span class="rf-re">Re</span>'forma
     </div>
     <div class="home-tagline">バッティング動作解析</div>
+    <div class="home-credits">
+      <span>監修: 理学療法士・パーソナルトレーナー</span><br>
+      協力: YAMAHA野球部・舟久保秀稔選手ほか
+    </div>
     <div id="home-venue-badge" style="display:none" class="home-venue-badge">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
       <span id="home-venue-name"></span>

@@ -130,6 +130,26 @@
  .guide-list li::before {
  content: "✓"; color: var(--color-success); font-weight: bold; flex-shrink: 0;
  }
+ /* アコーディオン */
+ details.rf-accordion { margin-top: 12px; }
+ details.rf-accordion > summary {
+  display: flex; align-items: center; justify-content: space-between;
+  list-style: none; cursor: pointer;
+  padding: 11px 14px; border-radius: var(--radius-md);
+  background: var(--bg-secondary); border: 1px solid var(--border-subtle);
+  font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  -webkit-tap-highlight-color: transparent; user-select: none;
+ }
+ details.rf-accordion > summary::-webkit-details-marker { display: none; }
+ details.rf-accordion > summary::after {
+  content: "▼"; font-size: 10px; color: #6e7681;
+  transition: transform 0.2s; flex-shrink: 0;
+ }
+ details.rf-accordion[open] > summary::after { transform: rotate(180deg); }
+ details.rf-accordion > summary .acc-hint {
+  font-size: 11px; font-weight: 400; color: #6e7681; margin-left: 6px;
+ }
+ details.rf-accordion > .acc-body { padding-top: 8px; }
  </style>
 </head>
 <body>
@@ -160,42 +180,47 @@
  </div>
 
  <!-- 撮影者ルール -->
- <div class="card-emphasized card" style="padding:16px;margin-top:12px;border-left:3px solid var(--color-info)">
- <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
- 撮影の絶対ルール
- </div>
- <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
- <div style="font-size:22px;flex-shrink:0"></div>
- <div style="flex:1">
- <div style="font-weight:600;font-size:14px">スマホは縦向き</div>
- <div class="text-tertiary text-small">横向きでは撮らないでください。</div>
- </div>
- </div>
- <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
- <div style="font-size:22px;flex-shrink:0"></div>
- <div style="flex:1">
- <div style="font-weight:600;font-size:14px">カメラは打者の腰の高さ</div>
- <div class="text-tertiary text-small">大人がお子さんを撮るときはしゃがんでください。</div>
- </div>
- </div>
- <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
- <div style="font-size:22px;flex-shrink:0"></div>
- <div style="flex:1">
- <div style="font-weight:600;font-size:14px">真横から、距離は4-5m</div>
- <div class="text-tertiary text-small">1塁側 or 3塁側のどちらかから撮影。</div>
- </div>
- </div>
- <div style="display:flex;gap:12px;align-items:flex-start;padding-top:10px;border-top:1px dashed var(--border-subtle);background:rgba(245,158,11,0.05);margin:0 -16px -16px;padding:14px 16px 14px;border-radius:0 0 8px 8px">
- <div style="font-size:22px;flex-shrink:0;color:var(--color-warning)">!</div>
- <div style="flex:1">
- <div style="font-weight:700;font-size:14px;color:var(--color-warning)">画面はみ出し厳禁</div>
- <div class="text-tertiary text-small" style="line-height:1.7">
- 構えからフォロースルーまで <b>頭・両足・バット先端</b> がすべて画面内に収まること。<br>
- とくに <b>フォロースルー時にバットが画面外に出る</b> ことが多いので、カメラを少し引いて撮影してください。
- </div>
- </div>
- </div>
- </div>
+ <details class="rf-accordion">
+  <summary>撮影のポイント<span class="acc-hint">（タップで確認）</span></summary>
+  <div class="acc-body">
+  <div class="card-emphasized card" style="padding:16px;border-left:3px solid var(--color-info)">
+  <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
+  撮影の絶対ルール
+  </div>
+  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+  <div style="font-size:22px;flex-shrink:0"></div>
+  <div style="flex:1">
+  <div style="font-weight:600;font-size:14px">スマホは縦向き</div>
+  <div class="text-tertiary text-small">横向きでは撮らないでください。</div>
+  </div>
+  </div>
+  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+  <div style="font-size:22px;flex-shrink:0"></div>
+  <div style="flex:1">
+  <div style="font-weight:600;font-size:14px">カメラは打者の腰の高さ</div>
+  <div class="text-tertiary text-small">大人がお子さんを撮るときはしゃがんでください。</div>
+  </div>
+  </div>
+  <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:10px">
+  <div style="font-size:22px;flex-shrink:0"></div>
+  <div style="flex:1">
+  <div style="font-weight:600;font-size:14px">真横から、距離は4-5m</div>
+  <div class="text-tertiary text-small">1塁側 or 3塁側のどちらかから撮影。</div>
+  </div>
+  </div>
+  <div style="display:flex;gap:12px;align-items:flex-start;padding-top:10px;border-top:1px dashed var(--border-subtle);background:rgba(245,158,11,0.05);margin:0 -16px -16px;padding:14px 16px 14px;border-radius:0 0 8px 8px">
+  <div style="font-size:22px;flex-shrink:0;color:var(--color-warning)">!</div>
+  <div style="flex:1">
+  <div style="font-weight:700;font-size:14px;color:var(--color-warning)">画面はみ出し厳禁</div>
+  <div class="text-tertiary text-small" style="line-height:1.7">
+  構えからフォロースルーまで <b>頭・両足・バット先端</b> がすべて画面内に収まること。<br>
+  とくに <b>フォロースルー時にバットが画面外に出る</b> ことが多いので、カメラを少し引いて撮影してください。
+  </div>
+  </div>
+  </div>
+  </div>
+  </div>
+ </details>
 
  <div class="role-card role-subject" style="margin-top:12px">
  <div class="role-label"><span class="role-icon"></span>打者の方へ</div>
@@ -253,23 +278,28 @@
  </div>
  </div>
 
- <div style="padding:14px 16px;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.28);border-radius:var(--radius-md);margin-bottom:10px">
- <div style="font-size:12px;font-weight:700;color:#60a5fa;letter-spacing:0.5px;margin-bottom:4px">スイングスピードの精度について</div>
- <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">通常撮影（30fps）でも解析できますが、スイングスピードの誤差が大きくなります。より正確に計測したい場合は、iPhoneの<b style="color:var(--text-primary)">「設定」→「カメラ」→「フォーマット」→「互換性優先」</b>に変更してからスロー撮影（H.264形式）した動画をアップロードしてください。</div>
- </div>
- <div class="card-emphasized card" style="padding:16px;border-left:3px solid var(--color-info)">
- <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
- 解析に向いている動画
- </div>
- <ul class="guide-list" style="margin:0">
- <li><b>1動画につきスイング1回のみ</b>(複数スイングは不可)</li>
- <li>真横(1塁側 or 3塁側)から撮影されている</li>
- <li>構え〜フォロースルーまで全身が画面に映っている</li>
- <li>長さは 3秒以上 ・ 20秒以内(目安 4〜8秒)</li>
- <li>明るい場所で撮影されている</li>
- <li>形式: mp4 / mov / m4v(iPhone標準形式に対応)</li>
- </ul>
- </div>
+ <details class="rf-accordion">
+  <summary>解析に向いている動画・精度について<span class="acc-hint">（タップで確認）</span></summary>
+  <div class="acc-body">
+  <div style="padding:14px 16px;background:rgba(59,130,246,0.07);border:1px solid rgba(59,130,246,0.28);border-radius:var(--radius-md);margin-bottom:8px">
+  <div style="font-size:12px;font-weight:700;color:#60a5fa;letter-spacing:0.5px;margin-bottom:4px">スイングスピードの精度について</div>
+  <div style="font-size:13px;color:var(--text-secondary);line-height:1.7">通常撮影（30fps）でも解析できますが、スイングスピードの誤差が大きくなります。より正確に計測したい場合は、iPhoneの<b style="color:var(--text-primary)">「設定」→「カメラ」→「フォーマット」→「互換性優先」</b>に変更してからスロー撮影（H.264形式）した動画をアップロードしてください。</div>
+  </div>
+  <div class="card-emphasized card" style="padding:16px;border-left:3px solid var(--color-info)">
+  <div style="color:var(--color-info);font-size:11px;font-weight:700;letter-spacing:1.5px;margin-bottom:10px">
+  解析に向いている動画
+  </div>
+  <ul class="guide-list" style="margin:0">
+  <li><b>1動画につきスイング1回のみ</b>(複数スイングは不可)</li>
+  <li>真横(1塁側 or 3塁側)から撮影されている</li>
+  <li>構え〜フォロースルーまで全身が画面に映っている</li>
+  <li>長さは 3秒以上 ・ 20秒以内(目安 4〜8秒)</li>
+  <li>明るい場所で撮影されている</li>
+  <li>形式: mp4 / mov / m4v(iPhone標準形式に対応)</li>
+  </ul>
+  </div>
+  </div>
+ </details>
 
  <input type="file" id="file-input" accept="video/mp4,video/quicktime,video/x-m4v,.mp4,.mov,.m4v,video/*" style="display:none">
  <!-- PC向け: mp4 / mov(HEVC含む)/ m4v すべて選択可能。HEVC は FFmpeg.wasm で自動変換 -->
