@@ -779,6 +779,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  t: f.t,
  landmarks: f.landmarks,
  }));
+ const _courseRaw = sessionStorage.getItem('reforma_course_info');
+ const _courseInfo = _courseRaw ? JSON.parse(_courseRaw) : null;
  const payload = {
  analysis: result,
  raw_frames: cleanFrames,
@@ -790,6 +792,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  n_frames: recordedFrames.length,
  duration_ms: recordedFrames[recordedFrames.length - 1].t,
  source: 'capture',
+ course: _courseInfo ? _courseInfo.label : null,
+ height_cm: parseInt(sessionStorage.getItem('reforma_height_cm') || '0', 10) || null,
  };
  try {
  sessionStorage.setItem('reforma_last_batting', JSON.stringify(payload));
@@ -1916,7 +1920,16 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
 
  // アップロードフロー: extractFromPreviewVideo() を使用（旧フォールバック関数は削除済み）
 
- showScreen('intro');
+ // URLパラメータ対応: ?mode=upload でアップロード画面を直接表示
+ (function () {
+  var mode = new URLSearchParams(window.location.search).get('mode');
+  if (mode === 'upload') {
+   resetUploadState();
+   showScreen('upload');
+  } else {
+   showScreen('intro');
+  }
+ })();
 
  // ─── 撮影ガイドモーダル ───────────────────────────────────────
  $('btn-start-recording').addEventListener('click', () => {
@@ -1926,12 +1939,49 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    $('modal-shoot-guide').classList.remove('hidden');
  });
 
+ // コース選択ボタンの状態管理
+ let selectedCourse = null; // 'inner' | 'center' | 'outer'
+ let selectedHeight = null; // 'high' | 'mid' | 'low'
+ const courseMap = { '内角': 'inner', '真ん中': 'center', '外角': 'outer' };
+ const heightMap = { '高め': 'high', '真ん中': 'mid', '低め': 'low' };
+
+ document.querySelectorAll('.course-btn').forEach(btn => {
+   btn.addEventListener('click', () => {
+     const type = btn.dataset.type;
+     const val  = btn.dataset.val;
+     // 同じグループのボタンをリセット
+     document.querySelectorAll(`.course-btn[data-type="${type}"]`).forEach(b => {
+       b.style.background = 'var(--bg-secondary)';
+       b.style.color = 'var(--text-secondary)';
+       b.style.borderColor = 'var(--border-subtle)';
+       b.style.fontWeight = '400';
+     });
+     // 選択したボタンをハイライト
+     btn.style.background = 'rgba(245,158,11,0.12)';
+     btn.style.color = '#f59e0b';
+     btn.style.borderColor = 'rgba(245,158,11,0.5)';
+     btn.style.fontWeight = '700';
+     if (type === 'course') selectedCourse = val;
+     if (type === 'height') selectedHeight = val;
+   });
+ });
+
  $('btn-guide-confirm').addEventListener('click', () => {
    const hVal = parseInt($('input-height-cm').value, 10);
    if (hVal >= 120 && hVal <= 220) {
      sessionStorage.setItem('reforma_height_cm', String(hVal));
    } else {
      sessionStorage.removeItem('reforma_height_cm');
+   }
+   // コース情報をsessionStorageに保存（解析結果ページで参照）
+   if (selectedCourse || selectedHeight) {
+     sessionStorage.setItem('reforma_course_info', JSON.stringify({
+       course: selectedCourse,
+       height: selectedHeight,
+       label: [selectedHeight, selectedCourse].filter(Boolean).join('・')
+     }));
+   } else {
+     sessionStorage.removeItem('reforma_course_info');
    }
    $('modal-shoot-guide').classList.add('hidden');
    $('btn-start-recording').classList.add('hidden');
@@ -2003,6 +2053,27 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
       </div>
     </div>
 
+    <!-- コース・高さ選択 -->
+    <div style="margin-bottom:18px;padding:14px 16px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:10px">
+      <div style="font-size:13px;font-weight:600;color:#f59e0b;margin-bottom:12px">想定コース・高さ（任意）</div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:6px">コース</div>
+        <div style="display:flex;gap:6px">
+          <button class="course-btn" data-type="course" data-val="内角" style="flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-secondary);font-size:12px;cursor:pointer;touch-action:manipulation">内角</button>
+          <button class="course-btn" data-type="course" data-val="真ん中" style="flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-secondary);font-size:12px;cursor:pointer;touch-action:manipulation">真ん中</button>
+          <button class="course-btn" data-type="course" data-val="外角" style="flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-secondary);font-size:12px;cursor:pointer;touch-action:manipulation">外角</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px;margin-bottom:6px">高さ</div>
+        <div style="display:flex;gap:6px">
+          <button class="course-btn" data-type="height" data-val="高め" style="flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-secondary);font-size:12px;cursor:pointer;touch-action:manipulation">高め</button>
+          <button class="course-btn" data-type="height" data-val="真ん中" style="flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-secondary);font-size:12px;cursor:pointer;touch-action:manipulation">真ん中</button>
+          <button class="course-btn" data-type="height" data-val="低め" style="flex:1;padding:8px 4px;border-radius:8px;border:1px solid var(--border-subtle);background:var(--bg-secondary);color:var(--text-secondary);font-size:12px;cursor:pointer;touch-action:manipulation">低め</button>
+        </div>
+      </div>
+    </div>
+
     <button id="btn-guide-confirm" class="btn btn-primary btn-block btn-large" style="touch-action:manipulation">
       確認できました → 撮影開始
     </button>
@@ -2012,5 +2083,6 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
   </div>
 </div>
 
+<script src="js/navbar.js"></script>
 </body>
 </html>

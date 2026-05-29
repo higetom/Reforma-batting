@@ -648,6 +648,9 @@
 
  <!-- アクション -->
  <div class="action-card mt-3">
+ <button id="btn-save-record" class="btn btn-block btn-large" style="background:rgba(16,185,129,0.12);color:#10b981;border:1.5px solid rgba(16,185,129,0.5);font-weight:600;margin-bottom:10px">
+  この記録を保存する
+ </button>
  <a href="batting.html" class="btn btn-primary btn-large btn-block">もう一度撮影する</a>
  <a href="index.html" class="btn btn-secondary btn-block mt-2">トップへ戻る</a>
  </div>
@@ -720,6 +723,32 @@
  </div>
  </div>
 
+
+<!-- 記録保存モーダル -->
+<div id="save-modal" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(0,0,0,0.85);align-items:flex-end;justify-content:center">
+ <div style="background:var(--bg-card);border-radius:20px 20px 0 0;padding:24px 20px 40px;width:100%;max-width:480px;border-top:1px solid var(--border-default)">
+  <div style="font-size:17px;font-weight:700;color:var(--text-primary);margin-bottom:6px">この記録を保存する</div>
+  <div style="font-size:12px;color:var(--text-muted);margin-bottom:18px">最大10件まで保存できます（古い順に自動削除）</div>
+
+  <!-- タグ選択 -->
+  <div style="font-size:11px;color:var(--text-muted);letter-spacing:1px;font-weight:700;margin-bottom:8px">タグ（複数選択可）</div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+   <button class="save-tag-btn" data-tag="ベスト" style="padding:6px 14px;border-radius:20px;border:1.5px solid #10b981;background:transparent;color:#10b981;font-size:12px;cursor:pointer;touch-action:manipulation">ベスト</button>
+   <button class="save-tag-btn" data-tag="課題" style="padding:6px 14px;border-radius:20px;border:1.5px solid #f59e0b;background:transparent;color:#f59e0b;font-size:12px;cursor:pointer;touch-action:manipulation">課題</button>
+   <button class="save-tag-btn" data-tag="内角" style="padding:6px 14px;border-radius:20px;border:1.5px solid #60a5fa;background:transparent;color:#60a5fa;font-size:12px;cursor:pointer;touch-action:manipulation">内角</button>
+   <button class="save-tag-btn" data-tag="外角" style="padding:6px 14px;border-radius:20px;border:1.5px solid #60a5fa;background:transparent;color:#60a5fa;font-size:12px;cursor:pointer;touch-action:manipulation">外角</button>
+   <button class="save-tag-btn" data-tag="高め" style="padding:6px 14px;border-radius:20px;border:1.5px solid #60a5fa;background:transparent;color:#60a5fa;font-size:12px;cursor:pointer;touch-action:manipulation">高め</button>
+   <button class="save-tag-btn" data-tag="低め" style="padding:6px 14px;border-radius:20px;border:1.5px solid #60a5fa;background:transparent;color:#60a5fa;font-size:12px;cursor:pointer;touch-action:manipulation">低め</button>
+  </div>
+
+  <!-- メモ -->
+  <div style="font-size:11px;color:var(--text-muted);letter-spacing:1px;font-weight:700;margin-bottom:8px">課題・メモ（任意）</div>
+  <textarea id="save-memo" rows="3" placeholder="例：内角への対応が課題。腰の回転を早くする練習を続ける。" style="width:100%;background:var(--bg-secondary);border:1px solid var(--border-default);border-radius:8px;padding:10px 12px;color:var(--text-primary);font-size:13px;resize:none;outline:none;line-height:1.6;font-family:inherit"></textarea>
+
+  <button id="btn-save-confirm" class="btn btn-primary btn-large btn-block" style="margin-top:16px">保存する</button>
+  <button id="btn-save-cancel" class="btn btn-secondary btn-block" style="margin-top:8px;background:transparent;color:var(--text-muted);border-color:var(--border-subtle)">キャンセル</button>
+ </div>
+</div>
 </main>
 
 <footer class="rf-footer">
@@ -732,6 +761,7 @@
 <script src="js/batting-data.js"></script>
 <script src="js/batting-analyzer.js"></script>
 <script src="js/bat-detector.js"></script>
+<script src="js/records-db.js"></script>
 <script>
 (function () {
  'use strict';
@@ -861,8 +891,10 @@
  // ヘッダー
  const greet = userName ? userName + 'さんのバッティング解析結果' : 'バッティング解析結果';
  $('result-greeting').textContent = greet;
- $('result-meta').textContent =
- `${r.side_jp} ・ ${r.n_frames}フレーム ・ ${r.fps.toFixed(0)}fps`;
+ var _metaParts = [r.side_jp, r.n_frames + 'フレーム', r.fps.toFixed(0) + 'fps'];
+ var _courseLabel = payload && payload.course;
+ if (_courseLabel) _metaParts.push(_courseLabel);
+ $('result-meta').textContent = _metaParts.join(' ・ ');
 
  // ── 年齢層判定 ──────────────────────────────────────
  const _profile = window.ReformaUserProfile && window.ReformaUserProfile.load();
@@ -2451,6 +2483,102 @@
  });
  })();
 
+
+ // ── 記録保存モーダル ──────────────────────────────────────────
+ (function () {
+  var selectedTags = [];
+
+  function openSaveModal() {
+   var modal = $('save-modal');
+   if (!modal) return;
+   modal.style.display = 'flex';
+   selectedTags = [];
+   document.querySelectorAll('.save-tag-btn').forEach(function (b) {
+    b.style.opacity = '1'; b.style.fontWeight = '500';
+   });
+   var memo = $('save-memo');
+   if (memo) memo.value = '';
+  }
+
+  function closeSaveModal() {
+   var modal = $('save-modal');
+   if (modal) modal.style.display = 'none';
+  }
+
+  var openBtn = $('btn-save-record');
+  if (openBtn) openBtn.addEventListener('click', openSaveModal);
+
+  var cancelBtn = $('btn-save-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', closeSaveModal);
+
+  // タグトグル
+  document.querySelectorAll('.save-tag-btn').forEach(function (btn) {
+   btn.addEventListener('click', function () {
+    var tag = btn.dataset.tag;
+    var idx = selectedTags.indexOf(tag);
+    if (idx >= 0) {
+     selectedTags.splice(idx, 1);
+     btn.style.opacity = '1'; btn.style.fontWeight = '500';
+    } else {
+     selectedTags.push(tag);
+     btn.style.opacity = '1'; btn.style.fontWeight = '800';
+     btn.style.background = 'rgba(255,255,255,0.08)';
+    }
+   });
+  });
+
+  // 保存実行
+  var confirmBtn = $('btn-save-confirm');
+  if (confirmBtn) {
+   confirmBtn.addEventListener('click', function () {
+    if (!payload) { alert('解析データがありません'); return; }
+    confirmBtn.disabled = true; confirmBtn.textContent = '保存中...';
+
+    // 代表フレームを1枚取得（IndexedDBのlast_swing_frames[0]）
+    function getThumbnail() {
+     return new Promise(function (resolve) {
+      try {
+       var req = indexedDB.open('reforma_batting_v1', 3);
+       req.onsuccess = function (e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains('frames')) { db.close(); resolve(null); return; }
+        var tx = db.transaction('frames', 'readonly');
+        var gr = tx.objectStore('frames').get('last_swing_frames');
+        gr.onsuccess = function (ev) {
+         var frames = ev.target.result;
+         var thumb = (frames && frames.length > 0) ? frames[Math.floor(frames.length * 0.6)].img : null;
+         db.close(); resolve(thumb);
+        };
+        gr.onerror = function () { db.close(); resolve(null); };
+       };
+       req.onerror = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+     });
+    }
+
+    var memo = ($('save-memo') && $('save-memo').value.trim()) || '';
+    getThumbnail().then(function (thumb) {
+     return window.ReformaRecordsDB.saveRecord(payload, memo, selectedTags, thumb);
+    }).then(function () {
+     closeSaveModal();
+     confirmBtn.disabled = false; confirmBtn.textContent = '保存する';
+     // 成功フラッシュ
+     var flash = document.createElement('div');
+     flash.textContent = '記録に保存しました';
+     flash.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%);' +
+      'background:#10b981;color:#fff;padding:10px 20px;border-radius:20px;' +
+      'font-size:13px;font-weight:600;z-index:999;white-space:nowrap;' +
+      'box-shadow:0 4px 12px rgba(16,185,129,0.4)';
+     document.body.appendChild(flash);
+     setTimeout(function () { flash.remove(); }, 2500);
+    }).catch(function (e) {
+     alert('保存に失敗しました: ' + e.message);
+     confirmBtn.disabled = false; confirmBtn.textContent = '保存する';
+    });
+   });
+  }
+ })();
+
  function showError(msg) {
  $('loading-state').classList.add('hidden');
  $('error-state').classList.remove('hidden');
@@ -2459,5 +2587,6 @@
 })();
 </script>
 
+<script src="js/navbar.js"></script>
 </body>
 </html>
