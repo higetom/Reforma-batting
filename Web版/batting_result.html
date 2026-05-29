@@ -270,6 +270,49 @@
  .attention-title { font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
  .attention-body { font-size: 12.5px; color: var(--text-secondary); line-height: 1.78; }
 
+
+ /* ── タブバー（固定フッター）── */
+ .rf-tab-bar {
+ position: -webkit-sticky; position: sticky; top: 0; z-index: 100;
+ display: flex; background: #0d1117;
+ border-bottom: 2px solid #21262d;
+ }
+ .rf-tab-btn {
+ flex: 1; display: flex; flex-direction: column; align-items: center;
+ justify-content: center; gap: 3px; background: none; border: none;
+ cursor: pointer; padding: 11px 4px 10px; color: #6e7681;
+ font-size: 10px; letter-spacing: 0.5px; touch-action: manipulation;
+ transition: color 0.15s; -webkit-tap-highlight-color: transparent;
+ }
+ .rf-tab-btn svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+ .rf-tab-btn { position: relative; }
+ .rf-tab-btn::after {
+ content: ''; position: absolute; bottom: 0; left: 20%; right: 20%;
+ height: 2px; border-radius: 2px 2px 0 0; background: #ef4444;
+ opacity: 0; transition: opacity 0.15s;
+ }
+ .rf-tab-btn.active::after { opacity: 1; }
+ .rf-tab-btn.active { color: #ef4444; }
+ .rf-tab-btn.active svg { stroke: #ef4444; }
+ .rf-tab-bar-label { font-size: 10px; font-weight: 500; }
+
+ /* ── タブパネル ── */
+ .tab-panel { display: none; }
+ .tab-panel.active { display: block; }
+
+
+ /* ── スコアバッジ（改善点の個数） ── */
+ .score-issue-badge {
+ display: inline-flex; align-items: center; gap: 5px;
+ margin-top: 8px; padding: 4px 10px;
+ background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+ border-radius: 99px; font-size: 11px; color: #f87171;
+ }
+ .score-issue-badge.hidden { display: none; }
+
+ /* ── フォームレビュー を診断タブ内で見やすく ── */
+ #review-section { border-top: 1px solid #21262d; }
+
  /* ── 9フェーズ アコーディオン ── */
  .phase-accordion-toggle {
  display: flex; align-items: center; justify-content: space-between;
@@ -286,6 +329,64 @@
  overflow: hidden; max-height: 0; transition: max-height 0.3s ease;
  }
  .phase-accordion-body.open { max-height: 700px; }
+ /* ── 年齢層別スコアUI ── */
+
+ /* 子供向け: 大きなドーナツ + シンプルラベル */
+ .score-hero--youth {
+ flex-direction: column; text-align: center; padding: 24px 16px 20px; gap: 12px;
+ }
+ .score-hero--youth .score-ring-wrap svg { width: 160px; height: 160px; }
+ .score-hero--youth .score-band { font-size: 32px; font-weight: 500; }
+ .score-hero--youth .score-meta { font-size: 14px; }
+ .score-bars { display: none; } /* 子供向けではバー非表示 */
+ .score-hero--youth .score-bars { display: none !important; }
+
+ /* 大人・コーチ向け: スコアヒーローを非表示 */
+ .score-hero.score-hero--hidden { display: none; }
+
+ /* 大人・コーチ向けサマリーカード */
+ .adult-summary-card {
+ margin: 12px 16px 0; padding: 16px 18px;
+ background: #161b22; border: 1px solid #21262d;
+ border-radius: var(--radius-lg);
+ }
+ .adult-summary-eyebrow {
+ font-size: 9px; letter-spacing: 2px; color: #484f58; font-weight: 700; margin-bottom: 8px;
+ }
+ .adult-summary-title {
+ font-size: 15px; font-weight: 500; color: #e6edf3; margin-bottom: 4px;
+ }
+ .adult-summary-meta {
+ font-size: 12px; color: #6e7681; line-height: 1.6;
+ }
+ .adult-summary-items {
+ display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap;
+ }
+ .adult-summary-item {
+ display: flex; flex-direction: column; gap: 2px; min-width: 60px;
+ }
+ .adult-summary-item-val {
+ font-size: 22px; font-weight: 300; font-family: var(--font-family-mono);
+ color: #e6edf3;
+ }
+ .adult-summary-item-label {
+ font-size: 10px; color: #484f58; letter-spacing: 0.5px;
+ }
+
+ /* 短すぎる動画の子供向け表示 */
+ .score-hero--short-video {
+ flex-direction: column; text-align: center; padding: 24px 16px 20px; gap: 8px;
+ }
+ .short-video-icon {
+ font-size: 48px; line-height: 1;
+ }
+ .short-video-title {
+ font-size: 20px; font-weight: 600; color: #f59e0b;
+ }
+ .short-video-body {
+ font-size: 13px; color: #8b949e; line-height: 1.6;
+ }
+
  </style>
 </head>
 <body>
@@ -307,11 +408,14 @@
  <!-- 結果コンテンツ -->
  <div id="result-content" class="hidden">
 
+
+ <!-- 常時表示: ヘッダー + 打席カード -->
  <!-- ヘッダー: 名前+側 -->
  <div class="action-card" style="padding:16px;text-align:center">
  <div class="eyebrow" id="result-greeting">バッティング解析結果</div>
  <div class="text-small text-muted" id="result-meta">--</div>
  </div>
+
 
  <!-- 打席判定カード(手動切替可) -->
  <div id="side-card" style="padding:14px 16px;background:var(--bg-card);border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle)">
@@ -331,6 +435,37 @@
  <span id="side-warning-body">違う場合は右の「切替」ボタンを押してください。手動で切り替えると全指標が再計算されます。</span>
  </div>
  </div>
+
+
+
+<!-- タブナビゲーションバー -->
+<nav class="rf-tab-bar" role="tablist" aria-label="結果ページナビゲーション">
+ <button class="rf-tab-btn active" id="tab-btn-diagnosis" role="tab"
+  aria-selected="true" aria-controls="panel-diagnosis"
+  onclick="rfSwitchTab('diagnosis')">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+   <path d="M9 11l3 3L22 4"/>
+   <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+  </svg>
+  <span class="rf-tab-bar-label">診断</span>
+ </button>
+ <button class="rf-tab-btn" id="tab-btn-detail" role="tab"
+  aria-selected="false" aria-controls="panel-detail"
+  onclick="rfSwitchTab('detail')">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+   <rect x="3" y="3" width="7" height="7" rx="1"/>
+   <rect x="14" y="3" width="7" height="7" rx="1"/>
+   <rect x="3" y="14" width="7" height="7" rx="1"/>
+   <rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+  <span class="rf-tab-bar-label">詳細データ</span>
+ </button>
+</nav>
+
+ <!-- ================================================ -->
+ <!-- タブ1: 診断 -->
+ <!-- ================================================ -->
+ <div class="tab-panel tab-panel--diagnosis active" id="panel-diagnosis">
 
  <!-- 総合スコア -->
  <div class="score-hero" id="score-hero">
@@ -356,44 +491,40 @@
  </div>
  </div>
 
- <!-- 注意点セクション（スコア直下 — 最重要・最優先表示） -->
- <div id="attention-section" class="hidden" style="border-top:2px solid rgba(245,158,11,0.35);border-bottom:1px solid rgba(245,158,11,0.15)">
- <div class="action-card" style="padding:20px 16px 8px">
- <div class="eyebrow" style="color:#f59e0b">CLINICAL ATTENTION NOTES</div>
- <h2 class="card-title">いまのスイングで気をつけること</h2>
- <p class="text-secondary text-small mb-3">理学療法士の視点から、怪我予防と動作改善のポイントをまとめました。</p>
- </div>
- <div style="padding:0 16px 12px" id="attention-items"></div>
- </div>
 
- <!-- ボトルネック詳細（注意点の直下） -->
- <div id="bottleneck-detail" class="hidden" style="margin:16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-radius:var(--radius-lg);padding:18px 20px">
- <div class="eyebrow" style="color:#fca5a5">あなたの最弱リンク</div>
- <h3 style="font-size:20px;font-weight:500;color:#fff;margin-top:4px" id="bn-name">--</h3>
- <div style="color:#fed7aa;font-size:13.5px;line-height:1.85;margin:10px 0" id="bn-function"></div>
- <div style="background:#0a0d11;border-left:3px solid var(--color-danger);padding:12px 14px;border-radius:6px;margin-bottom:8px">
- <div style="color:var(--color-danger);font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">弱いとどうなるか</div>
- <div style="color:#fecaca;font-size:13px;line-height:1.85" id="bn-cascade"></div>
- </div>
- <div style="background:#0a0d11;border-left:3px solid #f97316;padding:12px 14px;border-radius:6px">
- <div style="color:#f97316;font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">PT視点: 怪我リスク予測</div>
- <div style="color:#fed7aa;font-size:13px;line-height:1.85" id="bn-risk"></div>
- </div>
- </div>
 
- <!-- 改善ロードマップ（ボトルネックの直下） -->
- <div id="roadmap-section" class="hidden">
- <div class="action-card" style="padding:24px 16px 8px">
- <div class="eyebrow" style="color:#a855f7">PERSONALIZED IMPROVEMENT ROADMAP</div>
- <h2 class="card-title" id="roadmap-title">改善プログラム</h2>
- <p class="text-secondary text-small mb-3" id="roadmap-goal"></p>
- </div>
- <div id="roadmap-phases" style="padding:0 16px"></div>
- <div class="alert alert-info" style="margin:12px 16px">
- <b>運用のコツ:</b> 各フェーズの「進入基準」を満たしてから次へ進んでください。痛みが出たら一段階前に戻す。2週間ごとに Re'forma で再解析して改善を確認することを推奨します。
+ <!-- 大人・コーチ向けサマリー（スコアの代わり） -->
+ <div id="adult-summary-card" class="adult-summary-card hidden">
+ <div class="adult-summary-eyebrow">ANALYSIS SUMMARY</div>
+ <div class="adult-summary-title" id="adult-summary-title">動作解析の概要</div>
+ <div class="adult-summary-meta" id="adult-summary-meta">--</div>
+ <div class="adult-summary-items">
+  <div class="adult-summary-item">
+  <span class="adult-summary-item-val" id="adult-frame-val">--</span>
+  <span class="adult-summary-item-label">フレーム数</span>
+  </div>
+  <div class="adult-summary-item">
+  <span class="adult-summary-item-val" id="adult-fps-val">--</span>
+  <span class="adult-summary-item-label">FPS</span>
+  </div>
+  <div class="adult-summary-item">
+  <span class="adult-summary-item-val" id="adult-metric-val">--</span>
+  <span class="adult-summary-item-label">計測指標数</span>
+  </div>
+  <div class="adult-summary-item">
+  <span class="adult-summary-item-val" id="adult-phase-val">--</span>
+  <span class="adult-summary-item-label">検出フェーズ</span>
+  </div>
  </div>
  </div>
 
+ <!-- 低フレーム数警告（解析信頼性が低い場合に表示） -->
+ <div id="low-frame-warning" class="hidden" style="margin:8px 16px 0;padding:10px 14px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px;font-size:12px;color:#f87171;line-height:1.6">
+ <b>動画が短すぎます（<span id="low-frame-count">--</span>フレーム）</b><br>
+ 正確な解析には最低90フレーム（約3秒）必要です。この結果は参考程度にとどめ、撮影画面でスイング全体（3秒以上）を撮り直すことをおすすめします。
+ </div>
+
+ <!-- フォームレビュー（スコアと改善点の間 — 自分のスイングを確認してから読む） -->
  <!-- ── フォームレビュー ── -->
  <div id="review-section" class="hidden">
  <div class="action-card" style="padding:16px 16px 10px">
@@ -469,33 +600,51 @@
  </div>
  </div>
 
- <!-- タイプ特徴カード -->
- <div id="type-feature-card" class="hidden"></div>
 
- <!-- 9フェーズ（アコーディオン折りたたみ） -->
- <div style="background:var(--bg-card);border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);margin-top:8px">
- <button class="phase-accordion-toggle" id="phase-accordion-btn" aria-expanded="false">
- <div>
- <div style="font-size:10px;letter-spacing:2px;color:var(--text-tertiary);font-weight:600;margin-bottom:3px">9-PHASE BREAKDOWN</div>
- <div style="font-size:15px;font-weight:600;color:var(--text-primary)">スイングを9つの瞬間に分解</div>
+
+ <!-- 注意点セクション（スコア直下 — 最重要・最優先表示） -->
+ <div id="attention-section" class="hidden" style="border-top:2px solid rgba(245,158,11,0.35);border-bottom:1px solid rgba(245,158,11,0.15)">
+ <div class="action-card" style="padding:20px 16px 8px">
+ <div class="eyebrow" style="color:#f59e0b">CLINICAL ATTENTION NOTES</div>
+ <h2 class="card-title">いまのスイングで気をつけること</h2>
+ <p class="text-secondary text-small mb-3">理学療法士の視点から、怪我予防と動作改善のポイントをまとめました。</p>
  </div>
- <span class="phase-accordion-icon" id="phase-accordion-icon">&#8964;</span>
- </button>
- <div class="phase-accordion-body" id="phase-accordion-body">
- <div class="phase-grid" id="phase-grid" style="padding-bottom:12px"></div>
- </div>
+ <div style="padding:0 16px 12px" id="attention-items"></div>
  </div>
 
- <!-- Kinetic Chain -->
+
+
+ <!-- ボトルネック詳細（注意点の直下） -->
+ <div id="bottleneck-detail" class="hidden" style="margin:16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-radius:var(--radius-lg);padding:18px 20px">
+ <div class="eyebrow" style="color:#fca5a5">あなたの最弱リンク</div>
+ <h3 style="font-size:20px;font-weight:500;color:#fff;margin-top:4px" id="bn-name">--</h3>
+ <div style="color:#fed7aa;font-size:13.5px;line-height:1.85;margin:10px 0" id="bn-function"></div>
+ <div style="background:#0a0d11;border-left:3px solid var(--color-danger);padding:12px 14px;border-radius:6px;margin-bottom:8px">
+ <div style="color:var(--color-danger);font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">弱いとどうなるか</div>
+ <div style="color:#fecaca;font-size:13px;line-height:1.85" id="bn-cascade"></div>
+ </div>
+ <div style="background:#0a0d11;border-left:3px solid #f97316;padding:12px 14px;border-radius:6px">
+ <div style="color:#f97316;font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">PT視点: 怪我リスク予測</div>
+ <div style="color:#fed7aa;font-size:13px;line-height:1.85" id="bn-risk"></div>
+ </div>
+ </div>
+
+
+
+ <!-- 改善ロードマップ（ボトルネックの直下） -->
+ <div id="roadmap-section" class="hidden">
  <div class="action-card" style="padding:24px 16px 8px">
- <div class="eyebrow" style="color:var(--color-info)">KINETIC CHAIN DIAGNOSIS</div>
- <h2 class="card-title">動作連鎖の診断 — 6リンク評価</h2>
- <p class="text-secondary text-small mb-3">
- バッティングは「軸足→踏み出し→前足ブロック→ひねり→上体→肘→バット」の連鎖で力が伝わります。一番弱いところがバットスピードと怪我リスクを決めます。
- </p>
- <div id="chain-pills" class="mb-3"></div>
+ <div class="eyebrow" style="color:#a855f7">PERSONALIZED IMPROVEMENT ROADMAP</div>
+ <h2 class="card-title" id="roadmap-title">改善プログラム</h2>
+ <p class="text-secondary text-small mb-3" id="roadmap-goal"></p>
  </div>
- <div class="chain-cards-wrap" id="chain-cards"></div>
+ <div id="roadmap-phases" style="padding:0 16px"></div>
+ <div class="alert alert-info" style="margin:12px 16px">
+ <b>運用のコツ:</b> 各フェーズの「進入基準」を満たしてから次へ進んでください。痛みが出たら一段階前に戻す。2週間ごとに Re'forma で再解析して改善を確認することを推奨します。
+ </div>
+ </div>
+
+
 
  <!-- アクション -->
  <div class="action-card mt-3">
@@ -512,6 +661,50 @@
  </div>
  </div>
 
+
+ </div>
+
+ <!-- ================================================ -->
+ <!-- タブ2: 詳細データ -->
+ <!-- ================================================ -->
+ <div class="tab-panel tab-panel--detail" id="panel-detail">
+
+ <!-- タイプ特徴カード -->
+ <div id="type-feature-card" class="hidden"></div>
+
+
+
+ <!-- 9フェーズ（アコーディオン折りたたみ） -->
+ <div style="background:var(--bg-card);border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);margin-top:8px">
+ <button class="phase-accordion-toggle" id="phase-accordion-btn" aria-expanded="false">
+ <div>
+ <div style="font-size:10px;letter-spacing:2px;color:var(--text-tertiary);font-weight:600;margin-bottom:3px">9-PHASE BREAKDOWN</div>
+ <div style="font-size:15px;font-weight:600;color:var(--text-primary)">スイングを9つの瞬間に分解</div>
+ </div>
+ <span class="phase-accordion-icon" id="phase-accordion-icon">&#8964;</span>
+ </button>
+ <div class="phase-accordion-body" id="phase-accordion-body">
+ <div class="phase-grid" id="phase-grid" style="padding-bottom:12px"></div>
+ </div>
+ </div>
+
+
+
+ <!-- Kinetic Chain -->
+ <div class="action-card" style="padding:24px 16px 8px">
+ <div class="eyebrow" style="color:var(--color-info)">KINETIC CHAIN DIAGNOSIS</div>
+ <h2 class="card-title">動作連鎖の診断 — 6リンク評価</h2>
+ <p class="text-secondary text-small mb-3">
+ バッティングは「軸足→踏み出し→前足ブロック→ひねり→上体→肘→バット」の連鎖で力が伝わります。一番弱いところがバットスピードと怪我リスクを決めます。
+ </p>
+ <div id="chain-pills" class="mb-3"></div>
+ </div>
+ <div class="chain-cards-wrap" id="chain-cards"></div>
+
+
+
+ </div>
+
  </div>
 
  <!-- エラー -->
@@ -526,6 +719,7 @@
  </button>
  </div>
  </div>
+
 </main>
 
 <footer class="rf-footer">
@@ -637,6 +831,7 @@
  avg_fps: payload.raw_fps || 30,
  rmp_type: payload.raw_rmp_type || 'フロー型',
  force_side: forceSide,
+ aspect_ratio: payload.aspect_ratio || 0.5625,
  });
  if (result.error) {
  alert('再解析に失敗しました: ' + result.error);
@@ -669,6 +864,54 @@
  $('result-meta').textContent =
  `${r.side_jp} ・ ${r.n_frames}フレーム ・ ${r.fps.toFixed(0)}fps`;
 
+ // ── 年齢層判定 ──────────────────────────────────────
+ const _profile = window.ReformaUserProfile && window.ReformaUserProfile.load();
+ const _ageGroup = (_profile && _profile.ageGroup) || 'adult';
+ // 小中高生（elementary/junior）→ スコアあり、大人・コーチ → 観察サマリー
+ const isYouth = (_ageGroup === 'elementary' || _ageGroup === 'junior');
+ window._rfIsYouth = isYouth; // renderScore から参照
+
+ // ── スコアヒーロー or 大人サマリー 切替 ──────────────────────
+ const scoreHeroEl = $('score-hero');
+ const adultSummaryEl = $('adult-summary-card');
+ if (isYouth) {
+ if (scoreHeroEl) scoreHeroEl.classList.remove('score-hero--hidden');
+ if (adultSummaryEl) adultSummaryEl.classList.add('hidden');
+ // 子供向けレイアウト適用
+ if (scoreHeroEl) scoreHeroEl.classList.add('score-hero--youth');
+ // スコアバー（検出/安全性/適合の内訳）を非表示
+ var scoreBarsEl = scoreHeroEl && scoreHeroEl.querySelector('.score-bars');
+ if (scoreBarsEl) scoreBarsEl.style.display = 'none';
+ } else {
+ if (scoreHeroEl) scoreHeroEl.classList.add('score-hero--hidden');
+ if (adultSummaryEl) {
+  adultSummaryEl.classList.remove('hidden');
+  // 大人サマリーを埋める（renderResultの最後にrenderAdultSummaryで充填）
+ }
+ }
+
+ // ── 低フレーム数警告 ────────────────────────────────────────
+ const lowWarn = $('low-frame-warning');
+ const lowCount = $('low-frame-count');
+ if (lowWarn) {
+ if (r.n_frames < 90) {
+  if (lowCount) lowCount.textContent = r.n_frames;
+  lowWarn.classList.remove('hidden');
+  // 子供向けは警告メッセージを変える
+  if (isYouth) {
+  lowWarn.style.background = 'rgba(245,158,11,0.1)';
+  lowWarn.style.borderColor = 'rgba(245,158,11,0.4)';
+  lowWarn.style.color = '#fbbf24';
+  const b = lowWarn.querySelector('b');
+  if (b) b.textContent = '動画が短すぎるよ！（' + r.n_frames + 'フレーム）';
+  const body = lowWarn.childNodes[2];
+  lowWarn.innerHTML = '<b>動画が短すぎるよ！（' + r.n_frames + 'フレーム）</b><br>スイング全体（3秒以上）が映るように撮り直そう！もっと長く振ってね。';
+  }
+ } else {
+  lowWarn.classList.add('hidden');
+ }
+ }
+
  // 打席切替セットアップ
  setupSideToggle(r);
 
@@ -695,42 +938,86 @@
  if (r.kinetic_chain && r.kinetic_chain.bottleneck) {
  renderRoadmap(r.kinetic_chain.bottleneck);
  }
+
+ // 大人・コーチ向けサマリー充填
+ if (!isYouth) {
+ renderAdultSummary(r, r.metric_evals);
+ }
+ }
+
+ // ── スコア計算共通ヘルパー ────────────────────────────────────
+ function getScoreMeta(total) {
+ // 子供向けラベル
+ if (total >= 85) return { color: '#10b981', band: 'バッチリ！', youthMsg: '最高のスイングだ！この調子でどんどん上達しよう。', adultMsg: '完成度の高い動作パターンが確認されました。' };
+ if (total >= 70) return { color: '#3b82f6', band: 'いい感じ！', youthMsg: 'バランスのとれたスイングができているよ！', adultMsg: '全体的にバランスのとれた動作が見られます。' };
+ if (total >= 55) return { color: '#f59e0b', band: 'もう少し！', youthMsg: '伸びしろがたくさんある！練習すればもっと良くなるよ。', adultMsg: '改善の余地があるポイントが確認されました。' };
+ return { color: '#ef4444', band: '練習あるのみ！', youthMsg: 'まずは撮影条件を確認してみよう。全身が映っているかな？', adultMsg: '撮影条件の確認または基本動作の見直しをおすすめします。' };
  }
 
  function renderScore(score) {
  if (!score) return;
  const total = score.total;
- let ringColor, band, msg;
- if (total >= 85) { ringColor = '#10b981'; band = 'ハイレベル'; msg = '完成度が高い状態です。'; }
- else if (total >= 70) { ringColor = '#3b82f6'; band = '安定圏'; msg = '全体的にバランスのとれた状態です。'; }
- else if (total >= 55) { ringColor = '#f59e0b'; band = '成長期'; msg = '上達ポイントが明確に見えています。'; }
- else { ringColor = '#ef4444'; band = '見直しが必要'; msg = '撮影条件や基本動作の確認から始めることをおすすめします。'; }
- $('score-band').style.color = ringColor;
- $('score-band').textContent = band;
- $('score-message').textContent = msg;
+ const meta = getScoreMeta(total);
 
- // SVG ドーナツリング
- const circ = 2 * 3.14159 * 50;
+ $('score-band').style.color = meta.color;
+ $('score-band').textContent = meta.band;
+ // isYoothはrenderResultのスコープ変数。ここではwindow変数として参照
+ $('score-message').textContent = window._rfIsYouth ? meta.youthMsg : meta.adultMsg;
+
+ // SVGリング（子供向けは大きく、大人向けはコンパクト）
+ const ringSize = window._rfIsYouth ? 160 : 130;
+ const cx = ringSize / 2;
+ const r = window._rfIsYouth ? 65 : 50;
+ const sw = window._rfIsYouth ? 11 : 10;
+ const circ = 2 * 3.14159 * r;
  const arc = (circ * (total / 100)).toFixed(1);
- $('score-ring-wrap').innerHTML = `
- <svg width="130" height="130" viewBox="0 0 130 130">
- <circle cx="65" cy="65" r="50" fill="none" stroke="#21262d" stroke-width="10"/>
- <circle cx="65" cy="65" r="50" fill="none" stroke="${ringColor}" stroke-width="10"
- stroke-linecap="round" stroke-dasharray="${arc} ${circ.toFixed(1)}" transform="rotate(-90 65 65)"/>
- <text x="65" y="68" text-anchor="middle" font-family="-apple-system,SF Pro,Hiragino Sans"
- font-size="34" font-weight="300" fill="#fff" letter-spacing="-2">${total}</text>
- <text x="65" y="88" text-anchor="middle" font-family="-apple-system,sans-serif"
- font-size="9" font-weight="500" fill="#7c8290" letter-spacing="2">/ 100</text>
- </svg>
- `;
+ const fontSize = window._rfIsYouth ? 42 : 34;
+ $('score-ring-wrap').innerHTML =
+ '<svg width="' + ringSize + '" height="' + ringSize + '" viewBox="0 0 ' + ringSize + ' ' + ringSize + '">' +
+ '<circle cx="' + cx + '" cy="' + cx + '" r="' + r + '" fill="none" stroke="#21262d" stroke-width="' + sw + '"/>' +
+ '<circle cx="' + cx + '" cy="' + cx + '" r="' + r + '" fill="none" stroke="' + meta.color + '" stroke-width="' + sw + '"' +
+ ' stroke-linecap="round" stroke-dasharray="' + arc + ' ' + circ.toFixed(1) + '" transform="rotate(-90 ' + cx + ' ' + cx + ')"/>' +
+ '<text x="' + cx + '" y="' + (cx + 8) + '" text-anchor="middle" font-family="-apple-system,sans-serif"' +
+ ' font-size="' + fontSize + '" font-weight="300" fill="#fff" letter-spacing="-2">' + total + '</text>' +
+ '<text x="' + cx + '" y="' + (cx + 24) + '" text-anchor="middle" font-family="-apple-system,sans-serif"' +
+ ' font-size="9" font-weight="500" fill="#7c8290" letter-spacing="2">/ 100</text>' +
+ '</svg>';
 
- // バー
- $('bar-det-val').textContent = `${score.detection.score}/${score.detection.max}`;
+ // バーは子供向けでは非表示（CSSで制御済み）、大人向けには表示しない
+ // バー要素は残すが更新のみ行う（大人は score-hero 自体が非表示のため無害）
+ if ($('bar-det-val')) {
+ $('bar-det-val').textContent = score.detection.score + '/' + score.detection.max;
  $('bar-det-fill').style.width = (score.detection.score / score.detection.max * 100) + '%';
- $('bar-safe-val').textContent = `${score.safety.score}/${score.safety.max}`;
+ $('bar-safe-val').textContent = score.safety.score + '/' + score.safety.max;
  $('bar-safe-fill').style.width = (score.safety.score / score.safety.max * 100) + '%';
- $('bar-fit-val').textContent = `${score.fit.score}/${score.fit.max}`;
+ $('bar-fit-val').textContent = score.fit.score + '/' + score.fit.max;
  $('bar-fit-fill').style.width = (score.fit.score / score.fit.max * 100) + '%';
+ }
+ }
+
+ // ── 大人・コーチ向けサマリーレンダリング ─────────────────────────
+ function renderAdultSummary(r, allMetricEvals) {
+ const t = $('adult-summary-title');
+ const m = $('adult-summary-meta');
+ const fv = $('adult-frame-val');
+ const fpv = $('adult-fps-val');
+ const mv = $('adult-metric-val');
+ const pv = $('adult-phase-val');
+ if (!t) return;
+ // タイトル: 動画の品質を端的に
+ const quality = r.n_frames >= 90 ? '解析に十分な動画' : '動画が短め（精度が低下）';
+ t.textContent = quality;
+ // メタ情報
+ const sideLabel = r.side_jp || (r.side === 'right' ? '右打者' : '左打者');
+ const conf = r.side_confidence != null ? Math.round(r.side_confidence * 100) : 0;
+ m.textContent = sideLabel + ' / 打席判定 ' + conf + '%';
+ // 数値
+ if (fv) fv.textContent = r.n_frames;
+ if (fpv) fpv.textContent = Math.round(r.fps);
+ if (mv) mv.textContent = (allMetricEvals ? allMetricEvals.length : 0) + '項目';
+ // 検出フェーズ数
+ const detectedPhases = r.phases ? Object.keys(r.phases).filter(k => r.phases[k] != null).length : 0;
+ if (pv) pv.textContent = detectedPhases + '/9';
  }
 
  function renderPhases(phases, fps) {
@@ -2102,7 +2389,7 @@
  }
  });
 
- if (notes.length === 0) { section.classList.add('hidden'); return; }
+ if (notes.length === 0) { section.classList.add('hidden'); rfUpdateScoreBadge(0); return; }
 
  section.classList.remove('hidden');
  itemsWrap.innerHTML = notes.map(n => `
@@ -2111,6 +2398,37 @@
  <div class="attention-body">${n.body}</div>
  </div>
  `).join('');
+ rfUpdateScoreBadge(notes.length);
+ }
+
+
+ // ── タブ切替 ──────────────────────────────────────────────
+ function rfSwitchTab(name) {
+ document.querySelectorAll('.tab-panel').forEach(function(p) {
+  p.classList.remove('active');
+ });
+ document.querySelectorAll('.rf-tab-btn').forEach(function(b) {
+  b.classList.remove('active');
+  b.setAttribute('aria-selected', 'false');
+ });
+ var panel = document.getElementById('panel-' + name);
+ var btn   = document.getElementById('tab-btn-' + name);
+ if (panel) panel.classList.add('active');
+ if (btn)   { btn.classList.add('active'); btn.setAttribute('aria-selected', 'true'); }
+ // スクロールをトップに戻す
+ window.scrollTo(0, 0);
+ }
+
+ // ── スコアバッジ更新（注意点レンダリング後に呼ぶ）────────────
+ function rfUpdateScoreBadge(noteCount) {
+ var badge = document.getElementById('score-issue-badge');
+ if (!badge) return;
+ if (noteCount > 0) {
+  badge.textContent = noteCount + '個の改善ポイントが見つかりました';
+  badge.classList.remove('hidden');
+ } else {
+  badge.classList.add('hidden');
+ }
  }
 
  // ── 9フェーズ アコーディオン ──
