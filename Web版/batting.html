@@ -1494,11 +1494,8 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // HEVC + WebCodecs 対応: HEVCのときはWebCodecsを優先試行 → 失敗時フォールバック
  let frames;
  let wcRealFps = null; // WebCodecsパスでのみ取得できる元動画の実FPS
- // iOS SafariはcanvasへのdrawImageが制限されブラックフレームになるため、iOSは常にWebCodecsを使う
- // (H.264動画も含めてWebCodecsで直接バイト列からデコードすればcanvas制限を回避できる)
- const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
- if ((pickedFileCodec !== 'h264' || isIOSDevice) && typeof VideoDecoder !== 'undefined') {
+ // HEVCと確定した動画のみWebCodecsを使う。H.264/unknown は元のextractFromPreviewVideoパスで処理
+ if (pickedFileCodec === 'hevc' && typeof VideoDecoder !== 'undefined') {
    setOverlayProgress(3, 'WebCodecsで動画を解析します…', '変換不要・完全ローカル処理');
    try {
      const wcResult = await extractWithWebCodecs(pickedFile);
@@ -1846,13 +1843,6 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    catch (e) { console.warn('[upload] IDB save error:', e); }
  }
 
- // 早期診断: visibility 全て0 = フレーム読出に何らかの問題
- if (collected.length >= 5 && avgVis === 0) {
- throw new Error(
- 'HEVC_BLACKOUT: ブラウザがこの動画のフレームを正しく読み出せませんでした ' +
- '(' + collected.length + 'フレーム検出 / 全て認識精度0%)'
- );
- }
  // 取得フレーム数チェック
  if (collected.length < 12) {
  throw new Error('EXTRACT_FAILED: 動画から取得できたフレーム数が少なすぎます(' + collected.length + ')');
