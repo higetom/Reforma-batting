@@ -763,6 +763,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  frames: recordedFrames,
  avg_fps: fps,
  rmp_type: rmpType,
+ aspect_ratio: (video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 0.5625,
  };
  const result = window.ReformaBattingAnalyzer.analyzeBatting(analysisInput);
 
@@ -784,6 +785,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  raw_fps: fps,
  actual_video_fps: actualVideoFps,
  raw_rmp_type: rmpType,
+ aspect_ratio: (video.videoWidth && video.videoHeight) ? video.videoWidth / video.videoHeight : 0.5625,
  captured_at: new Date().toISOString(),
  n_frames: recordedFrames.length,
  duration_ms: recordedFrames[recordedFrames.length - 1].t,
@@ -1559,11 +1561,14 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  ? (frames.length - 1) * 1000 / (frames[frames.length - 1].t - frames[0].t)
  : TARGET_PROCESS_FPS;
 
+ const previewVideo2 = $('upload-preview');
  const analysisInput = {
  frames: frames,
  avg_fps: fps,
  rmp_type: rmpType,
  source: 'upload', // 出所を記録
+ aspect_ratio: (previewVideo2 && previewVideo2.videoWidth && previewVideo2.videoHeight)
+ ? previewVideo2.videoWidth / previewVideo2.videoHeight : 0.5625,
  };
  const result = window.ReformaBattingAnalyzer.analyzeBatting(analysisInput);
 
@@ -1584,6 +1589,10 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // 従来パスではcollectedフレームから計算した値(≒30fps)
  actual_video_fps: (wcRealFps && wcRealFps > 5) ? wcRealFps : fps,
  raw_rmp_type: rmpType,
+ aspect_ratio: (function() {
+ const pv = $('upload-preview');
+ return (pv && pv.videoWidth && pv.videoHeight) ? pv.videoWidth / pv.videoHeight : 0.5625;
+ })(),
  captured_at: new Date().toISOString(),
  n_frames: frames.length,
  duration_ms: frames[frames.length - 1].t,

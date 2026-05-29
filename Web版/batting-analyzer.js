@@ -464,7 +464,8 @@
  // ─────────────────────────────────────────
  // 指標計算
  // ─────────────────────────────────────────
- function calcMetricsForFrame(landmarks, side, bodyHeight) {
+ function calcMetricsForFrame(landmarks, side, bodyHeight, aspectRatio) {
+ aspectRatio = aspectRatio || 0.5625; // デフォルト 9:16
  const lm = landmarks;
  if (!lm || !lm[LM.L_SHO] || !lm[LM.R_SHO]) return {};
  const out = { angles: {}, extra: {} };
@@ -514,10 +515,18 @@
  out.extra['腰肩分離'] = +sep.toFixed(1);
  }
 
- // ストライド長(両足首の2D距離を身長正規化)
+ // ストライド長（アスペクト比補正版）
+ // 問題: 縦長動画(9:16)ではX方向1単位と Y方向1単位の実距離が異なる。
+ // bodyHeight は Y方向の正規化距離で計算されているため、
+ // ストライド（主にX方向）をそのままbodyHeightで割ると大幅に過小評価される。
+ // 補正: strideX(正規化X) を Y方向単位に換算するには /aspectRatio を掛ける。
+ // aspectRatio = videoWidth/videoHeight (9:16なら ≈0.5625)
  if (lm[LM.L_ANK] && lm[LM.R_ANK] && bodyHeight && bodyHeight > 0.05) {
- const stride = Math.hypot(lm[LM.L_ANK].x - lm[LM.R_ANK].x, lm[LM.L_ANK].y - lm[LM.R_ANK].y);
- out.extra['ストライド長'] = +(stride / bodyHeight * 100).toFixed(1);
+ const strideX = Math.abs(lm[LM.L_ANK].x - lm[LM.R_ANK].x);
+ // X正規化距離 → Y正規化距離へ変換（アスペクト比補正）
+ // 縦長動画(例:9:16, ar=0.5625)では X1単位が Y1単位より実際に大きいためar除算で補正
+ const strideY = strideX / aspectRatio;
+ out.extra['ストライド長'] = +(strideY / bodyHeight * 100).toFixed(1);
  }
 
  return out;
@@ -702,9 +711,14 @@
  // 身長推定
  const bodyHeight = estimateBodyHeight(frames);
 
+ // アスペクト比（動画幅/高さ）— ストライド計算の補正に使用
+ // input.aspect_ratio が渡されれば使う。なければ標準縦長(9:16≈0.5625)を仮定。
+ const aspectRatio = (input.aspect_ratio && input.aspect_ratio > 0.2 && input.aspect_ratio < 3)
+ ? input.aspect_ratio : 0.5625;
+
  // 全フレームの指標計算
  frames.forEach(f => {
- const m = calcMetricsForFrame(f.landmarks, side, bodyHeight);
+ const m = calcMetricsForFrame(f.landmarks, side, bodyHeight, aspectRatio);
  f.angles = m.angles;
  f.extra = m.extra;
  });
