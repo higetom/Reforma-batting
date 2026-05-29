@@ -1,155 +1,366 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
- <meta charset="UTF-8">
- <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
- <meta name="apple-mobile-web-app-capable" content="yes">
- <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
- <meta name="theme-color" content="#0b0e13">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0b0e13">
 
- <!-- セキュリティヘッダー(MediaPipe WebAssembly のため wasm-unsafe-eval 必要) -->
- <meta http-equiv="Content-Security-Policy" content="
- default-src 'self';
- script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
- style-src 'self' 'unsafe-inline';
- img-src 'self' data: blob:;
- media-src 'self' blob:;
- connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
- font-src 'self' data:;
- object-src 'none';
- base-uri 'self';
- form-action 'self';
- frame-ancestors 'self' https://*.vercel.app;
- ">
- <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdn.jsdelivr.net;
+    style-src 'self' 'unsafe-inline';
+    img-src 'self' data: blob:;
+    media-src 'self' blob:;
+    connect-src 'self' https://cdn.jsdelivr.net https://storage.googleapis.com;
+    font-src 'self' data:;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+    frame-ancestors 'self' https://*.vercel.app;
+  ">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
 
- <!-- SEO・OG -->
- <title>Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析</title>
- <meta name="description" content="スマホで30秒撮るだけで、理学療法士・パーソナルトレーナー監修の動作解析。動物図鑑のように自分のタイプを知り、改善ロードマップを手に入れる。">
- <meta property="og:title" content="Re'forma — 理学療法士・パーソナルトレーナー監修バッティング動作解析">
- <meta property="og:description" content="スマホで30秒撮るだけで、専門家監修・学術文献ベースの動作診断。">
- <meta property="og:type" content="website">
+  <title>Re'forma — バッティング動作解析</title>
+  <meta name="description" content="スマホで撮影するだけ。理学療法士・パーソナルトレーナー監修のバッティング動作解析。">
 
- <link rel="stylesheet" href="css/common.css">
+  <link rel="stylesheet" href="css/common.css">
+  <style>
+    /* ── ホーム専用スタイル ─────────────────────────────── */
+
+    body { background: #0b0e13; }
+
+    .home-wrap {
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* Hero */
+    .home-hero {
+      text-align: center;
+      padding: 44px 24px 28px;
+    }
+    .home-logo-img {
+      max-height: 80px;
+      max-width: 220px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto;
+    }
+    .home-logo-text {
+      font-size: 34px;
+      font-weight: 300;
+      letter-spacing: 0.04em;
+      color: #fff;
+      line-height: 1;
+    }
+    .home-logo-text .rf-re { color: #e63946; }
+    .home-tagline {
+      font-size: 11px;
+      color: #6e7681;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-top: 8px;
+    }
+    .home-venue-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(230,57,70,0.1);
+      border: 1px solid rgba(230,57,70,0.28);
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: 12px;
+      color: #f88379;
+      margin-top: 12px;
+    }
+
+    /* CTA */
+    .home-cta-wrap { padding: 0 16px 12px; }
+    .home-cta-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 18px 24px;
+      background: linear-gradient(135deg, #e63946 0%, #c1252f 100%);
+      color: #fff;
+      font-size: 17px;
+      font-weight: 600;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 14px;
+      letter-spacing: 0.01em;
+      box-shadow: 0 4px 24px rgba(230,57,70,0.32);
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    .home-cta-btn:active { opacity: 0.85; }
+    .home-cta-btn svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+    /* Quick access */
+    .home-quick-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 0 16px 20px;
+    }
+    .home-quick-card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 14px;
+      padding: 20px 12px 18px;
+      text-align: center;
+      text-decoration: none;
+      color: #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.1s;
+    }
+    .home-quick-card:active { background: #1c2430; }
+    .home-quick-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: rgba(230,57,70,0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .home-quick-icon svg { width: 22px; height: 22px; stroke: #f88379; }
+    .home-quick-label { font-size: 14px; font-weight: 600; }
+    .home-quick-sub { font-size: 11px; color: #6e7681; margin-top: -4px; }
+
+    /* Section */
+    .home-section { padding: 0 16px 28px; }
+    .home-section-hdr {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .home-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #6e7681;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .home-section-link {
+      font-size: 12px;
+      color: #60a5fa;
+      text-decoration: none;
+    }
+
+    /* Record cards */
+    .home-record-card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 10px;
+      padding: 11px 13px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      text-decoration: none;
+      color: #e5e7eb;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .home-record-card:active { background: #1c2430; }
+    .home-record-thumb {
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex-shrink: 0;
+      background: #0d1117;
+    }
+    .home-record-thumb-ph {
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      background: #0d1117;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .home-record-info { flex: 1; min-width: 0; }
+    .home-record-name {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .home-record-meta { font-size: 11px; color: #6e7681; margin-top: 2px; }
+    .home-record-tags { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+    .home-record-tag {
+      font-size: 10px;
+      background: rgba(96,165,250,0.12);
+      color: #60a5fa;
+      border-radius: 4px;
+      padding: 2px 6px;
+    }
+    .home-record-score-wrap { text-align: right; flex-shrink: 0; min-width: 38px; }
+    .home-record-score { font-size: 22px; font-weight: 300; color: #f88379; line-height: 1; }
+    .home-record-score-sub { font-size: 10px; color: #6e7681; margin-top: 1px; }
+
+    /* Empty state */
+    .home-empty {
+      text-align: center;
+      padding: 28px 20px;
+      color: #6e7681;
+      font-size: 13px;
+      background: #0d1117;
+      border-radius: 10px;
+      border: 1px dashed #21262d;
+      line-height: 1.7;
+    }
+  </style>
 </head>
 <body>
+<div class="home-wrap">
 
-<header class="rf-header">
- <div class="rf-brand">
- <span class="rf-re">Re</span><span class="rf-forma">'forma</span>
- <span class="rf-sub">バッティング動作解析</span>
- </div>
- <a href="rmst.html" class="text-small text-muted" id="continue-link" style="display:none">続きから →</a>
-</header>
+  <!-- Hero -->
+  <div class="home-hero">
+    <img id="home-logo-img" class="home-logo-img" src="logo.JPG" alt="Re'forma"
+         onerror="this.style.display='none';document.getElementById('home-logo-text').style.display='block'">
+    <div id="home-logo-text" style="display:none" class="home-logo-text">
+      <span class="rf-re">Re</span>'forma
+    </div>
+    <div class="home-tagline">バッティング動作解析</div>
+    <div id="home-venue-badge" style="display:none" class="home-venue-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      <span id="home-venue-name"></span>
+    </div>
+  </div>
 
-<main>
- <div class="container">
+  <!-- Main CTA -->
+  <div class="home-cta-wrap">
+    <a href="batting.html?mode=capture" class="home-cta-btn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3.5"/>
+        <path d="M20.5 7.5h-2.09A2 2 0 0116.76 6l-.72-1.5A2 2 0 0014.28 3H9.72a2 2 0 00-1.76 1.5L7.24 6A2 2 0 015.59 7.5H3.5A1.5 1.5 0 002 9v10a1.5 1.5 0 001.5 1.5h17A1.5 1.5 0 0022 19V9a1.5 1.5 0 00-1.5-1.5z"/>
+      </svg>
+      今すぐ撮影して解析する
+    </a>
+  </div>
 
- <!-- メインキャッチ -->
- <div class="card-emphasized card" style="text-align:center;padding:48px 24px">
- <div class="eyebrow" style="color: var(--reforma-red); margin-bottom: 16px">
- WORLD-CLASS BATTING ANALYSIS
- </div>
- <h1 style="font-size:28px;font-weight:400;margin-bottom:16px;letter-spacing:-0.02em">
- あなたのバッティング、<br>30秒で動作解析
- </h1>
- <p class="text-secondary mb-5" style="font-size:15px;line-height:1.85;max-width:480px;margin-left:auto;margin-right:auto">
- スマートフォンのカメラで撮影するだけ。<br>
- 理学療法士・パーソナルトレーナー監修の動作診断と、<br>
- 個別最適化された改善プログラムが手に入ります。
- </p>
- <a href="batting.html?mode=capture" class="btn btn-primary btn-large btn-block" id="start-batting-btn">
- バッティングを解析する
- </a>
- <a href="welcome.html" class="btn btn-secondary btn-block mt-2" id="start-btn" style="font-weight:500">
- 動作タイプを診断する(60秒)
- </a>
- <div class="text-tertiary text-small mt-3">
- ※ アカウント登録不要・データは端末のみに保存されます
- </div>
- </div>
+  <!-- Quick access -->
+  <div class="home-quick-wrap">
+    <a href="batting.html?mode=capture" class="home-quick-card">
+      <div class="home-quick-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3.5"/>
+          <path d="M20.5 7.5h-2.09A2 2 0 0116.76 6l-.72-1.5A2 2 0 0014.28 3H9.72a2 2 0 00-1.76 1.5L7.24 6A2 2 0 015.59 7.5H3.5A1.5 1.5 0 002 9v10a1.5 1.5 0 001.5 1.5h17A1.5 1.5 0 0022 19V9a1.5 1.5 0 00-1.5-1.5z"/>
+        </svg>
+      </div>
+      <div class="home-quick-label">撮影</div>
+      <div class="home-quick-sub">カメラで今すぐ</div>
+    </a>
+    <a href="batting.html?mode=upload" class="home-quick-card">
+      <div class="home-quick-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2"/>
+          <path d="M8 21h8M12 17v4"/>
+          <path d="M9 10l3-3 3 3M12 7v6"/>
+        </svg>
+      </div>
+      <div class="home-quick-label">動画解析</div>
+      <div class="home-quick-sub">保存済み動画から</div>
+    </a>
+  </div>
 
- <!-- 信頼バッジ -->
- <div class="card" style="padding:20px">
- <div class="flex gap-4" style="flex-wrap:wrap;justify-content:space-around;text-align:center">
- <div>
- <div style="font-size:24px"></div>
- <div class="text-small text-secondary">社会人野球優勝<br>チーム選手協力</div>
- </div>
- <div>
- <div style="font-size:24px"></div>
- <div class="text-small text-secondary">理学療法士・<br>パーソナルトレーナー監修</div>
- </div>
- <div>
- <div style="font-size:24px"></div>
- <div class="text-small text-secondary">学術文献をもとに<br>作成</div>
- </div>
- </div>
- </div>
+  <!-- Recent records -->
+  <div class="home-section">
+    <div class="home-section-hdr">
+      <span class="home-section-title">RECENT</span>
+      <a href="records.html" class="home-section-link">すべて見る</a>
+    </div>
+    <div id="home-records-wrap"></div>
+  </div>
 
- <!-- 特徴3つ -->
- <h2 class="mb-3" style="margin-top:32px">Re'forma の独自価値</h2>
-
- <div class="card">
- <div class="card-title">🔗 Kinetic Chain 診断</div>
- <p class="text-secondary text-small">
- バッティングを「軸足→踏み出し→前足ブロック→ひねり→上体→肘→バット」の7リンクの連鎖として分析。
- あなたの動作の<b>最弱リンク(ボトルネック)</b>を特定し、改善優先順位を明確にします。
- </p>
- </div>
-
- <div class="card">
- <div class="card-title">動物図鑑タイプ分類</div>
- <p class="text-secondary text-small">
- Janda(1987)の姿勢分類理論をベースに、あなたの動作タイプを<b>4タイプ(鷲・サイ・蛇・猫)</b>に分類。
- タイプ別の特性と最適な動作改善を提案します。
- </p>
- </div>
-
- <div class="card">
- <div class="card-title">📋 個別化改善ロードマップ</div>
- <p class="text-secondary text-small">
- 診断結果に基づき、<b>4段階(可動性→強化→統合→フォーム再構築)</b>の改善プログラムを自動生成。
- 各段階の「次へ進む基準」も明確に提示します。
- </p>
- </div>
-
- <!-- 精度の正直な開示 -->
- <div class="alert alert-info mt-5">
- <b>精度について</b>:
- 本解析は2Dスマートフォン動画による測定で、関節角度の誤差は撮影面内で±5-10°、撮影面外で±15-30°を含みます。
- 研究グレードの3Dモーションキャプチャ(±1°)とは異なりますが、自己改善とフォーム比較には十分な精度です。
- </div>
-
- </div>
-</main>
-
-<footer class="rf-footer">
- <div>Re'forma バッティング動作解析 — 監修:理学療法士+パーソナルトレーナー</div>
- <div class="precision-note">
- 根拠:Welch (1995), Werner (2008), DeRenne (2007), Janda (1987) ほか54件の学術文献・教科書
- </div>
-</footer>
+</div><!-- /.home-wrap -->
 
 <script src="js/user-profile.js"></script>
+<script src="js/records-db.js"></script>
 <script>
- // 登録済ユーザーには「続きから」を表示
- (function () {
- 'use strict';
- try {
- if (window.ReformaUserProfile && window.ReformaUserProfile.isRegistered()) {
- const link = document.getElementById('continue-link');
- if (link) {
- link.style.display = '';
- const name = window.ReformaUserProfile.getDisplayName();
- // textContent でセットしているので XSS安全
- link.textContent = name + 'さん、続きから →';
- }
- }
- } catch (e) {
- console.warn('user check error:', e);
- }
- })();
+(function () {
+  'use strict';
+
+  // ── 施設名バッジ ─────────────────────────────────────────
+  var venue = new URLSearchParams(window.location.search).get('venue');
+  if (venue) {
+    var badge = document.getElementById('home-venue-badge');
+    var vname = document.getElementById('home-venue-name');
+    if (badge && vname) { vname.textContent = venue; badge.style.display = 'inline-flex'; }
+  }
+
+  // ── 最近の記録 ──────────────────────────────────────────
+  var wrap = document.getElementById('home-records-wrap');
+  if (!wrap || !window.ReformaRecordsDB) { return; }
+
+  var profile   = window.ReformaUserProfile && window.ReformaUserProfile.load();
+  var showScore = profile && (profile.ageGroup === 'elementary' || profile.ageGroup === 'junior');
+
+  window.ReformaRecordsDB.getAllRecords().then(function (all) {
+    if (!all || all.length === 0) {
+      wrap.innerHTML =
+        '<div class="home-empty">' +
+        'まだ記録がありません<br>' +
+        '上のボタンから最初の解析を始めましょう' +
+        '</div>';
+      return;
+    }
+
+    // 新しい順に最大3件
+    var recent = all.slice().sort(function (a, b) { return a.savedAt < b.savedAt ? 1 : -1; }).slice(0, 3);
+
+    wrap.innerHTML = recent.map(function (rec) {
+      var date   = rec.savedAt ? new Date(rec.savedAt).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' }) : '';
+      var course = rec.course ? rec.course : '';
+      var meta   = [date, rec.side_jp, course].filter(Boolean).join(' · ');
+      var score  = (showScore && rec.total_score != null) ? Math.round(rec.total_score) : null;
+
+      var thumbHtml = rec.thumbnail
+        ? '<img class="home-record-thumb" src="' + rec.thumbnail + '" alt="">'
+        : '<div class="home-record-thumb-ph">' +
+          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3a3f47" stroke-width="1.5">' +
+          '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>' +
+          '</svg></div>';
+
+      var tagsHtml = (rec.tags && rec.tags.length)
+        ? '<div class="home-record-tags">' +
+          rec.tags.slice(0, 2).map(function (t) {
+            return '<span class="home-record-tag">' + t + '</span>';
+          }).join('') +
+          '</div>'
+        : '';
+
+      var scoreHtml = score != null
+        ? '<div class="home-record-score-wrap"><div class="home-record-score">' + score + '</div><div class="home-record-score-sub">点</div></div>'
+        : '';
+
+      return '<a href="records.html" class="home-record-card">' +
+        thumbHtml +
+        '<div class="home-record-info">' +
+        '<div class="home-record-name">' + (rec.playerName || 'プレイヤー') + '</div>' +
+        '<div class="home-record-meta">' + meta + '</div>' +
+        tagsHtml +
+        '</div>' +
+        scoreHtml +
+        '</a>';
+    }).join('');
+  }).catch(function () {
+    wrap.innerHTML = '';
+  });
+})();
 </script>
 
 <script src="js/navbar.js"></script>

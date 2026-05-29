@@ -1,9 +1,8 @@
 /**
  * Re'forma — グローバルナビゲーションバー
  *
- * 全ページ共通の4タブボトムナビゲーション。
+ * 全ページ共通の3タブボトムナビゲーション（ホーム / 記録 / 設定）。
  * <script src="js/navbar.js"></script> を </body> の直前に置くだけで動作する。
- * 現在のページURLからアクティブタブを自動判定する。
  */
 (function () {
   'use strict';
@@ -11,24 +10,13 @@
   // ── タブ定義 ────────────────────────────────────────────────
   var TABS = [
     {
-      id: 'capture',
-      label: '撮影',
-      href: 'batting.html?mode=capture',
-      match: function (p, q) { return p === '/batting.html' && q !== 'upload'; },
+      id: 'home',
+      label: 'ホーム',
+      href: 'index.html',
+      match: function (p) { return p === '/index.html' || p === '/' || p === ''; },
       icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-            '<circle cx="12" cy="12" r="3.5"/>' +
-            '<path d="M20.5 7.5h-2.09A2 2 0 0116.76 6l-.72-1.5A2 2 0 0014.28 3H9.72a2 2 0 00-1.76 1.5L7.24 6A2 2 0 015.59 7.5H3.5A1.5 1.5 0 002 9v10a1.5 1.5 0 001.5 1.5h17A1.5 1.5 0 0022 19V9a1.5 1.5 0 00-1.5-1.5z"/>' +
-            '</svg>',
-    },
-    {
-      id: 'upload',
-      label: '動画解析',
-      href: 'batting.html?mode=upload',
-      match: function (p, q) { return p === '/batting.html' && q === 'upload'; },
-      icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
-            '<rect x="2" y="3" width="20" height="14" rx="2"/>' +
-            '<path d="M8 21h8M12 17v4"/>' +
-            '<path d="M9 10l3-3 3 3M12 7v6"/>' +
+            '<path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H5a1 1 0 01-1-1V9.5z"/>' +
+            '<path d="M9 21V12h6v9"/>' +
             '</svg>',
     },
     {
@@ -59,11 +47,9 @@
   // ── アクティブタブ判定 ─────────────────────────────────────
   function getActiveId() {
     var pathname = window.location.pathname;
-    var search   = new URLSearchParams(window.location.search).get('mode') || '';
     for (var i = 0; i < TABS.length; i++) {
-      if (TABS[i].match(pathname, search)) return TABS[i].id;
+      if (TABS[i].match(pathname)) return TABS[i].id;
     }
-    // batting_result.html 等はナビ対象外ページ（ハイライトなし）
     return null;
   }
 
@@ -99,7 +85,7 @@
     style.textContent =
       '#rf-global-nav {' +
       '  position: fixed; bottom: 0; left: 0; right: 0; z-index: 1000;' +
-      '  display: flex; background: #0b0e13;' +
+      '  display: flex; background: rgba(11,14,19,0.96);' +
       '  border-top: 1px solid #21262d;' +
       '  padding-bottom: env(safe-area-inset-bottom, 0px);' +
       '  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);' +
@@ -129,7 +115,6 @@
 
   // ── マウント ──────────────────────────────────────────────
   function mount() {
-    // batting_result.html は独自タブバーがあるのでグローバルナビの余白調整のみ
     var pathname = window.location.pathname;
     injectCSS();
 
