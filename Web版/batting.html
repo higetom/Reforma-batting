@@ -1326,19 +1326,6 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
    console.log('[webcodecs] demux done:', allSamples.length, 'samples',
      durSec.toFixed(2) + 's', codecStr);
 
-   // ── MP4Box確定コーデックでHEVC確認 ──────────────────────────────────────
-   // detectVideoCodec()は「avc1」FourCCを先に検出してH.264と誤判定することがある
-   // (HEVCのサムネイルトラックにavc1が含まれているため)
-   // MP4Boxはmoovボックスから確実にコーデックを取得するため、ここで再確認する
-   const isActuallyHevc = /^hvc1|^hev1/i.test(codecStr);
-   const isIOSBrowser = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-                        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-   if (isActuallyHevc && isIOSBrowser) {
-     // iOSでHEVC確定 → canvasドローが必ずブラックアウトするため即中断
-     console.warn('[webcodecs] HEVC確定(', codecStr, ') + iOS → 即中断');
-     throw new Error('IOS_HEVC_UNSUPPORTED: iOSでHEVC動画の解析に失敗しました（実コーデック: ' + codecStr + '）');
-   }
-
    // demux 完了 → デコード開始表示に切り替え
    setOverlayProgress(30, 'WebCodecsで解析しています…', 'デコードを開始します…');
 
@@ -1528,11 +1515,7 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
        if (isIOS) {
-         if (pickedFileCodec === 'hevc') {
-           throw new Error('IOS_HEVC_UNSUPPORTED: iOSでHEVC動画の解析に失敗しました');
-         } else {
-           throw new Error('IOS_UPLOAD_FAILED: iOSでこの動画の解析に失敗しました');
-         }
+         throw new Error('IOS_HEVC_UNSUPPORTED: iOSでHEVC動画の解析に失敗しました');
        }
        // 非iOS: FFmpegでH.264に変換してから解析
        console.warn('[upload] WebCodecs失敗 → FFmpeg変換フォールバック:', wcErr.message);
