@@ -1493,8 +1493,11 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  // HEVC + WebCodecs 対応: HEVCのときはWebCodecsを優先試行 → 失敗時フォールバック
  let frames;
  let wcRealFps = null; // WebCodecsパスでのみ取得できる元動画の実FPS
- // HEVCと確定した場合のみWebCodecsを試行。不明・H.264はextractFromPreviewVideoを使う
- if (pickedFileCodec === 'hevc' && typeof VideoDecoder !== 'undefined') {
+ // iOS SafariはcanvasへのdrawImageが制限されブラックフレームになるため、iOSは常にWebCodecsを使う
+ // (H.264動画も含めてWebCodecsで直接バイト列からデコードすればcanvas制限を回避できる)
+ const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+ if ((pickedFileCodec !== 'h264' || isIOSDevice) && typeof VideoDecoder !== 'undefined') {
    setOverlayProgress(3, 'WebCodecsで動画を解析します…', '変換不要・完全ローカル処理');
    try {
      const wcResult = await extractWithWebCodecs(pickedFile);
@@ -1511,7 +1514,11 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
        if (isIOS) {
-         throw new Error('IOS_HEVC_UNSUPPORTED: iOSでHEVC動画の解析に失敗しました');
+         if (pickedFileCodec === 'hevc') {
+           throw new Error('IOS_HEVC_UNSUPPORTED: iOSでHEVC動画の解析に失敗しました');
+         } else {
+           throw new Error('IOS_UPLOAD_FAILED: iOSでこの動画の解析に失敗しました');
+         }
        }
        // 非iOS: FFmpegでH.264に変換してから解析
        console.warn('[upload] WebCodecs失敗 → FFmpeg変換フォールバック:', wcErr.message);
@@ -1623,9 +1630,16 @@ import { DrawingUtils, PoseLandmarker } from 'https://cdn.jsdelivr.net/npm/@medi
  'ページを再読み込みしてから再試行してください',
  ]);
  } else if (/IOS_HEVC_UNSUPPORTED/.test(msg)) {
- // iOS Safari: WebCodecs HEVC 失敗 + FFmpeg スキップ
+ // iOS Safari: HEVC動画は解析不可（Apple仕様）
  showRichError('この動画はSafariで解析できません', [
  'iPhoneの「設定」→「カメラ」→「フォーマット」→「互換性優先」に変更してから撮影した動画を使用してください',
+ '「撮影を準備する」からアプリ内で直接撮影すると確実に解析できます',
+ ]);
+ } else if (/IOS_UPLOAD_FAILED/.test(msg)) {
+ // iOS Safari: H.264動画でもWebCodecsが失敗した場合（姿勢が検出できないなど）
+ showRichError('動画の解析に失敗しました', [
+ '動画内にバッターの全身がはっきり写っているか確認してください',
+ 'ページを再読み込みしてから再試行してください',
  '「撮影を準備する」からアプリ内で直接撮影すると確実に解析できます',
  ]);
  } else if (/HEVC_BLACKOUT/.test(msg)) {
