@@ -269,6 +269,23 @@
  }
  .attention-title { font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
  .attention-body { font-size: 12.5px; color: var(--text-secondary); line-height: 1.78; }
+
+ /* ── 9フェーズ アコーディオン ── */
+ .phase-accordion-toggle {
+ display: flex; align-items: center; justify-content: space-between;
+ width: 100%; background: none; border: none; cursor: pointer;
+ padding: 16px 16px 8px; text-align: left; color: inherit;
+ touch-action: manipulation;
+ }
+ .phase-accordion-icon {
+ font-size: 18px; color: var(--text-muted); transition: transform 0.25s;
+ flex-shrink: 0; margin-left: 8px;
+ }
+ .phase-accordion-icon.open { transform: rotate(180deg); }
+ .phase-accordion-body {
+ overflow: hidden; max-height: 0; transition: max-height 0.3s ease;
+ }
+ .phase-accordion-body.open { max-height: 700px; }
  </style>
 </head>
 <body>
@@ -310,8 +327,8 @@
  </div>
  <!-- 信頼度が低い時の警告 -->
  <div id="side-warning" class="hidden" style="margin-top:10px;padding:10px 12px;background:rgba(245,158,11,0.08);border-left:3px solid var(--color-warning);border-radius:4px;font-size:12px;color:var(--color-warning);line-height:1.6">
- <b>判定信頼度が低めです</b><br>
- 違う場合は右上の「切替」ボタンを押してください。手動で切り替えると全指標が再計算されます。
+ <b id="side-warning-title">判定信頼度が低めです</b><br>
+ <span id="side-warning-body">違う場合は右の「切替」ボタンを押してください。手動で切り替えると全指標が再計算されます。</span>
  </div>
  </div>
 
@@ -336,6 +353,44 @@
  <div class="bar-track"><div class="bar-fill" id="bar-fit-fill" style="background:#a855f7"></div></div>
  </div>
  </div>
+ </div>
+ </div>
+
+ <!-- 注意点セクション（スコア直下 — 最重要・最優先表示） -->
+ <div id="attention-section" class="hidden" style="border-top:2px solid rgba(245,158,11,0.35);border-bottom:1px solid rgba(245,158,11,0.15)">
+ <div class="action-card" style="padding:20px 16px 8px">
+ <div class="eyebrow" style="color:#f59e0b">CLINICAL ATTENTION NOTES</div>
+ <h2 class="card-title">いまのスイングで気をつけること</h2>
+ <p class="text-secondary text-small mb-3">理学療法士の視点から、怪我予防と動作改善のポイントをまとめました。</p>
+ </div>
+ <div style="padding:0 16px 12px" id="attention-items"></div>
+ </div>
+
+ <!-- ボトルネック詳細（注意点の直下） -->
+ <div id="bottleneck-detail" class="hidden" style="margin:16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-radius:var(--radius-lg);padding:18px 20px">
+ <div class="eyebrow" style="color:#fca5a5">あなたの最弱リンク</div>
+ <h3 style="font-size:20px;font-weight:500;color:#fff;margin-top:4px" id="bn-name">--</h3>
+ <div style="color:#fed7aa;font-size:13.5px;line-height:1.85;margin:10px 0" id="bn-function"></div>
+ <div style="background:#0a0d11;border-left:3px solid var(--color-danger);padding:12px 14px;border-radius:6px;margin-bottom:8px">
+ <div style="color:var(--color-danger);font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">弱いとどうなるか</div>
+ <div style="color:#fecaca;font-size:13px;line-height:1.85" id="bn-cascade"></div>
+ </div>
+ <div style="background:#0a0d11;border-left:3px solid #f97316;padding:12px 14px;border-radius:6px">
+ <div style="color:#f97316;font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">PT視点: 怪我リスク予測</div>
+ <div style="color:#fed7aa;font-size:13px;line-height:1.85" id="bn-risk"></div>
+ </div>
+ </div>
+
+ <!-- 改善ロードマップ（ボトルネックの直下） -->
+ <div id="roadmap-section" class="hidden">
+ <div class="action-card" style="padding:24px 16px 8px">
+ <div class="eyebrow" style="color:#a855f7">PERSONALIZED IMPROVEMENT ROADMAP</div>
+ <h2 class="card-title" id="roadmap-title">改善プログラム</h2>
+ <p class="text-secondary text-small mb-3" id="roadmap-goal"></p>
+ </div>
+ <div id="roadmap-phases" style="padding:0 16px"></div>
+ <div class="alert alert-info" style="margin:12px 16px">
+ <b>運用のコツ:</b> 各フェーズの「進入基準」を満たしてから次へ進んでください。痛みが出たら一段階前に戻す。2週間ごとに Re'forma で再解析して改善を確認することを推奨します。
  </div>
  </div>
 
@@ -417,12 +472,19 @@
  <!-- タイプ特徴カード -->
  <div id="type-feature-card" class="hidden"></div>
 
- <!-- 9フェーズ -->
- <div class="action-card" style="padding:16px 16px 8px">
- <div class="eyebrow">9フェーズ自動検出</div>
- <h2 class="card-title">スイングを9つの瞬間に分解</h2>
+ <!-- 9フェーズ（アコーディオン折りたたみ） -->
+ <div style="background:var(--bg-card);border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);margin-top:8px">
+ <button class="phase-accordion-toggle" id="phase-accordion-btn" aria-expanded="false">
+ <div>
+ <div style="font-size:10px;letter-spacing:2px;color:var(--text-tertiary);font-weight:600;margin-bottom:3px">9-PHASE BREAKDOWN</div>
+ <div style="font-size:15px;font-weight:600;color:var(--text-primary)">スイングを9つの瞬間に分解</div>
  </div>
- <div class="phase-grid" id="phase-grid"></div>
+ <span class="phase-accordion-icon" id="phase-accordion-icon">&#8964;</span>
+ </button>
+ <div class="phase-accordion-body" id="phase-accordion-body">
+ <div class="phase-grid" id="phase-grid" style="padding-bottom:12px"></div>
+ </div>
+ </div>
 
  <!-- Kinetic Chain -->
  <div class="action-card" style="padding:24px 16px 8px">
@@ -434,44 +496,6 @@
  <div id="chain-pills" class="mb-3"></div>
  </div>
  <div class="chain-cards-wrap" id="chain-cards"></div>
-
- <!-- 注意点セクション -->
- <div id="attention-section" class="hidden">
- <div class="action-card" style="padding:20px 16px 8px">
- <div class="eyebrow" style="color:#f59e0b">CLINICAL ATTENTION NOTES</div>
- <h2 class="card-title">いまのスイングで気をつけたいこと</h2>
- <p class="text-secondary text-small mb-3">理学療法士の視点から、怪我予防と動作改善のポイントをまとめました。</p>
- </div>
- <div style="padding:0 16px 4px" id="attention-items"></div>
- </div>
-
- <!-- ボトルネック詳細 -->
- <div id="bottleneck-detail" class="hidden" style="margin:16px;background:linear-gradient(135deg,#1a0a0c 0%,#2d0d12 100%);border:1px solid #ef444444;border-radius:var(--radius-lg);padding:18px 20px">
- <div class="eyebrow" style="color:#fca5a5">あなたの最弱リンク</div>
- <h3 style="font-size:20px;font-weight:500;color:#fff;margin-top:4px" id="bn-name">--</h3>
- <div style="color:#fed7aa;font-size:13.5px;line-height:1.85;margin:10px 0" id="bn-function"></div>
- <div style="background:#0a0d11;border-left:3px solid var(--color-danger);padding:12px 14px;border-radius:6px;margin-bottom:8px">
- <div style="color:var(--color-danger);font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">弱いとどうなるか</div>
- <div style="color:#fecaca;font-size:13px;line-height:1.85" id="bn-cascade"></div>
- </div>
- <div style="background:#0a0d11;border-left:3px solid #f97316;padding:12px 14px;border-radius:6px">
- <div style="color:#f97316;font-size:10px;letter-spacing:2px;font-weight:700;margin-bottom:5px">PT視点: 怪我リスク予測</div>
- <div style="color:#fed7aa;font-size:13px;line-height:1.85" id="bn-risk"></div>
- </div>
- </div>
-
- <!-- 改善ロードマップ -->
- <div id="roadmap-section" class="hidden">
- <div class="action-card" style="padding:24px 16px 8px">
- <div class="eyebrow" style="color:#a855f7">PERSONALIZED IMPROVEMENT ROADMAP</div>
- <h2 class="card-title" id="roadmap-title">改善プログラム</h2>
- <p class="text-secondary text-small mb-3" id="roadmap-goal"></p>
- </div>
- <div id="roadmap-phases" style="padding:0 16px"></div>
- <div class="alert alert-info" style="margin:12px 16px">
- <b>運用のコツ:</b> 各フェーズの「進入基準」を満たしてから次へ進んでください。痛みが出たら一段階前に戻す。2週間ごとに Re'forma で再解析して改善を確認することを推奨します。
- </div>
- </div>
 
  <!-- アクション -->
  <div class="action-card mt-3">
@@ -567,9 +591,16 @@
  $('side-confidence-text').textContent = '判定信頼度: ' + Math.round(conf * 100) + '%';
  }
 
- // 信頼度低い時は警告
+ // 信頼度低い時は警告（0%は特別対応）
  if (!overridden && conf < 0.5) {
  $('side-warning').classList.remove('hidden');
+ if (conf === 0) {
+ $('side-warning-title').textContent = '打席を自動判定できませんでした';
+ $('side-warning-body').textContent = '右の「切替」ボタンで正しい打席（右打者/左打者）に変更してください。切り替えると全指標が自動で再計算されます。';
+ } else {
+ $('side-warning-title').textContent = '判定信頼度が低めです';
+ $('side-warning-body').textContent = '違う場合は右の「切替」ボタンを押してください。手動で切り替えると全指標が再計算されます。';
+ }
  } else {
  $('side-warning').classList.add('hidden');
  }
@@ -965,7 +996,7 @@
  }
  $('review-no-video').classList.add('hidden');
  const noVideoEl = $('review-no-video');
- if (noVideoEl) noVideoEl.textContent = `📸 ${capturedImgFrames.length}フレーム読み込み済み`;
+ if (noVideoEl) noVideoEl.textContent = `${capturedImgFrames.length}フレーム読込済み`;
  } else {
  reviewCanvas.width = 180;
  reviewCanvas.height = 320;
@@ -2081,6 +2112,26 @@
  </div>
  `).join('');
  }
+
+ // ── 9フェーズ アコーディオン ──
+ (function () {
+ const btn = $('phase-accordion-btn');
+ const body = $('phase-accordion-body');
+ const icon = $('phase-accordion-icon');
+ if (!btn || !body || !icon) return;
+ btn.addEventListener('click', function () {
+ const isOpen = body.classList.contains('open');
+ if (isOpen) {
+ body.classList.remove('open');
+ icon.classList.remove('open');
+ btn.setAttribute('aria-expanded', 'false');
+ } else {
+ body.classList.add('open');
+ icon.classList.add('open');
+ btn.setAttribute('aria-expanded', 'true');
+ }
+ });
+ })();
 
  function showError(msg) {
  $('loading-state').classList.add('hidden');
